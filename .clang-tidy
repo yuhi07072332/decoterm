@@ -1,0 +1,19 @@
+---
+Checks: "*,
+        -abseil-*,
+        -altera-*,
+        -android-*,
+        -boost-*,
+        -darwin-*,
+        -fuchsia-*,
+        -google-*,
+        -hicpp-*,
+        -mpi-*,
+        -objc-*,
+        -openmp-*,
+        -zircon-*,
+"
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+AnalyzeTemporaryDtors: false
+FormatStyle: none
