@@ -22,6 +22,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// TODO:
+// - formatter for std::format
+// - a way to reset/overwrite terminal style
+// - compile time to_escape() cache for style that only contains system color fg/bg
+// - Detect terminal color support info & provide fallback system color for true color
+// - Windows API fallback for Windows8 or lower versions
+
 
 #ifndef DECOTERM_HPP
 #define DECOTERM_HPP
@@ -58,8 +65,8 @@ inline constexpr std::array<std::string_view, 16> SGR_PARAM_BG {
 };
 
 inline constexpr std::array<std::string_view, 8> SGR_PARAMS_STYLE {
-    "1" /*bold*/,           "2"  /*dim*/,    "3" /*italic*/,
-    "4" /*underline*/,      "5"  /*blink*/,  "7" /*invert*/,
+    "1" /*bold*/,           "2"  /*dim*/,           "3" /*italic*/,
+    "4" /*underline*/,      "5"  /*blink*/,         "7" /*invert*/,
     "9" /*strikethrough*/,  "21" /*double underline*/
 };
 
@@ -206,7 +213,7 @@ private:
 
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                          style                          ║
+// ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
 struct Style {
