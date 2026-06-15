@@ -1,3 +1,26 @@
+// MIT Licence
+//
+// Copyright (c) 2026 Yuhi0707
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+
 #ifndef DECOTERM_HPP
 #define DECOTERM_HPP
 
@@ -75,7 +98,7 @@ struct Color {
     /// @pre rgb <= 0xFFFFFF
     constexpr static auto rgb(uint32_t rgb) -> Color {
         // clang-format off
-        if (rgb > 0xFFFFFF) throw std::invalid_argument("Color::rgb(): rgb > 0xFFFFFF");
+        if (rgb > 0xffffff) throw std::invalid_argument("Color::rgb(): rgb > 0xffffff");
         return Color::rgb((rgb >> 16) & 0xFF,
                           (rgb >> 8) & 0xFF,
                           rgb & 0xFF);
@@ -94,7 +117,7 @@ struct Color {
     constexpr static auto hsv(int h, uint8_t s, uint8_t v) -> Color {
         // clang-format off
         if (h < 0 || h >= 360) throw std::invalid_argument(
-            "Color::hsv(): h not in range [0, 360)");
+            "Color::hsv(): h is not in range [0, 360)");
 
         float hp = h / 60.f;
         float sp = s / 255.0f;
@@ -125,10 +148,13 @@ struct Color {
     constexpr Color(SpecialColor sp) : data_({0, 0, 0}) {
         if (sp == None) type_ = Type::None;
         else if (sp == Default) type_ = Type::Default;
-        else throw std::invalid_argument("Color(): sp should be a SpecialColor value(0 or 1)");
+        else 
+            throw std::invalid_argument("Color(): sp should be a SpecialColor value(0 or 1)");
     }
 
-    constexpr Color(Color16 c16) : type_(Type::Color16), data_({c16, 0, 0}) {}
+    constexpr Color(Color16 c16) : type_(Type::Color16), data_({c16, 0, 0}) {
+        if (c16 >= 16) throw std::invalid_argument("Color(): c16 should be < 16");
+    }
 
     constexpr Color(Color256 c256): type_(Type::Color256), data_({static_cast<uint8_t>(c256), 0, 0}) {}
 
@@ -136,6 +162,11 @@ struct Color {
 
     constexpr auto operator==(const Color&) const -> bool = default;
     constexpr auto operator!=(const Color&) const -> bool = default;
+
+    constexpr auto to_escape_params(bool is_bg) const -> std::string {
+        //TODO:
+        return "";
+    }
 
     /// @brief generate escape code
     constexpr auto to_escape(bool is_bg) const -> std::string {
