@@ -71,37 +71,16 @@ inline constexpr std::array<std::string_view, 8> SGR_PARAMS_STYLE {
 // ║                          Color                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-enum class Color256 : uint8_t;
+enum class Colors : uint8_t;
 
 struct Color {
-    enum class Type : uint8_t { None = 0, Default, Color16, Color256, TrueColor };
-
-    // ----- colors -----
+    enum class Type : uint8_t { None = 0, Default, Colors, TrueColor };
     
     enum SpecialColor : uint8_t {
         None = 0,
         Default = 1
     };
 
-    enum Color16 : uint8_t {
-        Black        = 0,
-        Red          = 1,
-        Green        = 2,
-        Yellow       = 3,
-        Blue         = 4,
-        Magenta      = 5,
-        Cyan         = 6,
-        White        = 7,
-        BlackLight   = 8,
-        RedLight     = 9,
-        GreenLight   = 10,
-        YellowLight  = 11,
-        BlueLight    = 12,
-        MagentaLight = 13,
-        CyanLight    = 14,
-        WhiteLight   = 15,
-    };
-    
     /// @brief Create a color by 0xRRGGBB
     /// @pre rgb <= 0xFFFFFF
     constexpr static auto rgb(uint32_t rgb) -> Color {
@@ -157,14 +136,11 @@ struct Color {
         if (sp == None) type_ = Type::None;
         else if (sp == Default) type_ = Type::Default;
         else 
-            throw std::invalid_argument("Color(): sp should be a SpecialColor value(0 or 1)");
+            throw std::invalid_argument("Color(): invalid SpecialColor value");
     }
 
-    constexpr Color(Color16 c16) : type_(Type::Color16), data_({c16, 0, 0}) {
-        if (c16 >= 16) throw std::invalid_argument("Color(): c16 should be < 16");
-    }
-
-    constexpr Color(Color256 c256): type_(Type::Color256), data_({static_cast<uint8_t>(c256), 0, 0}) {}
+    constexpr Color(Colors col)
+        : type_(Type::Colors), data_({static_cast<uint8_t>(col), 0, 0}) {}
 
     // ----- operators -----
 
@@ -183,18 +159,16 @@ struct Color {
                 return "";
             case Type::Default :
                 return is_bg ? "49" : "39";
-            case Type::Color16 : {
-                std::string esc;
-                esc.reserve(6);
-                return std::string(is_bg ? detail::SGR_PARAM_BG[data_[0]]
-                                  : detail::SGR_PARAM_FG[data_[0]]);
-            }
-            case Type::Color256 : {
+            case Type::Colors : {
                 std::string esc;
                 esc.reserve(8);
-                return esc
-                    + (is_bg ? "48;5;" : "38;5;")
-                    + std::to_string(data_[0]);
+                if (is_system_color()) {
+                return std::string(is_bg
+                                   ? detail::SGR_PARAM_BG[data_[0]]
+                                   : detail::SGR_PARAM_FG[data_[0]]);
+                } else return esc
+                        + (is_bg ? "48;5;" : "38;5;")
+                        + std::to_string(data_[0]);
             }
             case Type::TrueColor : {
                 const auto [r, g, b] = data_;
@@ -222,9 +196,14 @@ private:
     constexpr Color(Type type, uint8_t data1, uint8_t data2, uint8_t data3):
         type_(type), data_({data1, data2, data3}) {}
 
+    constexpr auto is_system_color() const -> bool {
+        return data_[0] < 16;
+    }
+
     Type type_;
     std::array<uint8_t, 3> data_;
 };
+
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                          style                          ║
@@ -316,12 +295,30 @@ inline auto operator<<(std::ostream& os, Style rhs) -> std::ostream& {
 
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                        Color256                         ║
+// ║                         Colors                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief non-system colors.
-/// @detail color names are from https://www.ditig.com/256-colors-cheat-sheet#google_vignette
-enum class Color256 : uint8_t {
+enum class Colors : uint8_t {
+    // system colors
+    Black             = 0,
+    Red               = 1,
+    Green             = 2,
+    Yellow            = 3,
+    Blue              = 4,
+    Magenta           = 5,
+    Cyan              = 6,
+    White             = 7,
+    BlackLight        = 8,
+    RedLight          = 9,
+    GreenLight        = 10,
+    YellowLight       = 11,
+    BlueLight         = 12,
+    MagentaLight      = 13,
+    CyanLight         = 14,
+    WhiteLight        = 15,
+
+    // non-system colors
+    // color names are from https://www.ditig.com/256-colors-cheat-sheet#google_vignette
     Grey0             = 16,
     NavyBlue          = 17,
     DarkBlue          = 18,
@@ -563,6 +560,23 @@ enum class Color256 : uint8_t {
     Grey89            = 254,
     Grey93            = 255,
 };
+
+inline constexpr Color black        = Color(Colors::Black);
+inline constexpr Color red          = Color(Colors::Red);
+inline constexpr Color green        = Color(Colors::Green);
+inline constexpr Color yellow       = Color(Colors::Yellow);
+inline constexpr Color blue         = Color(Colors::Blue);
+inline constexpr Color magenta      = Color(Colors::Magenta);
+inline constexpr Color cyan         = Color(Colors::Cyan);
+inline constexpr Color white        = Color(Colors::White);
+inline constexpr Color blacklight   = Color(Colors::BlackLight);
+inline constexpr Color redlight     = Color(Colors::RedLight);
+inline constexpr Color greenlight   = Color(Colors::GreenLight);
+inline constexpr Color yellowlight  = Color(Colors::YellowLight);
+inline constexpr Color bluelight    = Color(Colors::BlueLight);
+inline constexpr Color magentalight = Color(Colors::MagentaLight);
+inline constexpr Color cyanlight    = Color(Colors::CyanLight);
+inline constexpr Color whitelight   = Color(Colors::WhiteLight);
 
 }   // namespace deco
 
