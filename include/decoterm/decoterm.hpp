@@ -1,4 +1,6 @@
-// MIT Licence
+// ╔╦╗┌─┐┌─┐┌─┐╔╦╗┌─┐┬─┐┌┬┐
+//  ║║├┤ │  │ │ ║ ├┤ ├┬┘│││
+// ═╩╝└─┘└─┘└─┘ ╩ └─┘┴└─┴ ┴
 //
 // Copyright (c) 2026 Yuhi0707
 //
@@ -28,19 +30,16 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 
 namespace deco {
 
-// ╔═════════════════════════════════════════════════════════╗
-// ║                          Color                          ║
-// ╚═════════════════════════════════════════════════════════╝
-
 namespace detail {
 
 // clang-format off
-const std::array<std::string_view, 16> SGR_PARAM_FG {
+inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
     "30", "31", "32",
     "33", "34", "35",
     "36", "37", "90",
@@ -49,7 +48,7 @@ const std::array<std::string_view, 16> SGR_PARAM_FG {
     "97"
 };
 
-const std::array<std::string_view, 16> SGR_PARAM_BG {
+inline constexpr std::array<std::string_view, 16> SGR_PARAM_BG {
     "40", "41", "42",
     "43", "44", "45",
     "46", "47", "100",
@@ -58,9 +57,19 @@ const std::array<std::string_view, 16> SGR_PARAM_BG {
     "107"
 };
 
+inline constexpr std::array<std::string_view, 8> SGR_PARAMS_STYLE {
+    "1" /*bold*/,           "2"  /*dim*/,    "3" /*italic*/,
+    "4" /*underline*/,      "5"  /*blink*/,  "7" /*invert*/,
+    "9" /*strikethrough*/,  "21" /*double underline*/
+};
+
 // clang-format on
 
 }   // namespace detail
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                          Color                          ║
+// ╚═════════════════════════════════════════════════════════╝
 
 enum class Color256 : uint8_t;
 
@@ -68,7 +77,6 @@ struct Color {
     enum class Type : uint8_t { None = 0, Default, Color16, Color256, TrueColor };
 
     // ----- colors -----
-    // NOTE: Color256 is a enum class outside this class.
     
     enum SpecialColor : uint8_t {
         None = 0,
@@ -128,7 +136,7 @@ struct Color {
         uint8_t q = std::round(vp * (1 - f * sp) * 255);
         uint8_t t = std::round(vp * (1 - (1 - f) * sp) * 255);
 
-        switch (static_cast<int>(hp)) {
+        switch (h / 60) {
             case 0 : return rgb(v, t, p);
             case 1 : return rgb(q, v, p);
             case 2 : return rgb(p, v, t);
@@ -158,51 +166,56 @@ struct Color {
 
     constexpr Color(Color256 c256): type_(Type::Color256), data_({static_cast<uint8_t>(c256), 0, 0}) {}
 
-    // ----- observe -----
+    // ----- operators -----
 
     constexpr auto operator==(const Color&) const -> bool = default;
     constexpr auto operator!=(const Color&) const -> bool = default;
 
-    constexpr auto to_escape_params(bool is_bg) const -> std::string {
-        //TODO:
-        return "";
-    }
+    constexpr explicit operator bool() const { return type_ != Type::None; }
 
-    /// @brief generate escape code
-    constexpr auto to_escape(bool is_bg) const -> std::string {
+    // ----- output -----
+
+    /// @brief generate SGR parameters separated by ';'
+    [[nodiscard]]
+    auto to_escape_params(bool is_bg) const -> std::string {
         switch (type_) {
             case Type::None :
                 return "";
             case Type::Default :
-                return is_bg ? "\x1b[49m" : "\x1b[39m";
+                return is_bg ? "49" : "39";
             case Type::Color16 : {
-                const auto index = data_[0];
-                std::string seq = "\x1b[";
-                seq.reserve(6);
-                return seq
-                    .append(is_bg ? detail::SGR_PARAM_BG[index]
-                                  : detail::SGR_PARAM_FG[index])
-                    .append("m");
+                std::string esc;
+                esc.reserve(6);
+                return std::string(is_bg ? detail::SGR_PARAM_BG[data_[0]]
+                                  : detail::SGR_PARAM_FG[data_[0]]);
             }
             case Type::Color256 : {
-                std::string seq = "\x1b[";
-                seq.reserve(8);
-                return seq
-                .append(is_bg ? "48;5;" : "38;5;")
-                .append(std::to_string(data_[0]))
-                .append("m");
+                std::string esc;
+                esc.reserve(8);
+                return esc
+                    + (is_bg ? "48;5;" : "38;5;")
+                    + std::to_string(data_[0]);
             }
             case Type::TrueColor : {
-                auto [r, g, b] = data_;
-                std::string seq = "\x1b[";
-                seq.reserve(24);
-                seq.append(is_bg ? "48;2;" : "38;2;");
-                return seq 
+                const auto [r, g, b] = data_;
+                std::string esc;
+                esc.reserve(24);
+                return esc 
+                    + (is_bg ? "48;2;" : "38;2;")
                     + std::to_string(r) + ';'
                     + std::to_string(g) + ';'
-                    + std::to_string(b) + 'm';
+                    + std::to_string(b);
             }
         }
+        return "";
+    }
+
+    /// @brief generate full escape code
+    [[nodiscard]]
+    auto to_escape(bool is_bg) const -> std::string {
+        return std::string("\x1b[")
+            + to_escape_params(is_bg)
+            + 'm';
     }
 
 private:
@@ -216,6 +229,91 @@ private:
 // ╔═════════════════════════════════════════════════════════╗
 // ║                          style                          ║
 // ╚═════════════════════════════════════════════════════════╝
+
+struct Style {
+    enum AttributeFlags : uint8_t {
+        None            = 0,
+        Bold            = 1 << 0,
+        Dim             = 1 << 1,
+        Italic          = 1 << 2,
+        Underline       = 1 << 3,
+        Blink           = 1 << 4,
+        Invert          = 1 << 5,
+        Strikethrough   = 1 << 6,
+        UnderlineDouble = 1 << 7,
+    };
+
+    uint8_t flags   = None;
+    Color fg        = Color::None;
+    Color bg        = Color::None;
+
+    // ----- operators -----
+
+    constexpr auto operator|(Style rhs) const -> Style {
+        return Style(
+            flags | rhs.flags,
+            rhs.fg ? rhs.fg : fg,
+            rhs.bg ? rhs.bg : bg
+        );
+    }
+
+    constexpr auto operator==(const Style&) const -> bool = default;
+    constexpr auto operator!=(const Style&) const -> bool = default;
+
+    // ----- output -----
+
+    [[nodiscard]]
+    auto to_escape_params() const -> std::string {
+        std::string esc;
+        if (fg) esc += fg.to_escape_params(false) + ';';
+        if (bg) esc += bg.to_escape_params(true) + ';';
+
+        int count = 0;
+        uint8_t current_flag = flags;
+        while (current_flag) {
+            if (current_flag & 0x1) 
+                esc.append(detail::SGR_PARAMS_STYLE[count]).push_back(';');
+            count++;
+            current_flag >>= 1;
+        }
+
+        if (esc.back() == ';') esc.pop_back();
+        return esc;
+    }
+
+    [[nodiscard]]
+    auto to_escape() const -> std::string {
+        return std::string("\x1b[") + to_escape_params() + 'm';
+    }
+};
+
+// ----- color -----
+
+inline constexpr auto color(Color fg, Color bg) -> Style {
+    return Style{ .fg = fg, .bg = bg };
+}
+
+inline constexpr auto fg(Color fg) -> Style{ return Style{ .fg = fg }; }
+inline constexpr auto bg(Color bg) -> Style{ return Style{ .bg = bg }; }
+
+// ----- style composition -----
+
+inline constexpr Style bold              = Style(Style::Bold);
+inline constexpr Style dim               = Style(Style::Dim);
+inline constexpr Style italic            = Style(Style::Italic);
+inline constexpr Style underline         = Style(Style::Underline);
+inline constexpr Style blink             = Style(Style::Blink);
+inline constexpr Style invert            = Style(Style::Invert);
+inline constexpr Style strikethrough     = Style(Style::Strikethrough);
+inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
+
+// ----- style output -----
+
+inline auto operator<<(std::ostream& os, Style rhs) -> std::ostream& {
+    os << rhs.to_escape();
+    return os;
+}
+
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                        Color256                         ║
