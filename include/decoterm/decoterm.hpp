@@ -310,16 +310,12 @@ inline constexpr Style invert            = Style(Style::Invert);
 inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
-// ----- reset -----
+// ----- style output -----
 
 struct StyleReset {
     Style reset_to;
 
     constexpr StyleReset(Style reset_to = Style()) : reset_to(reset_to) {}
-
-    constexpr auto operator|(Style rhs) const -> Style {
-        return reset_to | rhs;
-    }
 };
 
 inline constexpr auto reset_to(Style style) -> StyleReset {
@@ -328,7 +324,6 @@ inline constexpr auto reset_to(Style style) -> StyleReset {
 
 inline constexpr StyleReset reset = StyleReset();
 
-// ----- style output -----
 
 inline auto operator<<(std::ostream& os, Style rhs) -> std::ostream& {
     os << rhs.to_escape();
