@@ -83,10 +83,7 @@ enum class Colors : uint8_t;
 struct Color {
     enum class Type : uint8_t { None = 0, Default, Colors, TrueColor };
     
-    enum SpecialColor : uint8_t {
-        None = 0,
-        Default = 1
-    };
+    enum SpecialColor : uint8_t { None = 0, Default = 1 };
 
     // ----- constructors -----
 
@@ -235,6 +232,11 @@ struct Style {
     Color fg        = Color::None;
     Color bg        = Color::None;
 
+    constexpr Style() = default;
+
+    constexpr Style(uint8_t flags, Color fg = Color::None, Color bg = Color::None)
+        : flags(flags), fg(fg), bg(bg) {}
+
     // ----- operators -----
 
     constexpr auto operator|(Style rhs) const -> Style {
@@ -286,11 +288,16 @@ struct Style {
 // ----- color -----
 
 inline constexpr auto color(Color fg, Color bg) -> Style {
-    return Style{ .fg = fg, .bg = bg };
+    return Style(Style::None, fg, bg);
 }
 
-inline constexpr auto fg(Color fg) -> Style { return Style{ .fg = fg }; }
-inline constexpr auto bg(Color bg) -> Style { return Style{ .bg = bg }; }
+inline constexpr auto fg(Color fg) -> Style {
+    return Style(Style::None, fg);
+}
+
+inline constexpr auto bg(Color bg) -> Style { 
+    return Style(Style::None, Color::None, bg);
+}
 
 // ----- styles -----
 
@@ -306,7 +313,9 @@ inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 // ----- reset -----
 
 struct StyleReset {
-    Style reset_to = Style();
+    Style reset_to;
+
+    constexpr StyleReset(Style reset_to = Style()) : reset_to(reset_to) {}
 
     constexpr auto operator|(Style rhs) const -> Style {
         return reset_to | rhs;
