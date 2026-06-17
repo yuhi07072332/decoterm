@@ -2,6 +2,8 @@
 //  ║║├┤ │  │ │ ║ ├┤ ├┬┘│││
 // ═╩╝└─┘└─┘└─┘ ╩ └─┘┴└─┴ ┴
 //
+// MIT Licence
+//
 // Copyright (c) 2026 Yuhi0707
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,13 +24,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO:
-// - formatter for std::format
-// - a way to reset/overwrite terminal style
-// - compile time to_escape() cache for style that only contains system color fg/bg
-// - Detect terminal color support info & provide fallback system color for true color
-// - Windows API fallback for Windows8 or lower versions
 
+// TODO:
+// - Detect terminal color support info & provide fallback system color for true color
+// - compile time to_escape() cache for style that only contains system color fg/bg
+// - Windows API fallback for Windows8 or lower versions
 
 #ifndef DECOTERM_HPP
 #define DECOTERM_HPP
@@ -88,52 +88,6 @@ struct Color {
         Default = 1
     };
 
-    /// @brief Create a color by 0xRRGGBB
-    /// @pre rgb <= 0xFFFFFF
-    constexpr static auto rgb(uint32_t rgb) -> Color {
-        // clang-format off
-        if (rgb > 0xffffff) throw std::invalid_argument("Color::rgb(): rgb > 0xffffff");
-        return Color::rgb((rgb >> 16) & 0xFF,
-                          (rgb >> 8) & 0xFF,
-                          rgb & 0xFF);
-        // clang-format on
-    }
-
-    /// @brief Create a color by RGB
-    constexpr static auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
-        return Color(Type::TrueColor, r, g, b);
-    }
-
-    /// @brief Create a color by HSV
-    /// @param h [0, 360): Hue of the color
-    /// @param s [0, 255]: Saturation of the color
-    /// @param v [0, 255]: Value (brightness) of the color
-    constexpr static auto hsv(int h, uint8_t s, uint8_t v) -> Color {
-        // clang-format off
-        if (h < 0 || h >= 360) throw std::invalid_argument(
-            "Color::hsv(): h is not in range [0, 360)");
-
-        float hp = h / 60.f;
-        float sp = s / 255.0f;
-        float vp = v / 255.0f;
-
-        float f = hp - std::floor(hp);
-        uint8_t p = std::round(vp * (1 - sp) * 255);
-        uint8_t q = std::round(vp * (1 - f * sp) * 255);
-        uint8_t t = std::round(vp * (1 - (1 - f) * sp) * 255);
-
-        switch (h / 60) {
-            case 0 : return rgb(v, t, p);
-            case 1 : return rgb(q, v, p);
-            case 2 : return rgb(p, v, t);
-            case 3 : return rgb(p, q, v);
-            case 4 : return rgb(t, p, v);
-            case 5 : return rgb(v, p, q);
-            default: assert(false);
-        }
-        // clang-format on
-    }
-
     // ----- constructors -----
 
     /// @brief Create Color::None
@@ -149,12 +103,17 @@ struct Color {
     constexpr Color(Colors col)
         : type_(Type::Colors), data_({static_cast<uint8_t>(col), 0, 0}) {}
 
+    constexpr Color(uint8_t r, uint8_t g, uint8_t b)
+        : type_(Type::TrueColor), data_({r, g, b}) {}
+
     // ----- operators -----
 
     constexpr auto operator==(const Color&) const -> bool = default;
     constexpr auto operator!=(const Color&) const -> bool = default;
 
-    constexpr explicit operator bool() const { return type_ != Type::None; }
+    constexpr explicit operator bool() const { return !empty(); }
+
+    auto empty() const -> bool { return type_ == Type::None; }
 
     // ----- output -----
 
@@ -180,7 +139,7 @@ struct Color {
             case Type::TrueColor : {
                 const auto [r, g, b] = data_;
                 std::string esc;
-                esc.reserve(24);
+                esc.reserve(19);
                 return esc 
                     + (is_bg ? "48;2;" : "38;2;")
                     + std::to_string(r) + ';'
@@ -200,9 +159,6 @@ struct Color {
     }
 
 private:
-    constexpr Color(Type type, uint8_t data1, uint8_t data2, uint8_t data3):
-        type_(type), data_({data1, data2, data3}) {}
-
     constexpr auto is_system_color() const -> bool {
         return data_[0] < 16;
     }
@@ -210,6 +166,52 @@ private:
     Type type_;
     std::array<uint8_t, 3> data_;
 };
+
+/// @brief Create a color by RGB
+inline constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
+    return Color(r, g, b);
+}
+
+/// @brief Create a color by 0xRRGGBB
+/// @pre rgb <= 0xFFFFFF
+inline constexpr auto rgb(uint32_t hex) -> Color {
+    // clang-format off
+    if (hex > 0xffffff) throw std::invalid_argument("Color::rgb(): rgb > 0xffffff");
+    return Color((hex >> 16) & 0xFF,
+                      (hex >> 8) & 0xFF,
+                      hex & 0xFF);
+    // clang-format on
+}
+
+/// @brief Create a color by HSV
+/// @param h [0, 360): Hue of the color
+/// @param s [0, 255]: Saturation of the color
+/// @param v [0, 255]: Value (brightness) of the color
+inline constexpr auto hsv(int h, uint8_t s, uint8_t v) -> Color {
+    // clang-format off
+    if (h < 0 || h >= 360) throw std::invalid_argument(
+        "Color::hsv(): h is not in range [0, 360)");
+
+    float hp = h / 60.f;
+    float sp = s / 255.0f;
+    float vp = v / 255.0f;
+
+    float f = hp - std::floor(hp);
+    uint8_t p = std::round(vp * (1 - sp) * 255);
+    uint8_t q = std::round(vp * (1 - f * sp) * 255);
+    uint8_t t = std::round(vp * (1 - (1 - f) * sp) * 255);
+
+    switch (h / 60) {
+        case 0 : return Color(v, t, p);
+        case 1 : return Color(q, v, p);
+        case 2 : return Color(p, v, t);
+        case 3 : return Color(p, q, v);
+        case 4 : return Color(t, p, v);
+        case 5 : return Color(v, p, q);
+        default: assert(false);
+    }
+    // clang-format on
+}
 
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -246,10 +248,18 @@ struct Style {
     constexpr auto operator==(const Style&) const -> bool = default;
     constexpr auto operator!=(const Style&) const -> bool = default;
 
+    constexpr explicit operator bool() const { return !empty(); }
+
+    auto empty() const -> bool {
+        return flags == None && fg.empty() && bg.empty();
+    }
+
     // ----- output -----
 
     [[nodiscard]]
     auto to_escape_params() const -> std::string {
+        if (empty()) return "";
+
         std::string esc;
         if (fg) esc += fg.to_escape_params(false) + ';';
         if (bg) esc += bg.to_escape_params(true) + ';';
@@ -263,13 +273,13 @@ struct Style {
             current_flag >>= 1;
         }
 
-        if (esc.back() == ';') esc.pop_back();
+        if (!esc.empty() && esc.back() == ';') esc.pop_back();
+
         return esc;
     }
 
-    [[nodiscard]]
     auto to_escape() const -> std::string {
-        return std::string("\x1b[") + to_escape_params() + 'm';
+        return "\x1b[" + to_escape_params() + "m";
     }
 };
 
@@ -279,10 +289,10 @@ inline constexpr auto color(Color fg, Color bg) -> Style {
     return Style{ .fg = fg, .bg = bg };
 }
 
-inline constexpr auto fg(Color fg) -> Style{ return Style{ .fg = fg }; }
-inline constexpr auto bg(Color bg) -> Style{ return Style{ .bg = bg }; }
+inline constexpr auto fg(Color fg) -> Style { return Style{ .fg = fg }; }
+inline constexpr auto bg(Color bg) -> Style { return Style{ .bg = bg }; }
 
-// ----- style composition -----
+// ----- styles -----
 
 inline constexpr Style bold              = Style(Style::Bold);
 inline constexpr Style dim               = Style(Style::Dim);
@@ -293,10 +303,31 @@ inline constexpr Style invert            = Style(Style::Invert);
 inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
+// ----- reset -----
+
+struct StyleReset {
+    Style reset_to = Style();
+
+    constexpr auto operator|(Style rhs) const -> Style {
+        return reset_to | rhs;
+    }
+};
+
+inline constexpr auto reset_to(Style style) -> StyleReset {
+    return StyleReset(style);
+}
+
+inline constexpr StyleReset reset = StyleReset();
+
 // ----- style output -----
 
 inline auto operator<<(std::ostream& os, Style rhs) -> std::ostream& {
     os << rhs.to_escape();
+    return os;
+}
+
+inline auto operator<<(std::ostream& os, StyleReset rhs) -> std::ostream& {
+    os << "\x1b[;" << rhs.reset_to.to_escape_params() << "m";
     return os;
 }
 
@@ -586,6 +617,31 @@ inline constexpr Color cyanlight    = Color(Colors::CyanLight);
 inline constexpr Color whitelight   = Color(Colors::WhiteLight);
 
 }   // namespace deco
+
+#ifndef DECOTERM_NO_FORMAT
+
+#include <format>
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                        formatter                        ║
+// ╚═════════════════════════════════════════════════════════╝
+
+namespace std {
+
+template<>
+struct formatter<deco::Style>{
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    auto format(deco::Style style, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "{}", style.to_escape());
+    }
+};
+
+};
+
+#endif // !DECOTERM_NO_FORMAT
 
 
 #endif  // !DECOTERM_HPP
