@@ -10,6 +10,7 @@ include("${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake")
 
 add_executable(decoterm_tests
     test_color.cpp
+    test_style.cpp
 )
 
 target_compile_features(decoterm_tests PRIVATE cxx_std_23)

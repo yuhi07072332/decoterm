@@ -138,7 +138,6 @@ TEST_CASE("hsv helper creates expected true colors") {
     CHECK(hsv(30, 128, 128).to_escape(true) == true_bg(128, 96, 64));
     CHECK(hsv(359, 0, 42).to_escape(false) == true_fg(42, 42, 42));
 
-    CHECK_THROWS_AS(static_cast<void>(hsv(-1, 255, 255)), std::invalid_argument);
     CHECK_THROWS_AS(static_cast<void>(hsv(360, 255, 255)), std::invalid_argument);
 }
 

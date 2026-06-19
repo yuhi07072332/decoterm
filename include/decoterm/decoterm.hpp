@@ -209,7 +209,7 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 /// @param h [0, 360): Hue of the color
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
-inline constexpr auto hsv(int h, uint8_t s, uint8_t v) -> Color {
+inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
     // clang-format off
     if (h < 0 || h >= 360) throw std::invalid_argument(
         "Color::hsv(): h is not in range [0, 360)");
@@ -322,8 +322,6 @@ struct Style {
         to_escape(std::back_inserter(esc));
         return esc;
     }
-
-
 };
 
 // ----- color -----
