@@ -1,1 +1,154 @@
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+
+#include <decoterm/decoterm.hpp>
+#include <doctest.h>
+
+#include <array>
+#include <cstdint>
+#include <string>
+#include <string_view>
+
+namespace {
+
+auto esc(std::string_view params) -> std::string {
+    std::string result = "\x1b[";
+    result += params;
+    result += 'm';
+    return result;
+}
+
+auto indexed_fg(uint8_t index) -> std::string {
+    return esc("38;5;" + std::to_string(index));
+}
+
+auto indexed_bg(uint8_t index) -> std::string {
+    return esc("48;5;" + std::to_string(index));
+}
+
+auto true_fg(uint8_t r, uint8_t g, uint8_t b) -> std::string {
+    return esc("38;2;" + std::to_string(r) + ';' + std::to_string(g) + ';' +
+               std::to_string(b));
+}
+
+auto true_bg(uint8_t r, uint8_t g, uint8_t b) -> std::string {
+    return esc("48;2;" + std::to_string(r) + ';' + std::to_string(g) + ';' +
+               std::to_string(b));
+}
+
+} // namespace
+
+TEST_CASE("Color special colors generate escape sequences") {
+    using namespace deco;
+
+    const Color none = Color::None;
+    CHECK(none.empty());
+    CHECK_FALSE(static_cast<bool>(none));
+    CHECK(none.to_escape(false) == esc(""));
+    CHECK(none.to_escape(true) == esc(""));
+
+    const Color default_color = Color::Default;
+    CHECK_FALSE(default_color.empty());
+    CHECK(static_cast<bool>(default_color));
+    CHECK(default_color.to_escape(false) == esc("39"));
+    CHECK(default_color.to_escape(true) == esc("49"));
+}
+
+TEST_CASE("Color system colors use SGR foreground and background parameters") {
+    using namespace deco;
+
+    constexpr std::array colors {
+        Colors::Black, Colors::Red, Colors::Green, Colors::Yellow,
+        Colors::Blue, Colors::Magenta, Colors::Cyan, Colors::White,
+        Colors::BlackLight, Colors::RedLight, Colors::GreenLight,
+        Colors::YellowLight, Colors::BlueLight, Colors::MagentaLight,
+        Colors::CyanLight, Colors::WhiteLight,
+    };
+
+    for (std::size_t i = 0; i < colors.size(); ++i) {
+        CAPTURE(i);
+        const Color color = colors[i];
+        CHECK(color.to_escape(false) == esc(detail::SGR_PARAM_FG[i]));
+        CHECK(color.to_escape(true) == esc(detail::SGR_PARAM_BG[i]));
+    }
+}
+
+TEST_CASE("Color predefined constants match system color escape sequences") {
+    using namespace deco;
+
+    constexpr std::array constants {
+        black, red, green, yellow, blue, magenta, cyan, white,
+        blacklight, redlight, greenlight, yellowlight, bluelight,
+        magentalight, cyanlight, whitelight,
+    };
+
+    for (std::size_t i = 0; i < constants.size(); ++i) {
+        CAPTURE(i);
+        CHECK(constants[i].to_escape(false) == esc(detail::SGR_PARAM_FG[i]));
+        CHECK(constants[i].to_escape(true) == esc(detail::SGR_PARAM_BG[i]));
+    }
+}
+
+TEST_CASE("Color indexed 256 colors use 38/48;5 escape sequences") {
+    using namespace deco;
+
+    constexpr std::array<uint8_t, 8> indexes {16, 17, 52, 123, 196, 231, 232, 255};
+
+    for (uint8_t index : indexes) {
+        CAPTURE(index);
+        const Color color = static_cast<Colors>(index);
+        CHECK(color.to_escape(false) == indexed_fg(index));
+        CHECK(color.to_escape(true) == indexed_bg(index));
+    }
+}
+
+TEST_CASE("Color true color constructors use 38/48;2 escape sequences") {
+    using namespace deco;
+
+    CHECK(Color(0, 0, 0).to_escape(false) == true_fg(0, 0, 0));
+    CHECK(Color(0, 0, 0).to_escape(true) == true_bg(0, 0, 0));
+
+    CHECK(Color(255, 255, 255).to_escape(false) == true_fg(255, 255, 255));
+    CHECK(Color(255, 255, 255).to_escape(true) == true_bg(255, 255, 255));
+
+    CHECK(Color(12, 34, 56).to_escape(false) == true_fg(12, 34, 56));
+    CHECK(Color(12, 34, 56).to_escape(true) == true_bg(12, 34, 56));
+}
+
+TEST_CASE("rgb helpers create true colors") {
+    using namespace deco;
+
+    CHECK(rgb(1, 2, 3).to_escape(false) == true_fg(1, 2, 3));
+    CHECK(rgb(1, 2, 3).to_escape(true) == true_bg(1, 2, 3));
+
+    CHECK(rgb(0x123456).to_escape(false) == true_fg(0x12, 0x34, 0x56));
+    CHECK(rgb(0xabcdef).to_escape(true) == true_bg(0xab, 0xcd, 0xef));
+    CHECK(rgb(0xffffff).to_escape(false) == true_fg(255, 255, 255));
+    CHECK_THROWS_AS(static_cast<void>(rgb(0x1000000)), std::invalid_argument);
+}
+
+TEST_CASE("hsv helper creates expected true colors") {
+    using namespace deco;
+
+    CHECK(hsv(0, 255, 255).to_escape(false) == true_fg(255, 0, 0));
+    CHECK(hsv(60, 255, 255).to_escape(false) == true_fg(255, 255, 0));
+    CHECK(hsv(120, 255, 255).to_escape(false) == true_fg(0, 255, 0));
+    CHECK(hsv(180, 255, 255).to_escape(false) == true_fg(0, 255, 255));
+    CHECK(hsv(240, 255, 255).to_escape(false) == true_fg(0, 0, 255));
+    CHECK(hsv(300, 255, 255).to_escape(false) == true_fg(255, 0, 255));
+    CHECK(hsv(30, 128, 128).to_escape(true) == true_bg(128, 96, 64));
+    CHECK(hsv(359, 0, 42).to_escape(false) == true_fg(42, 42, 42));
+
+    CHECK_THROWS_AS(static_cast<void>(hsv(-1, 255, 255)), std::invalid_argument);
+    CHECK_THROWS_AS(static_cast<void>(hsv(360, 255, 255)), std::invalid_argument);
+}
+
+TEST_CASE("Color can write escapes through output iterators") {
+    using namespace deco;
+
+    std::string output = "prefix";
+    auto it = rgb(10, 20, 30).to_escape(std::back_inserter(output), false);
+
+    CHECK(output == "prefix" + true_fg(10, 20, 30));
+    static_cast<void>(it);
+}
 

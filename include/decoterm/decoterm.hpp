@@ -1,3 +1,6 @@
+#ifndef DECOTERM_HPP
+#define DECOTERM_HPP
+
 // ╔╦╗┌─┐┌─┐┌─┐╔╦╗┌─┐┬─┐┌┬┐
 //  ║║├┤ │  │ │ ║ ├┤ ├┬┘│││
 // ═╩╝└─┘└─┘└─┘ ╩ └─┘┴└─┴ ┴
@@ -30,14 +33,12 @@
 // - compile time to_escape() cache for style that only contains system color fg/bg
 // - Windows API fallback for Windows8 or lower versions
 
-#ifndef DECOTERM_HPP
-#define DECOTERM_HPP
-
 #include <array>
 #include <cassert>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
-#include <ostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 
@@ -69,6 +70,12 @@ inline constexpr std::array<std::string_view, 8> SGR_PARAMS_STYLE {
     "4" /*underline*/,      "5"  /*blink*/,         "7" /*invert*/,
     "9" /*strikethrough*/,  "21" /*double underline*/
 };
+
+template <std::output_iterator<const char&> OutputIt>
+inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
+    for (auto c : sv) *out++ = c;
+    return out;
+}
 
 // clang-format on
 
@@ -113,47 +120,65 @@ struct Color {
     auto empty() const -> bool { return type_ == Type::None; }
 
     // ----- output -----
+    
+    /// @brief write SGR parameters to out.
+    template <std::output_iterator<char> OutputIt>
+    constexpr auto to_sgr_params(OutputIt out, bool is_bg) const -> OutputIt {
+        using namespace detail;
+        auto write_converted = [&out](int value) {
+            std::array<char, 3> buf;
+            auto [ptr, ec] = std::to_chars(buf.begin(), buf.end(), value);
+            assert(ec == std::errc{});
+            for (char* it = buf.begin(); it != ptr; ++it)
+                *out++ = *it;
+        };
 
-    /// @brief generate SGR parameters separated by ';'
-    [[nodiscard]]
-    auto to_escape_params(bool is_bg) const -> std::string {
         switch (type_) {
             case Type::None :
-                return "";
+                return out;
             case Type::Default :
-                return is_bg ? "49" : "39";
+                if (is_bg) out = write_to(out, "49");
+                else out = write_to(out, "39");
+                return out;
             case Type::Colors : {
-                std::string esc;
-                esc.reserve(8);
                 if (is_system_color()) {
-                return std::string(is_bg
-                                   ? detail::SGR_PARAM_BG[data_[0]]
-                                   : detail::SGR_PARAM_FG[data_[0]]);
-                } else return esc
-                        + (is_bg ? "48;5;" : "38;5;")
-                        + std::to_string(data_[0]);
+                    out = write_to(out, is_bg ? SGR_PARAM_BG[data_[0]]
+                                 : SGR_PARAM_FG[data_[0]]);
+                } else {
+                    out = write_to(out, is_bg ? "48;5;" : "38;5;");
+                    write_converted(data_[0]);
+                }
+                return out;
             }
             case Type::TrueColor : {
                 const auto [r, g, b] = data_;
-                std::string esc;
-                esc.reserve(19);
-                return esc 
-                    + (is_bg ? "48;2;" : "38;2;")
-                    + std::to_string(r) + ';'
-                    + std::to_string(g) + ';'
-                    + std::to_string(b);
+                out = write_to(out, is_bg ? "48;2;" : "38;2;");
+                write_converted(r); *out++ = ';'; 
+                write_converted(g); *out++ = ';'; 
+                write_converted(b);
+                return out;
             }
+
+            default: return out;
         }
-        return "";
+    }
+
+    template <std::output_iterator<char> OutputIt>
+    constexpr auto to_escape(OutputIt out, bool is_bg) const -> OutputIt {
+        out = detail::write_to(out, "\x1b[");
+        out = to_sgr_params(out, is_bg);
+        *out++ = 'm';
+        return out;
     }
 
     /// @brief generate full escape code
     [[nodiscard]]
     auto to_escape(bool is_bg) const -> std::string {
-        return std::string("\x1b[")
-            + to_escape_params(is_bg)
-            + 'm';
+        std::string esc;
+        to_escape(std::back_inserter(esc), is_bg);
+        return esc;
     }
+
 
 private:
     constexpr auto is_system_color() const -> bool {
@@ -216,7 +241,7 @@ inline constexpr auto hsv(int h, uint8_t s, uint8_t v) -> Color {
 // ╚═════════════════════════════════════════════════════════╝
 
 struct Style {
-    enum AttributeFlags : uint8_t {
+    enum StyleFlags : uint8_t {
         None            = 0,
         Bold            = 1 << 0,
         Dim             = 1 << 1,
@@ -258,31 +283,47 @@ struct Style {
 
     // ----- output -----
 
-    [[nodiscard]]
-    auto to_escape_params() const -> std::string {
-        if (empty()) return "";
+    template <std::output_iterator<char> OutputIt>
+    constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
+        using namespace detail;
 
-        std::string esc;
-        if (fg) esc += fg.to_escape_params(false) + ';';
-        if (bg) esc += bg.to_escape_params(true) + ';';
+        if (empty()) return out;
 
-        int count = 0;
+        out = fg.to_sgr_params(out, false);
+        out = bg.to_sgr_params(out, false);
+
+        if (!flags) return out;
+
         uint8_t current_flag = flags;
-        while (current_flag) {
-            if (current_flag & 0x1) 
-                esc.append(detail::SGR_PARAMS_STYLE[count]).push_back(';');
+        int count = 0;
+        while (true) {
+            if (current_flag & 1) {
+                out = write_to(out, SGR_PARAMS_STYLE[count]);
+                if (current_flag >> 1) *out++ = ';';
+                else break;
+            }
             count++;
             current_flag >>= 1;
         }
+        return out;
+    }
 
-        if (!esc.empty() && esc.back() == ';') esc.pop_back();
+    template <std::output_iterator<char> OutputIt>
+    constexpr auto to_escape(OutputIt out) const -> OutputIt {
+        out = detail::write_to(out, "\x1b[");
+        out = to_sgr_params(out);
+        *out++ = 'm';
+        return out;
+    }
 
+    [[nodiscard]]
+    auto to_escape() const -> std::string {
+        std::string esc;
+        to_escape(std::back_inserter(esc));
         return esc;
     }
 
-    auto to_escape() const -> std::string {
-        return "\x1b[" + to_escape_params() + "m";
-    }
+
 };
 
 // ----- color -----
@@ -310,7 +351,7 @@ inline constexpr Style invert            = Style(Style::Invert);
 inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
-// ----- style output -----
+// ----- style reset -----
 
 struct StyleReset {
     Style reset_to;
@@ -323,18 +364,6 @@ inline constexpr auto reset_to(Style style) -> StyleReset {
 }
 
 inline constexpr StyleReset reset = StyleReset();
-
-
-inline auto operator<<(std::ostream& os, Style rhs) -> std::ostream& {
-    os << rhs.to_escape();
-    return os;
-}
-
-inline auto operator<<(std::ostream& os, StyleReset rhs) -> std::ostream& {
-    os << "\x1b[;" << rhs.reset_to.to_escape_params() << "m";
-    return os;
-}
-
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         Colors                          ║
@@ -639,7 +668,18 @@ struct formatter<deco::Style>{
     }
 
     auto format(deco::Style style, std::format_context& ctx) const {
-        return std::format_to(ctx.out(), "{}", style.to_escape());
+        return style.to_escape(ctx.out());
+    }
+};
+
+template<>
+struct formatter<deco::StyleReset> : formatter<deco::Style> {
+    auto format(deco::StyleReset style_reset, std::format_context& ctx) const {
+        auto out = ctx.out();
+        *out++ = '\x1b';
+        *out++ = 'm';
+        out = style_reset.reset_to.to_sgr_params(out);
+        return out;
     }
 };
 
