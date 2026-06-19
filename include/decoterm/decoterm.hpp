@@ -1,9 +1,18 @@
 #ifndef DECOTERM_HPP
 #define DECOTERM_HPP
 
-// ╔╦╗┌─┐┌─┐┌─┐╔╦╗┌─┐┬─┐┌┬┐
-//  ║║├┤ │  │ │ ║ ├┤ ├┬┘│││
-// ═╩╝└─┘└─┘└─┘ ╩ └─┘┴└─┴ ┴
+// ╭──────────────────────────────────╮
+// │╔═══╗                             │
+// │╚╗╔╗║            ┏━━━━┓           │
+// │ ║║║║╔══╗╔══╗╔══╗┃┏┓┏┓┃           │
+// │ ║║║║║╔╗║║╔═╝║╔╗║┗┛┃┃┗┛┏━━┓┏━┓┏┓┏┓│   A simple C++20 library for styling
+// │╔╝╚╝║║║═╣║╚═╗║╚╝║  ┃┃  ┃┏┓┃┃┏┛┃┗┛┃│   terminal output
+// │╚═══╝╚══╝╚══╝╚══╝ ┏┛┗┓ ┃┃━┫┃┃ ┃┃┃┃│
+// │                  ┗━━┛ ┗━━┛┗┛ ┗┻┻┛│
+// ╰──────────────────────────────────╯
+//
+// Licence
+// =======
 //
 // MIT Licence
 //
@@ -433,8 +442,11 @@ public:
     auto current_style() const -> Style { return style_track.back().style; }
 
 private:
+
+#ifndef DECOTERM_NO_FORMAT
     friend class std::formatter<Style>;
     friend class std::formatter<StylePop>;
+#endif // !DECOTERM_NO_FORMAT
 
     friend auto operator<<(std::ostream& os, Style rhs) -> std::ostream&;
     friend auto operator<<(std::ostream& os, StylePop) -> std::ostream&;
@@ -818,7 +830,7 @@ struct formatter<deco::StylePop> {
 };
 
 
-};
+};  // namespace std
 
 #endif // !DECOTERM_NO_FORMAT
 
