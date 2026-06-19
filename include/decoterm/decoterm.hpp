@@ -30,7 +30,7 @@
 
 // TODO:
 // - Detect terminal color support info & provide fallback system color for true color
-// - compile time to_escape() cache for style that only contains system color fg/bg
+// - styled()
 // - Windows API fallback for Windows8 or lower versions
 
 #include <array>
@@ -40,7 +40,13 @@
 #include <cstdint>
 #include <iterator>
 #include <stdexcept>
+#include <iostream>
 #include <string>
+#include <vector>
+
+#ifndef DECOTERM_NO_FORMAT
+#include <format>
+#endif // !DECOTERM_NO_FORMAT
 
 namespace deco {
 
@@ -77,6 +83,7 @@ inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
     return out;
 }
 
+
 // clang-format on
 
 }   // namespace detail
@@ -91,6 +98,8 @@ struct Color {
     enum class Type : uint8_t { None = 0, Default, Colors, TrueColor };
     
     enum SpecialColor : uint8_t { None = 0, Default = 1 };
+
+    static constexpr std::size_t MAX_ESCAPE_CODE_SIZE = 19;
 
     // ----- constructors -----
 
@@ -117,7 +126,7 @@ struct Color {
 
     constexpr explicit operator bool() const { return !empty(); }
 
-    auto empty() const -> bool { return type_ == Type::None; }
+    constexpr auto empty() const -> bool { return type_ == Type::None; }
 
     // ----- output -----
     
@@ -153,8 +162,8 @@ struct Color {
             case Type::TrueColor : {
                 const auto [r, g, b] = data_;
                 out = write_to(out, is_bg ? "48;2;" : "38;2;");
-                write_converted(r); *out++ = ';'; 
-                write_converted(g); *out++ = ';'; 
+                write_converted(r); *out++ = ';';
+                write_converted(g); *out++ = ';';
                 write_converted(b);
                 return out;
             }
@@ -178,7 +187,6 @@ struct Color {
         to_escape(std::back_inserter(esc), is_bg);
         return esc;
     }
-
 
 private:
     constexpr auto is_system_color() const -> bool {
@@ -235,7 +243,6 @@ inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
     // clang-format on
 }
 
-
 // ╔═════════════════════════════════════════════════════════╗
 // ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
@@ -253,6 +260,9 @@ struct Style {
         UnderlineDouble = 1 << 7,
     };
 
+    static constexpr std::size_t MAX_ESCAPE_CODE_SIZE = 
+        Color::MAX_ESCAPE_CODE_SIZE * 2 + 16;
+
     uint8_t flags   = None;
     Color fg        = Color::None;
     Color bg        = Color::None;
@@ -263,6 +273,12 @@ struct Style {
         : flags(flags), fg(fg), bg(bg) {}
 
     // ----- operators -----
+
+    constexpr void operator|=(Style rhs) {
+        flags = flags | rhs.flags;
+        fg = rhs.fg ? rhs.fg : fg;
+        bg = rhs.bg ? rhs.bg : bg;
+    }
 
     constexpr auto operator|(Style rhs) const -> Style {
         return Style(
@@ -277,7 +293,7 @@ struct Style {
 
     constexpr explicit operator bool() const { return !empty(); }
 
-    auto empty() const -> bool {
+    constexpr auto empty() const -> bool {
         return flags == None && fg.empty() && bg.empty();
     }
 
@@ -289,22 +305,30 @@ struct Style {
 
         if (empty()) return out;
 
-        out = fg.to_sgr_params(out, false);
-        out = bg.to_sgr_params(out, false);
+        bool needs_separate = false;
+
+        if (fg) {
+            out = fg.to_sgr_params(out, false);
+            needs_separate = true;
+        }
+        if (bg) {
+            if (needs_separate) *out++ = ';';
+            out = bg.to_sgr_params(out, true);
+            needs_separate = true;
+        }
 
         if (!flags) return out;
-
         uint8_t current_flag = flags;
         int count = 0;
-        while (true) {
+        do {
             if (current_flag & 1) {
+                if (needs_separate) *out++ = ';';
                 out = write_to(out, SGR_PARAMS_STYLE[count]);
-                if (current_flag >> 1) *out++ = ';';
-                else break;
+                needs_separate = true;
             }
             count++;
             current_flag >>= 1;
-        }
+        } while (current_flag);
         return out;
     }
 
@@ -322,6 +346,7 @@ struct Style {
         to_escape(std::back_inserter(esc));
         return esc;
     }
+
 };
 
 // ----- color -----
@@ -349,19 +374,127 @@ inline constexpr Style invert            = Style(Style::Invert);
 inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
-// ----- style reset -----
+// ----- absolute style -----
 
-struct StyleReset {
-    Style reset_to;
+struct AbsoluteStyle {
+    Style style;
 
-    constexpr StyleReset(Style reset_to = Style()) : reset_to(reset_to) {}
+    constexpr AbsoluteStyle(Style style = Style()) : style(style) {}
+
+    template <std::output_iterator<char> OutputIt>
+    constexpr auto to_escape(OutputIt out) const -> OutputIt {
+        out = detail::write_to(out, "\x1b[;");
+        out = style.to_sgr_params(out);
+        *out++ = 'm';
+        return out;
+    }
+    
+    [[nodiscard]]
+    auto to_escape() const -> std::string {
+        std::string esc;
+        to_escape(std::back_inserter(esc));
+        return esc;
+    }
 };
 
-inline constexpr auto reset_to(Style style) -> StyleReset {
-    return StyleReset(style);
+inline constexpr auto absolute(Style style) -> AbsoluteStyle {
+    return AbsoluteStyle(style);
 }
 
-inline constexpr StyleReset reset = StyleReset();
+inline constexpr AbsoluteStyle reset = AbsoluteStyle();
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                        Terminal                         ║
+// ╚═════════════════════════════════════════════════════════╝
+
+constexpr struct StylePop {} pop;
+
+class Terminal {
+public:
+    // ----- settings -----
+    
+    enum class StyleMode{ Auto, Always, Never } style_mode = StyleMode::Auto;
+
+    bool restore_default_style_on_exit = true;
+
+    bool enable_style_track = true;
+
+    bool enable_color_fallback = true;
+
+    // ----- ctor -----
+
+    Terminal() :
+        style_track({ AbsoluteStyle() }) {}
+
+    ~Terminal() {
+        if (restore_default_style_on_exit) std::cout << reset.to_escape();
+    }
+
+    auto current_style() const -> Style { return style_track.back().style; }
+
+private:
+    friend class std::formatter<Style>;
+    friend class std::formatter<StylePop>;
+
+    friend auto operator<<(std::ostream& os, Style rhs) -> std::ostream&;
+    friend auto operator<<(std::ostream& os, StylePop) -> std::ostream&;
+
+    template <std::output_iterator<char> OutputIt>
+    auto style_push_and_apply(OutputIt out, AbsoluteStyle abs) -> OutputIt {
+        if (enable_style_track) style_track.push_back(abs.style);
+        return abs.to_escape(out);
+    }
+
+    template <std::output_iterator<char> OutputIt>
+    auto style_push_and_apply(OutputIt out, Style style) -> OutputIt {
+        if (enable_style_track) {
+            AbsoluteStyle absolute(current_style());
+            absolute.style |= style;
+            style_track.push_back(absolute);
+        }
+        return style.to_escape(out);
+    }
+
+    template <std::output_iterator<char> OutputIt>
+    auto style_pop_and_apply(OutputIt out) -> OutputIt {
+        if (enable_style_track) style_track.pop_back();
+        return current_style().to_escape(out);
+    }
+
+    std::vector<AbsoluteStyle> style_track;
+};
+
+inline Terminal terminal = Terminal();
+
+namespace detail {
+
+/// @brief make writter write to buffer, and emit to ostream.
+/// @detail max buffer size is Style::MAX_ESCAPE_CODE_SIZE + 1
+/// @param writter function: (OutputIt) -> OutputIt, where OutputIt is char*
+///                (ex.) Terminal::style_push_and_apply
+inline void write_style_to_os(std::invocable<char*> auto&& writter,
+                         std::ostream& os) {
+    std::array<char, Style::MAX_ESCAPE_CODE_SIZE + 1> buf;
+    auto out = writter(buf.begin());
+    *out = 0;
+    os << buf.begin();
+}
+
+}   // namespace detail
+
+inline auto operator<<(std::ostream& os, Style rhs) -> std::ostream& {
+    detail::write_style_to_os([rhs](char* out){
+        return terminal.style_push_and_apply(out, rhs);
+    }, os);
+    return os;
+}
+
+inline auto operator<<(std::ostream& os, StylePop) -> std::ostream& {
+    detail::write_style_to_os([](char* out) {
+        return terminal.style_pop_and_apply(out);
+    }, os);
+    return os;
+}
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         Colors                          ║
@@ -651,39 +784,42 @@ inline constexpr Color whitelight   = Color(Colors::WhiteLight);
 
 #ifndef DECOTERM_NO_FORMAT
 
-#include <format>
-
 // ╔═════════════════════════════════════════════════════════╗
 // ║                        formatter                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
 namespace std {
 
-template<>
-struct formatter<deco::Style>{
+template<typename StyleType>
+    requires std::same_as<StyleType, deco::Style>
+        || std::same_as<StyleType, deco::AbsoluteStyle>
+struct formatter<StyleType> {
+
+    constexpr formatter() = default;
+
     constexpr auto parse(std::format_parse_context& ctx) {
         return ctx.begin();
     }
 
-    auto format(deco::Style style, std::format_context& ctx) const {
-        return style.to_escape(ctx.out());
+    auto format(StyleType style, std::format_context& ctx) const {
+        return deco::terminal.style_push_and_apply(ctx.out(), style);
     }
 };
 
 template<>
-struct formatter<deco::StyleReset> : formatter<deco::Style> {
-    auto format(deco::StyleReset style_reset, std::format_context& ctx) const {
-        auto out = ctx.out();
-        *out++ = '\x1b';
-        *out++ = 'm';
-        out = style_reset.reset_to.to_sgr_params(out);
-        return out;
+struct formatter<deco::StylePop> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    auto format(deco::StylePop, std::format_context &ctx) const {
+        return deco::terminal.style_pop_and_apply(ctx.out());
     }
 };
+
 
 };
 
 #endif // !DECOTERM_NO_FORMAT
-
 
 #endif  // !DECOTERM_HPP

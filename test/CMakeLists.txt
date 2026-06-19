@@ -9,16 +9,16 @@ FetchContent_MakeAvailable(doctest)
 include("${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake")
 
 add_executable(decoterm_tests
-    test_color.cpp
-    test_style.cpp
+    test_color_esc.cpp
+    test_style_esc.cpp
 )
-
-target_compile_features(decoterm_tests PRIVATE cxx_std_23)
 
 target_link_libraries(decoterm_tests
     PRIVATE
     decoterm
     doctest::doctest
 )
+
+target_compile_features(decoterm_tests PRIVATE cxx_std_20)
 
 add_test(NAME decoterm_tests COMMAND decoterm_tests)
