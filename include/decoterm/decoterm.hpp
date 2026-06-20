@@ -1,7 +1,7 @@
 #ifndef DECOTERM_HPP
 #define DECOTERM_HPP
 
-// ╭──────────────────────────────────╮
+// ╔──────────────────────────────────╗
 // │╔═══╗                             │
 // │╚╗╔╗║            ┏━━━━┓           │
 // │ ║║║║╔══╗╔══╗╔══╗┃┏┓┏┓┃           │
@@ -9,7 +9,7 @@
 // │╔╝╚╝║║║═╣║╚═╗║╚╝║  ┃┃  ┃┏┓┃┃┏┛┃┗┛┃│   terminal output
 // │╚═══╝╚══╝╚══╝╚══╝ ┏┛┗┓ ┃┃━┫┃┃ ┃┃┃┃│
 // │                  ┗━━┛ ┗━━┛┗┛ ┗┻┻┛│
-// ╰──────────────────────────────────╯
+// ╚──────────────────────────────────╝
 //
 // Licence
 // =======
@@ -42,6 +42,7 @@
 // - styled()
 // - Windows API fallback for Windows8 or lower versions
 
+#include <unistd.h>
 #include <array>
 #include <cassert>
 #include <charconv>
@@ -51,6 +52,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #ifndef DECOTERM_NO_FORMAT
@@ -80,7 +82,7 @@ inline constexpr std::array<std::string_view, 16> SGR_PARAM_BG {
     "107"
 };
 
-inline constexpr std::array<std::string_view, 8> SGR_PARAMS_STYLE {
+inline constexpr std::array<std::string_view, 8> SGR_PARAM_STYLE {
     "1" /*bold*/,           "2"  /*dim*/,           "3" /*italic*/,
     "4" /*underline*/,      "5"  /*blink*/,         "7" /*invert*/,
     "9" /*strikethrough*/,  "21" /*double underline*/
@@ -140,7 +142,7 @@ struct Color {
     // ----- output -----
     
     /// @brief write SGR parameters to out.
-    template <std::output_iterator<char> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out, bool is_bg) const -> OutputIt {
         using namespace detail;
         auto write_converted = [&out](int value) {
@@ -181,7 +183,7 @@ struct Color {
         }
     }
 
-    template <std::output_iterator<char> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out, bool is_bg) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
         out = to_sgr_params(out, is_bg);
@@ -226,6 +228,7 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 /// @param h [0, 360): Hue of the color
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
+[[nodiscard]]
 inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
     // clang-format off
     if (h < 0 || h >= 360) throw std::invalid_argument(
@@ -308,12 +311,10 @@ struct Style {
 
     // ----- output -----
 
-    template <std::output_iterator<char> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
         using namespace detail;
-
         if (empty()) return out;
-
         bool needs_separate = false;
 
         if (fg) {
@@ -332,7 +333,7 @@ struct Style {
         do {
             if (current_flag & 1) {
                 if (needs_separate) *out++ = ';';
-                out = write_to(out, SGR_PARAMS_STYLE[count]);
+                out = write_to(out, SGR_PARAM_STYLE[count]);
                 needs_separate = true;
             }
             count++;
@@ -341,7 +342,7 @@ struct Style {
         return out;
     }
 
-    template <std::output_iterator<char> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
         out = to_sgr_params(out);
@@ -358,39 +359,12 @@ struct Style {
 
 };
 
-// ----- color -----
-
-inline constexpr auto color(Color fg, Color bg) -> Style {
-    return Style(Style::None, fg, bg);
-}
-
-inline constexpr auto fg(Color fg) -> Style {
-    return Style(Style::None, fg);
-}
-
-inline constexpr auto bg(Color bg) -> Style { 
-    return Style(Style::None, Color::None, bg);
-}
-
-// ----- styles -----
-
-inline constexpr Style bold              = Style(Style::Bold);
-inline constexpr Style dim               = Style(Style::Dim);
-inline constexpr Style italic            = Style(Style::Italic);
-inline constexpr Style underline         = Style(Style::Underline);
-inline constexpr Style blink             = Style(Style::Blink);
-inline constexpr Style invert            = Style(Style::Invert);
-inline constexpr Style strikethrough     = Style(Style::Strikethrough);
-inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
-
-// ----- absolute style -----
-
 struct AbsoluteStyle {
     Style style;
 
     constexpr AbsoluteStyle(Style style = Style()) : style(style) {}
 
-    template <std::output_iterator<char> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[;");
         out = style.to_sgr_params(out);
@@ -410,6 +384,29 @@ inline constexpr auto absolute(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
+// ----- styles -----
+
+inline constexpr auto color(Color fg, Color bg) -> Style {
+    return Style(Style::None, fg, bg);
+}
+
+inline constexpr auto fg(Color fg) -> Style {
+    return Style(Style::None, fg);
+}
+
+inline constexpr auto bg(Color bg) -> Style { 
+    return Style(Style::None, Color::None, bg);
+}
+
+inline constexpr Style bold              = Style(Style::Bold);
+inline constexpr Style dim               = Style(Style::Dim);
+inline constexpr Style italic            = Style(Style::Italic);
+inline constexpr Style underline         = Style(Style::Underline);
+inline constexpr Style blink             = Style(Style::Blink);
+inline constexpr Style invert            = Style(Style::Invert);
+inline constexpr Style strikethrough     = Style(Style::Strikethrough);
+inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
+
 inline constexpr AbsoluteStyle reset = AbsoluteStyle();
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -418,65 +415,11 @@ inline constexpr AbsoluteStyle reset = AbsoluteStyle();
 
 constexpr struct StylePop {} pop;
 
-class Terminal {
-public:
-    // ----- settings -----
-    
-    enum class StyleMode{ Auto, Always, Never } style_mode = StyleMode::Auto;
-
-    bool restore_default_style_on_exit = true;
-
-    bool enable_style_track = true;
-
-    bool enable_color_fallback = true;
-
-    // ----- ctor -----
-
-    Terminal() :
-        style_track({ AbsoluteStyle() }) {}
-
-    ~Terminal() {
-        if (restore_default_style_on_exit) std::cout << reset.to_escape();
-    }
-
-    auto current_style() const -> Style { return style_track.back().style; }
-
-private:
-
-#ifndef DECOTERM_NO_FORMAT
-    friend class std::formatter<Style>;
-    friend class std::formatter<StylePop>;
-#endif // !DECOTERM_NO_FORMAT
-
-    friend auto operator<<(std::ostream& os, Style rhs) -> std::ostream&;
-    friend auto operator<<(std::ostream& os, StylePop) -> std::ostream&;
-
-    template <std::output_iterator<char> OutputIt>
-    auto style_push_and_apply(OutputIt out, AbsoluteStyle abs) -> OutputIt {
-        if (enable_style_track) style_track.push_back(abs.style);
-        return abs.to_escape(out);
-    }
-
-    template <std::output_iterator<char> OutputIt>
-    auto style_push_and_apply(OutputIt out, Style style) -> OutputIt {
-        if (enable_style_track) {
-            AbsoluteStyle absolute(current_style());
-            absolute.style |= style;
-            style_track.push_back(absolute);
-        }
-        return style.to_escape(out);
-    }
-
-    template <std::output_iterator<char> OutputIt>
-    auto style_pop_and_apply(OutputIt out) -> OutputIt {
-        if (enable_style_track) style_track.pop_back();
-        return current_style().to_escape(out);
-    }
-
-    std::vector<AbsoluteStyle> style_track;
+enum class ColorSupport {
+    TrueColor,
+    Color256,
+    Color16
 };
-
-inline Terminal terminal = Terminal();
 
 namespace detail {
 
@@ -492,7 +435,139 @@ inline void write_style_to_os(std::invocable<char*> auto&& writter,
     os << buf.begin();
 }
 
+inline void write_stdout(std::string_view s) {
+    write(STDOUT_FILENO, s.data(), s.size());
+}
+
+inline auto read_stdin(char* out, int nbytes) -> char* {
+    auto n = read(STDIN_FILENO, out, nbytes);
+    return out + n;
+}
+
+[[nodiscard]]
+inline auto is_stdout_tty() -> bool {
+    return isatty(STDOUT_FILENO);
+};
+
+// see https://github.com/termstandard/colors?tab=readme-ov-file
+[[nodiscard]]
+inline auto fetch_color_support() -> ColorSupport {
+    auto sv_from_pointer = [](const char* ch) -> std::string_view {
+        if (ch) return ch;
+        else return "";
+    };
+
+    std::string_view colorterm = sv_from_pointer(std::getenv("COLORTERM"));
+    if (colorterm == "truecolor" || colorterm == "24bit")
+        return ColorSupport::TrueColor; 
+
+    // fallback
+    std::array<char, 23> buf;
+    write_stdout("\x1b[48;2;1;1;1m\x1bP$qm\x1b\\");
+    char* out = read_stdin(buf.begin(), 22);
+    *out = 0;
+
+    std::string_view receive(buf.begin());
+    if (receive.find("48:2:1:1:1m") != receive.npos)
+        return ColorSupport::TrueColor;
+
+    // TODO: 
+    return ColorSupport::Color16;
+};
+
 }   // namespace detail
+
+
+class Terminal {
+public:
+    // ----- settings -----
+    enum class StyleMode{ CheckStdout, Always, Never };
+    
+    /// @brief set style output mode. [default: CheckStdout]
+    /// @details 
+    /// StyleMode::CheckStdout: if current stdout points to tty, enable.
+    /// StyleMode::Always:      always enable style output.
+    /// StyleMode::Never:       disable style output.
+    auto style_mode(StyleMode set) -> Terminal& {
+        enabled_style_output_ = style_mode_ == StyleMode::Always
+            || (style_mode_ == StyleMode::CheckStdout && detail::is_stdout_tty());
+        return *this;
+    }
+
+    bool restore_default_style_on_exit = true;
+
+    bool enable_style_track = true;
+
+    bool enable_color_fallback = true;
+
+    // ----- constructor -----
+
+    Terminal() :
+        style_track_({ AbsoluteStyle()}) {
+        style_mode(StyleMode::CheckStdout);
+        if (enable_color_fallback) 
+            color_support_ = detail::fetch_color_support();
+    }
+
+    ~Terminal() {
+        //TODO: 
+        if (restore_default_style_on_exit) std::cout << reset.to_escape();
+    }
+
+    auto current_style() const -> Style { return style_track_.back().style; }
+
+    auto is_style_enabled() const -> bool { return enabled_style_output_; }
+
+    auto color_support() const -> ColorSupport { return color_support_; }
+
+private:
+
+#ifndef DECOTERM_NO_FORMAT
+    friend class std::formatter<Style>;
+    friend class std::formatter<StylePop>;
+#endif // !DECOTERM_NO_FORMAT
+
+    friend auto operator<<(std::ostream& os, Style rhs) -> std::ostream&;
+    friend auto operator<<(std::ostream& os, StylePop) -> std::ostream&;
+
+    template <std::output_iterator<const char&> OutputIt>
+    auto style_push_and_apply(OutputIt out, AbsoluteStyle abs) -> OutputIt {
+        if (enable_style_track) style_track_.push_back(abs.style);
+        if (enabled_style_output_) return abs.to_escape(out);
+        else return out;
+    }
+
+    template <std::output_iterator<const char&> OutputIt>
+    auto style_push_and_apply(OutputIt out, Style style) -> OutputIt {
+        if (enable_style_track) {
+            AbsoluteStyle absolute(current_style());
+            absolute.style |= style;
+            style_track_.push_back(absolute);
+        }
+        if (enabled_style_output_) return style.to_escape(out);
+        else return out;
+    }
+
+    template <std::output_iterator<const char&> OutputIt>
+    auto style_pop_and_apply(OutputIt out) -> OutputIt {
+        if (enable_style_track) style_track_.pop_back();
+        if (enabled_style_output_) return current_style().to_escape(out);
+        else return out;
+    }
+
+    std::vector<AbsoluteStyle> style_track_;
+
+    StyleMode style_mode_;
+    ColorSupport color_support_;
+    bool enabled_style_output_;
+};
+
+#ifndef DECOTERM_NO_GLOBAL_TERMINAL
+
+/// the global terminal object.
+inline Terminal terminal = Terminal();
+
+#endif // !DECOTERM_NO_GLOBAL_TERMINAL
 
 inline auto operator<<(std::ostream& os, Style rhs) -> std::ostream& {
     detail::write_style_to_os([rhs](char* out){
