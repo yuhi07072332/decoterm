@@ -1,15 +1,15 @@
 #ifndef DECOTERM_HPP
 #define DECOTERM_HPP
 
-// ╔──────────────────────────────────╗
-// │╔═══╗                             │
-// │╚╗╔╗║            ┏━━━━┓           │
+// ╔
+// │╔═══╗
+// │╚╗╔╗║            ┏━━━━┓           ╗
 // │ ║║║║╔══╗╔══╗╔══╗┃┏┓┏┓┃           │
 // │ ║║║║║╔╗║║╔═╝║╔╗║┗┛┃┃┗┛┏━━┓┏━┓┏┓┏┓│   A simple C++20 library for styling
 // │╔╝╚╝║║║═╣║╚═╗║╚╝║  ┃┃  ┃┏┓┃┃┏┛┃┗┛┃│   terminal output
 // │╚═══╝╚══╝╚══╝╚══╝ ┏┛┗┓ ┃┃━┫┃┃ ┃┃┃┃│
-// │                  ┗━━┛ ┗━━┛┗┛ ┗┻┻┛│
-// ╚──────────────────────────────────╝
+// ╚────────────────┐ ┗━━┛ ┗━━┛┗┛ ┗┻┻┛│
+//                  ╚─────────────────╝
 //
 // Licence
 // =======
@@ -42,7 +42,6 @@
 // - styled()
 // - Windows API fallback for Windows8 or lower versions
 
-#include <unistd.h>
 #include <array>
 #include <cassert>
 #include <charconv>
@@ -54,6 +53,13 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#if defined(__linux__) || defined(__unix__)
+
+#include <unistd.h>
+#include <termios.h>
+
+#endif // defined(__linux__) || defined(__unix__)
 
 #ifndef DECOTERM_NO_FORMAT
 #include <format>
@@ -417,11 +423,14 @@ constexpr struct StylePop {} pop;
 
 enum class ColorSupport {
     TrueColor,
-    Color256,
     Color16
 };
 
 namespace detail {
+
+template <typename T>
+concept OutputableStyle = std::same_as<T, Style>
+    || std::same_as<T, AbsoluteStyle>;
 
 /// @brief make writter write to buffer, and emit to ostream.
 /// @detail max buffer size is Style::MAX_ESCAPE_CODE_SIZE + 1
@@ -439,19 +448,15 @@ inline void write_stdout(std::string_view s) {
     write(STDOUT_FILENO, s.data(), s.size());
 }
 
-inline auto read_stdin(char* out, int nbytes) -> char* {
-    auto n = read(STDIN_FILENO, out, nbytes);
-    return out + n;
-}
-
 [[nodiscard]]
 inline auto is_stdout_tty() -> bool {
     return isatty(STDOUT_FILENO);
 };
 
-// see https://github.com/termstandard/colors?tab=readme-ov-file
+// see https://github.com/termstandard/colors?tab=readme-ov-file,
+// https://www.xfree86.org/current/ctlseqs.html
 [[nodiscard]]
-inline auto fetch_color_support() -> ColorSupport {
+inline auto get_color_support() -> ColorSupport {
     auto sv_from_pointer = [](const char* ch) -> std::string_view {
         if (ch) return ch;
         else return "";
@@ -461,17 +466,35 @@ inline auto fetch_color_support() -> ColorSupport {
     if (colorterm == "truecolor" || colorterm == "24bit")
         return ColorSupport::TrueColor; 
 
-    // fallback
-    std::array<char, 23> buf;
-    write_stdout("\x1b[48;2;1;1;1m\x1bP$qm\x1b\\");
-    char* out = read_stdin(buf.begin(), 22);
-    *out = 0;
+    // fallback to DECRQSS if $COLORTERM is not set.
 
-    std::string_view receive(buf.begin());
-    if (receive.find("48:2:1:1:1m") != receive.npos)
-        return ColorSupport::TrueColor;
+    // termios original_termios;
+    // tcgetattr(STDIN_FILENO, &original_termios);
+    //
+    // termios raw = original_termios;
+    // cfmakeraw(&raw);
+    // raw.c_cc[VTIME] = 1;
+    // raw.c_cc[VMIN] = 0;
+    // tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    //
+    // write(STDOUT_FILENO, "\x1b[48;2;1;2;3m\x1bP$qm\x1b\\",20);
+    //
+    // std::array<char, 24> buf;
+    // for (std::size_t i = 0; i < buf.size() - 1; ++i) {
+    //     if (read(STDIN_FILENO, &buf[i], 1) != 1
+    //         || (i >= 2 && buf[i - 1] == '\\' && buf[i - 2] == '\x1b')) {
+    //             buf[i + 1] = '\0';
+    //         break;
+    //     }
+    // }
+    //
+    // tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
+    //
+    // std::string_view receive(buf.begin());
+    // if (receive.starts_with("\x1bP1$r")
+    //     && receive.find("48:2:1:2:3m") != receive.npos)
+    //     return ColorSupport::TrueColor;
 
-    // TODO: 
     return ColorSupport::Color16;
 };
 
@@ -480,7 +503,7 @@ inline auto fetch_color_support() -> ColorSupport {
 
 class Terminal {
 public:
-    // ----- settings -----
+    // ----- options -----
     enum class StyleMode{ CheckStdout, Always, Never };
     
     /// @brief set style output mode. [default: CheckStdout]
@@ -489,34 +512,46 @@ public:
     /// StyleMode::Always:      always enable style output.
     /// StyleMode::Never:       disable style output.
     auto style_mode(StyleMode set) -> Terminal& {
-        enabled_style_output_ = style_mode_ == StyleMode::Always
-            || (style_mode_ == StyleMode::CheckStdout && detail::is_stdout_tty());
+        is_style_enabled_ = set == StyleMode::Always
+            || (set == StyleMode::CheckStdout && detail::is_stdout_tty());
         return *this;
     }
 
-    bool restore_default_style_on_exit = true;
+    /// @brief [default: true]
+    auto restore_default_style_on_exit(bool set) -> Terminal& {
+        restore_default_style_on_exit_ = set;
+        return *this;
+    }
 
-    bool enable_style_track = true;
+    /// @brief [default: true]
+    auto enable_style_track(bool set) -> Terminal& {
+        is_style_track_enabled_ = set;
+        return *this;
+    }
 
-    bool enable_color_fallback = true;
+    auto enable_color_fallback(bool set) -> Terminal& {
+        is_color_fallback_enabled_ = set;
+        if (set) color_support_ = detail::get_color_support();
+        return *this;
+    }
 
     // ----- constructor -----
 
     Terminal() :
         style_track_({ AbsoluteStyle()}) {
         style_mode(StyleMode::CheckStdout);
-        if (enable_color_fallback) 
-            color_support_ = detail::fetch_color_support();
+        if (is_color_fallback_enabled_) 
+            color_support_ = detail::get_color_support();
     }
 
     ~Terminal() {
         //TODO: 
-        if (restore_default_style_on_exit) std::cout << reset.to_escape();
+        if (restore_default_style_on_exit_) std::cout << reset.to_escape();
     }
 
     auto current_style() const -> Style { return style_track_.back().style; }
 
-    auto is_style_enabled() const -> bool { return enabled_style_output_; }
+    auto is_style_enabled() const -> bool { return is_style_enabled_; }
 
     auto color_support() const -> ColorSupport { return color_support_; }
 
@@ -524,42 +559,47 @@ private:
 
 #ifndef DECOTERM_NO_FORMAT
     friend class std::formatter<Style>;
+    friend class std::formatter<AbsoluteStyle>;
     friend class std::formatter<StylePop>;
 #endif // !DECOTERM_NO_FORMAT
 
-    friend auto operator<<(std::ostream& os, Style rhs) -> std::ostream&;
+    template <detail::OutputableStyle StyleType>
+    friend auto operator<<(std::ostream& os, StyleType rhs) -> std::ostream&;
     friend auto operator<<(std::ostream& os, StylePop) -> std::ostream&;
 
     template <std::output_iterator<const char&> OutputIt>
     auto style_push_and_apply(OutputIt out, AbsoluteStyle abs) -> OutputIt {
-        if (enable_style_track) style_track_.push_back(abs.style);
-        if (enabled_style_output_) return abs.to_escape(out);
+        if (is_style_track_enabled_) style_track_.push_back(abs.style);
+        if (is_style_enabled_) return abs.to_escape(out);
         else return out;
     }
 
     template <std::output_iterator<const char&> OutputIt>
     auto style_push_and_apply(OutputIt out, Style style) -> OutputIt {
-        if (enable_style_track) {
+        if (is_style_track_enabled_) {
             AbsoluteStyle absolute(current_style());
             absolute.style |= style;
             style_track_.push_back(absolute);
         }
-        if (enabled_style_output_) return style.to_escape(out);
+        if (is_style_enabled_) return style.to_escape(out);
         else return out;
     }
 
     template <std::output_iterator<const char&> OutputIt>
     auto style_pop_and_apply(OutputIt out) -> OutputIt {
-        if (enable_style_track) style_track_.pop_back();
-        if (enabled_style_output_) return current_style().to_escape(out);
+        if (is_style_track_enabled_) style_track_.pop_back();
+        if (is_style_enabled_) return current_style().to_escape(out);
         else return out;
     }
 
     std::vector<AbsoluteStyle> style_track_;
 
-    StyleMode style_mode_;
+    bool restore_default_style_on_exit_ = true;
+    bool is_style_track_enabled_ = true;
+    bool is_color_fallback_enabled_ = true;
+
     ColorSupport color_support_;
-    bool enabled_style_output_;
+    bool is_style_enabled_;
 };
 
 #ifndef DECOTERM_NO_GLOBAL_TERMINAL
@@ -569,7 +609,8 @@ inline Terminal terminal = Terminal();
 
 #endif // !DECOTERM_NO_GLOBAL_TERMINAL
 
-inline auto operator<<(std::ostream& os, Style rhs) -> std::ostream& {
+template <detail::OutputableStyle StyleType>
+inline auto operator<<(std::ostream& os, StyleType rhs) -> std::ostream& {
     detail::write_style_to_os([rhs](char* out){
         return terminal.style_push_and_apply(out, rhs);
     }, os);
@@ -877,9 +918,7 @@ inline constexpr Color whitelight   = Color(Colors::WhiteLight);
 
 namespace std {
 
-template<typename StyleType>
-    requires std::same_as<StyleType, deco::Style>
-        || std::same_as<StyleType, deco::AbsoluteStyle>
+template<deco::detail::OutputableStyle StyleType>
 struct formatter<StyleType> {
 
     constexpr formatter() = default;
