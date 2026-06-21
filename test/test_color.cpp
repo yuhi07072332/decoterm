@@ -1,11 +1,11 @@
 #include <decoterm/decoterm.hpp>
 
-#include <array>
-#include <iostream>
 #include <print>
 #include <string_view>
 
-inline constexpr std::array<std::string_view, 16> color_names {
+using namespace deco;
+
+constexpr std::array<std::string_view, 16> color_names {
     "Black",
     "Red",
     "Green",
@@ -24,17 +24,17 @@ inline constexpr std::array<std::string_view, 16> color_names {
     "WhiteLight",
 };
 
-void print_color_cell(int color_index) {
-    const auto background = deco::Color(static_cast<deco::Colors>(color_index));
-    const auto foreground = color_index <= 213 ? deco::white : deco::black;
+void print_color_cell(int color_index, bool is_fg_white) {
+    const auto background = Color(static_cast<Colors>(color_index));
+    const auto foreground = 
+        is_fg_white ? white : black;
 
-    std::print("{}{:<3}{}", deco::color(foreground, background), color_index, deco::reset);
+    std::print("{}{:^4}{}", color(foreground, background), color_index, reset);
 }
 
 int main() {
-    using namespace deco;
 
-    std::println("{}========= ANSI Colors ========={}", fg(yellow), reset);
+    std::println("{}========= ANSI Colors ========={}\n", fg(bluelight), reset);
 
     std::println("system colors [0, 15]:\n");
     for (int i = 0; i <= 7; ++i) {
@@ -43,7 +43,7 @@ int main() {
         auto color_fg = col == black ? white : black;
 
         std::println(
-            "{2}{0:<12} {3}{0:<12} {4}{1:<12} {5}{1:<12}{6}",
+            "{2}{0:<12} {3}{0:<12}{6}  {4}{1:<12} {5}{1:<12}{6}",
             color_names[i],
             color_names[i + 8],
             fg(col),
@@ -54,13 +54,16 @@ int main() {
         );
     }
 
-    std::println("\n6 x 6 x 6 color cube [16, 231]:\n");
-    for (int cube_pair = 0; cube_pair < 6; cube_pair += 2) {
+    std::println();
+
+    std::println("6 x 6 x 6 color cube [16, 231]:\n");
+    for (int i = 0; i < 2; ++i) {
         for (int row = 0; row < 6; ++row) {
-            for (int cube = cube_pair; cube < cube_pair + 2; ++cube) {
+            for (int surface = i * 3; surface < i * 3 + 3; ++surface) {
                 for (int col = 0; col < 6; ++col) {
-                    print_color_cell(16 + cube * 36 + row * 6 + col);
-                    std::print(" ");
+                    int abs_col = 16 + surface * 6 + col;
+                    print_color_cell(row * 36 + abs_col,
+                                     abs_col < 34);
                 }
                 std::print("  ");
             }
@@ -69,9 +72,45 @@ int main() {
         std::println();
     }
 
+    std::println();
+
     std::println("grayscale colors [232, 255]:\n");
     for (int color_index = 232; color_index <= 255; ++color_index) {
-        print_color_cell(color_index);
+        print_color_cell(color_index, color_index <= 243);
     }
+    std::println("{}", reset);
+
     std::println();
+
+    std::println("{}========= True Color ========={}\n", fg(yellow), reset);
+
+
+    constexpr int step = 3;
+    for (int r = 0; r <= 255; r += step) std::print("{} ", bg(rgb(r, 0, 0)));
+    std::println("{}", reset);
+
+    for (int g = 0; g <= 255; g += step) std::print("{} ", bg(rgb(0, g, 0)));
+    std::println("{}", reset);
+
+    for (int b = 0; b <= 255; b += step) std::print("{} ", bg(rgb(0, 0, b)));
+    std::println("{}", reset);
+
+    for (int y = 0; y <= 255; y += step) std::print("{} ", bg(rgb(y, y, 0)));
+    std::println("{}", reset);
+
+    for (int c = 0; c <= 255; c += step) std::print("{} ", bg(rgb(0, c, c)));
+    std::println("{}", reset);
+
+    for (int m = 0; m <= 255; m += step) std::print("{} ", bg(rgb(m, 0, m)));
+    std::println("{}", reset);
+
+    std::println();
+
+    for (int v = 0; v < 256; v += 8) {
+        for (int h = 0; h < 360; h += 4) {
+            std::print("{} ", bg(hsv(h, 255, v)));
+        }
+        std::println("{}", reset);
+    }
+
 }
