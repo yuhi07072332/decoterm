@@ -33,6 +33,9 @@ void print_color_cell(int color_index, bool is_fg_white) {
 }
 
 int main() {
+    terminal.style_mode(deco::Terminal::StyleMode::Always)
+        .enable_style_track(false)
+        .restore_default_style_on_exit(false);
 
     std::println("{}========= ANSI Colors ========={}\n", fg(bluelight), reset);
 
@@ -106,9 +109,9 @@ int main() {
 
     std::println();
 
-    for (int v = 0; v < 256; v += 8) {
+    for (int v = 0; v < 256; v += 16) {
         for (int h = 0; h < 360; h += 4) {
-            std::print("{} ", bg(hsv(h, 255, v)));
+            std::print("{}▀", color(hsv(h, 255, v), hsv(h, 255, v + 8)));
         }
         std::println("{}", reset);
     }

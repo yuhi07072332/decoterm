@@ -1,15 +1,15 @@
 #ifndef DECOTERM_HPP
 #define DECOTERM_HPP
 
-// ╔
-// │╔═══╗
-// │╚╗╔╗║            ┏━━━━┓           ╗
-// │ ║║║║╔══╗╔══╗╔══╗┃┏┓┏┓┃           │
-// │ ║║║║║╔╗║║╔═╝║╔╗║┗┛┃┃┗┛┏━━┓┏━┓┏┓┏┓│   A simple C++20 library for styling
-// │╔╝╚╝║║║═╣║╚═╗║╚╝║  ┃┃  ┃┏┓┃┃┏┛┃┗┛┃│   terminal output
-// │╚═══╝╚══╝╚══╝╚══╝ ┏┛┗┓ ┃┃━┫┃┃ ┃┃┃┃│
-// ╚────────────────┐ ┗━━┛ ┗━━┛┗┛ ┗┻┻┛│
-//                  ╚─────────────────╝
+// 
+// ╔═══╗
+// ╚╗╔╗║            ┏━━━━┓
+//  ║║║║╔══╗╔══╗╔══╗┃┏┓┏┓┃
+//  ║║║║║╔╗║║╔═╝║╔╗║┗┛┃┃┗┛┏━━┓┏━┓┏┓┏┓   A simple C++20 library for styling
+// ╔╝╚╝║║║═╣║╚═╗║╚╝║  ┃┃  ┃┏┓┃┃┏┛┃┗┛┃   terminal output
+// ╚═══╝╚══╝╚══╝╚══╝ ┏┛┗┓ ┃┃━┫┃┃ ┃┃┃┃
+//                   ┗━━┛ ┗━━┛┗┛ ┗┻┻┛
+//
 //
 // Licence
 // =======
@@ -38,10 +38,12 @@
 
 
 // TODO:
+// - default color
 // - Detect terminal color support info & provide fallback system color for true color
 // - styled()
 // - Windows API fallback for Windows8 or lower versions
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <charconv>
@@ -61,9 +63,7 @@
 
 #endif // defined(__linux__) || defined(__unix__)
 
-#ifndef DECOTERM_NO_FORMAT
 #include <format>
-#endif // !DECOTERM_NO_FORMAT
 
 namespace deco {
 
@@ -435,13 +435,11 @@ concept OutputableStyle = std::same_as<T, Style>
 /// @brief make writter write to buffer, and emit to ostream.
 /// @detail max buffer size is Style::MAX_ESCAPE_CODE_SIZE + 1
 /// @param writter function: (OutputIt) -> OutputIt, where OutputIt is char*
-///                (ex.) Terminal::style_push_and_apply
 inline void write_style_to_os(std::invocable<char*> auto&& writter,
                          std::ostream& os) {
     std::array<char, Style::MAX_ESCAPE_CODE_SIZE + 1> buf;
     auto out = writter(buf.begin());
-    *out = 0;
-    os << buf.begin();
+    os.write(buf.data(), out - buf.begin());
 }
 
 inline void write_stdout(std::string_view s) {
@@ -537,8 +535,7 @@ public:
 
     // ----- constructor -----
 
-    Terminal() :
-        style_track_({ AbsoluteStyle()}) {
+    Terminal() {
         style_mode(StyleMode::CheckStdout);
         if (is_color_fallback_enabled_) 
             color_support_ = detail::get_color_support();
@@ -549,7 +546,10 @@ public:
         if (restore_default_style_on_exit_) std::cout << reset.to_escape();
     }
 
-    auto current_style() const -> Style { return style_track_.back().style; }
+    auto current_style() const -> Style { 
+        return !style_track_.empty() ? style_track_.back().style
+            : default_style_.style;
+    }
 
     auto is_style_enabled() const -> bool { return is_style_enabled_; }
 
@@ -557,11 +557,9 @@ public:
 
 private:
 
-#ifndef DECOTERM_NO_FORMAT
     friend class std::formatter<Style>;
     friend class std::formatter<AbsoluteStyle>;
     friend class std::formatter<StylePop>;
-#endif // !DECOTERM_NO_FORMAT
 
     template <detail::OutputableStyle StyleType>
     friend auto operator<<(std::ostream& os, StyleType rhs) -> std::ostream&;
@@ -569,6 +567,7 @@ private:
 
     template <std::output_iterator<const char&> OutputIt>
     auto style_push_and_apply(OutputIt out, AbsoluteStyle abs) -> OutputIt {
+        //TODO: check if style is same as current_style()
         if (is_style_track_enabled_) style_track_.push_back(abs.style);
         if (is_style_enabled_) return abs.to_escape(out);
         else return out;
@@ -593,6 +592,7 @@ private:
     }
 
     std::vector<AbsoluteStyle> style_track_;
+    AbsoluteStyle default_style_ = AbsoluteStyle();
 
     bool restore_default_style_on_exit_ = true;
     bool is_style_track_enabled_ = true;
@@ -910,7 +910,6 @@ inline constexpr Color whitelight   = Color(Colors::WhiteLight);
 
 }   // namespace deco
 
-#ifndef DECOTERM_NO_FORMAT
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                        formatter                        ║
@@ -946,6 +945,5 @@ struct formatter<deco::StylePop> {
 
 };  // namespace std
 
-#endif // !DECOTERM_NO_FORMAT
 
 #endif  // !DECOTERM_HPP
