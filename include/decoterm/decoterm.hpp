@@ -38,12 +38,10 @@
 
 
 // TODO:
-// - default color
 // - Detect terminal color support info & provide fallback system color for true color
 // - styled()
 // - Windows API fallback for Windows8 or lower versions
 
-#include <algorithm>
 #include <array>
 #include <cassert>
 #include <charconv>
@@ -93,6 +91,7 @@ inline constexpr std::array<std::string_view, 8> SGR_PARAM_STYLE {
     "4" /*underline*/,      "5"  /*blink*/,         "7" /*invert*/,
     "9" /*strikethrough*/,  "21" /*double underline*/
 };
+// clang-format on
 
 template <std::output_iterator<const char&> OutputIt>
 inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
@@ -100,8 +99,6 @@ inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
     return out;
 }
 
-
-// clang-format on
 
 }   // namespace detail
 
@@ -127,7 +124,7 @@ struct Color {
         if (sp == None) type_ = Type::None;
         else if (sp == Default) type_ = Type::Default;
         else 
-            throw std::invalid_argument("Color(): invalid SpecialColor value");
+            throw std::invalid_argument("deco::Color(): invalid SpecialColor value");
     }
 
     constexpr Color(Colors col)
@@ -223,7 +220,7 @@ inline constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
 /// @pre rgb <= 0xFFFFFF
 inline constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
-    if (hex > 0xffffff) throw std::invalid_argument("Color::rgb(): rgb > 0xffffff");
+    if (hex > 0xffffff) throw std::invalid_argument("deco::Color::rgb(): rgb > 0xffffff");
     return Color((hex >> 16) & 0xFF,
                       (hex >> 8) & 0xFF,
                       hex & 0xFF);
@@ -238,7 +235,7 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
     // clang-format off
     if (h < 0 || h >= 360) throw std::invalid_argument(
-        "Color::hsv(): h is not in range [0, 360)");
+        "deco::Color::hsv(): h is not in range [0, 360)");
 
     float hp = h / 60.f;
     float sp = s / 255.0f;
@@ -435,7 +432,7 @@ concept OutputableStyle = std::same_as<T, Style>
 /// @brief make writter write to buffer, and emit to ostream.
 /// @detail max buffer size is Style::MAX_ESCAPE_CODE_SIZE + 1
 /// @param writter function: (OutputIt) -> OutputIt, where OutputIt is char*
-inline void write_style_to_os(std::invocable<char*> auto&& writter,
+inline void write_style_to_ostream(std::invocable<char*> auto&& writter,
                          std::ostream& os) {
     std::array<char, Style::MAX_ESCAPE_CODE_SIZE + 1> buf;
     auto out = writter(buf.begin());
@@ -607,22 +604,37 @@ private:
 /// the global terminal object.
 inline Terminal terminal = Terminal();
 
-#endif // !DECOTERM_NO_GLOBAL_TERMINAL
-
 template <detail::OutputableStyle StyleType>
 inline auto operator<<(std::ostream& os, StyleType rhs) -> std::ostream& {
-    detail::write_style_to_os([rhs](char* out){
+    detail::write_style_to_ostream([rhs](char* out){
         return terminal.style_push_and_apply(out, rhs);
     }, os);
     return os;
 }
 
 inline auto operator<<(std::ostream& os, StylePop) -> std::ostream& {
-    detail::write_style_to_os([](char* out) {
+    detail::write_style_to_ostream([](char* out) {
         return terminal.style_pop_and_apply(out);
     }, os);
     return os;
 }
+
+#else
+
+template <detail::OutputableStyle StyleType>
+inline auto operator<<(std::ostream& os, StyleType rhs) -> std::ostream& {
+    detail::write_style_to_ostream([rhs](char* out){
+        return rhs.to_escape(out);
+    }, os);
+    return os;
+}
+
+inline auto operator<<(std::ostream& os, StylePop) -> std::ostream& {
+    throw std::logic_error("deco::operator<<(): cannot pop style"
+        "when global terminal object is disabled");
+}
+
+#endif // !DECOTERM_NO_GLOBAL_TERMINAL
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         Colors                          ║
@@ -891,6 +903,8 @@ enum class Colors : uint8_t {
     Grey93            = 255,
 };
 
+inline constexpr Color default_color = Color(Color::Default);
+
 inline constexpr Color black        = Color(Colors::Black);
 inline constexpr Color red          = Color(Colors::Red);
 inline constexpr Color green        = Color(Colors::Green);
@@ -917,6 +931,8 @@ inline constexpr Color whitelight   = Color(Colors::WhiteLight);
 
 namespace std {
 
+#ifndef DECOTERM_NO_GLOBAL_TERMINAL
+
 template<deco::detail::OutputableStyle StyleType>
 struct formatter<StyleType> {
 
@@ -941,6 +957,25 @@ struct formatter<deco::StylePop> {
         return deco::terminal.style_pop_and_apply(ctx.out());
     }
 };
+
+#else
+
+template<deco::detail::OutputableStyle StyleType>
+struct formatter<StyleType> {
+
+    constexpr formatter() = default;
+
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    auto format(StyleType style, std::format_context& ctx) const {
+        return style.to_escape(ctx.out());
+    }
+};
+
+#endif // !DECOTERM_NO_GLOBAL_TERMINAL
+
 
 
 };  // namespace std
