@@ -1,5 +1,5 @@
-#define DECOTERM_NO_FORMAT
-#include <decoterm/decoterm.hpp>
+#include <decoterm/terminal.hpp>
+
 #include <print>
 
 int main() {

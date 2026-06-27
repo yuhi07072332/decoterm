@@ -1,4 +1,4 @@
-#include <decoterm/decoterm.hpp>
+#include <decoterm/formatter.hpp>
 
 #include <array>
 #include <print>

@@ -1,4 +1,5 @@
 #include <decoterm/decoterm.hpp>
+#include <decoterm/formatter.hpp>
 
 #include <print>
 #include <string_view>
@@ -25,7 +26,7 @@ constexpr std::array<std::string_view, 16> color_names {
 };
 
 void print_color_cell(int color_index, bool is_fg_white) {
-    const auto background = Color(static_cast<Colors>(color_index));
+    const auto background = Color(color_index);
     const auto foreground = 
         is_fg_white ? white : black;
 
@@ -33,16 +34,12 @@ void print_color_cell(int color_index, bool is_fg_white) {
 }
 
 int main() {
-    terminal.style_mode(deco::Terminal::StyleMode::Always)
-        .enable_style_track(false)
-        .restore_default_style_on_exit(false);
-
     std::println("{}========= ANSI Colors ========={}\n", fg(bluelight), reset);
 
     std::println("system colors [0, 15]:\n");
     for (int i = 0; i <= 7; ++i) {
-        auto col = Color(static_cast<Colors>(i));
-        auto colorlight = Color(static_cast<Colors>(i + 8));
+        auto col = Color(i);
+        auto colorlight = Color(i);
         auto color_fg = col == black ? white : black;
 
         std::println(
@@ -51,7 +48,7 @@ int main() {
             color_names[i + 8],
             fg(col),
             color(color_fg, col),
-            color(colorlight, Color::Default),
+            color(colorlight, defaultcol),
             color(color_fg, colorlight),
             reset
         );

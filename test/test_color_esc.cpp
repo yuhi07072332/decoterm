@@ -2,6 +2,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 
 #include <decoterm/decoterm.hpp>
+#include <decoterm/formatter.hpp>
+
 #include <doctest.h>
 
 #include <array>
@@ -41,33 +43,24 @@ auto true_bg(uint8_t r, uint8_t g, uint8_t b) -> std::string {
 TEST_CASE("Color special colors generate escape sequences") {
     using namespace deco;
 
-    const Color none = Color::None;
-    CHECK(none.empty());
-    CHECK_FALSE(static_cast<bool>(none));
-    CHECK(none.to_escape(false) == esc(""));
-    CHECK(none.to_escape(true) == esc(""));
 
-    const Color default_color = Color::Default;
-    CHECK_FALSE(default_color.empty());
-    CHECK(static_cast<bool>(default_color));
-    CHECK(default_color.to_escape(false) == esc("39"));
-    CHECK(default_color.to_escape(true) == esc("49"));
+    CHECK(nullcol.is_empty());
+    CHECK_FALSE(static_cast<bool>(nullcol));
+    CHECK(nullcol.to_escape(false) == esc(""));
+    CHECK(nullcol.to_escape(true) == esc(""));
+
+    CHECK_FALSE(defaultcol.is_empty());
+    CHECK(static_cast<bool>(defaultcol));
+    CHECK(defaultcol.to_escape(false) == esc("39"));
+    CHECK(defaultcol.to_escape(true) == esc("49"));
 }
 
 TEST_CASE("Color system colors use SGR foreground and background parameters") {
     using namespace deco;
 
-    constexpr std::array colors {
-        Colors::Black, Colors::Red, Colors::Green, Colors::Yellow,
-        Colors::Blue, Colors::Magenta, Colors::Cyan, Colors::White,
-        Colors::BlackLight, Colors::RedLight, Colors::GreenLight,
-        Colors::YellowLight, Colors::BlueLight, Colors::MagentaLight,
-        Colors::CyanLight, Colors::WhiteLight,
-    };
-
-    for (std::size_t i = 0; i < colors.size(); ++i) {
+    for (std::size_t i = 0; i < 16; ++i) {
         CAPTURE(i);
-        const Color color = colors[i];
+        const Color color = Color(i);
         CHECK(color.to_escape(false) == esc(detail::SGR_PARAM_FG[i]));
         CHECK(color.to_escape(true) == esc(detail::SGR_PARAM_BG[i]));
     }
@@ -96,7 +89,7 @@ TEST_CASE("Color indexed 256 colors use 38/48;5 escape sequences") {
 
     for (uint8_t index : indexes) {
         CAPTURE(index);
-        const Color color = static_cast<Colors>(index);
+        const Color color = Color(index);
         CHECK(color.to_escape(false) == indexed_fg(index));
         CHECK(color.to_escape(true) == indexed_bg(index));
     }
