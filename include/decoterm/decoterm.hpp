@@ -1,19 +1,6 @@
-#ifndef DECOTERM_HPP
-#define DECOTERM_HPP
+#ifndef DECOTERM_DECOTERM_HPP
+#define DECOTERM_DECOTERM_HPP
 
-// 
-// ╔═══╗
-// ╚╗╔╗║            ┏━━━━┓
-//  ║║║║╔══╗╔══╗╔══╗┃┏┓┏┓┃
-//  ║║║║║╔╗║║╔═╝║╔╗║┗┛┃┃┗┛┏━━┓┏━┓┏┓┏┓   A simple C++20 library for styling
-// ╔╝╚╝║║║═╣║╚═╗║╚╝║  ┃┃  ┃┏┓┃┃┏┛┃┗┛┃   terminal output
-// ╚═══╝╚══╝╚══╝╚══╝ ┏┛┗┓ ┃┃━┫┃┃ ┃┃┃┃
-//                   ┗━━┛ ┗━━┛┗┛ ┗┻┻┛
-//
-//
-// Licence
-// =======
-//
 // MIT Licence
 //
 // Copyright (c) 2026 Yuhi0707
@@ -40,6 +27,7 @@
 // TODO:
 // - Detect terminal color support info & provide fallback system color for true color
 // - styled()
+// - markup string
 // - Windows API fallback for Windows8 or lower versions
 
 #include <array>
@@ -52,6 +40,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace deco {
 
@@ -64,9 +53,10 @@ template <typename T>
 concept OutputableStyle = std::same_as<T, Style>
     || std::same_as<T, AbsoluteStyle>;
 
-/// tag type for special color value.
-struct defaultcol_t { constexpr defaultcol_t() = default; };
-struct nullcol_t { constexpr nullcol_t() = default; };
+// tag types
+struct defaultcol_t {};
+struct nullcol_t {};
+struct stylepop_t {};
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
@@ -301,7 +291,7 @@ inline constexpr Color whitelight   = Color(colors::WhiteLight);
 // ╚═════════════════════════════════════════════════════════╝
 
 struct Style {
-    enum StyleFlags : uint8_t {
+    enum Flags : uint8_t {
         None            = 0,
         Bold            = 1 << 0,
         Dim             = 1 << 1,
@@ -406,7 +396,7 @@ struct AbsoluteStyle {
 
     Style style;
 
-    constexpr AbsoluteStyle(Style style = Style()) : style(style) {}
+    constexpr explicit AbsoluteStyle(Style style = Style()) : style(style) {}
 
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
@@ -457,19 +447,93 @@ inline constexpr AbsoluteStyle reset = AbsoluteStyle();
 // ║                         output                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-#ifndef DECOTERM_DETAIL_GLOBAL_TERMINAL
+namespace detail {
 
+class StyleOutput {
+public:
+    StyleOutput() = default;
+
+    // ----- options -----
+
+    bool is_enabled = true;
+    bool is_stack_enabled = false;
+
+    // ----- style -----
+
+    auto current_style() const -> AbsoluteStyle {
+        if (style_stack_.empty()) return reset;
+        return style_stack_.back();
+    }
+
+    void push_style_if(Style style) {
+        if (!is_stack_enabled) return;
+        AbsoluteStyle absolute = style_stack_.back();
+        absolute.style |= style;
+        style_stack_.push_back(absolute);
+    }
+
+    void push_style_if(AbsoluteStyle style) {
+        if (!is_stack_enabled) return;
+        style_stack_.push_back(style);
+    }
+
+    auto pop_style_if() -> AbsoluteStyle {
+        if (is_stack_enabled && style_stack_.size() > 1) 
+            style_stack_.pop_back();
+        return current_style();
+    }
+
+private:
+    std::vector<AbsoluteStyle> style_stack_;
+};
+
+inline StyleOutput g_style_output;
+
+}   // namespace detail
+
+/// @brief ostream output operator for Style and AbsoluteStyle.
 template <detail::OutputableStyle StyleT>
 inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
+    using namespace detail;
+
+    g_style_output.push_style_if(rhs);
+    if (!g_style_output.is_enabled) return os;
     std::array<char, StyleT::MAX_ESCAPE_CODE_SIZE> buf;
     auto end = rhs.to_escape(buf.begin());
     os.write(buf.data(), end - buf.begin());
     return os;
 }
 
-#endif // !DECOTERM_DETAIL_GLOBAL_TERMINAL
+/// @brief ostream output operator for pop.
+inline auto operator<<(std::ostream& os, detail::stylepop_t) -> std::ostream& {
+    using namespace detail;
 
+    auto current = g_style_output.pop_style_if();
+    if (!g_style_output.is_enabled) return os;
+    std::array<char, AbsoluteStyle::MAX_ESCAPE_CODE_SIZE> buf;
+    auto end = current.to_escape(buf.begin());
+    os.write(buf.data(), end - buf.begin());
+    return os;
+}
+
+inline void enable_style_output() { 
+    detail::g_style_output.is_enabled = true;
+}
+
+inline void disable_style_output() { 
+    detail::g_style_output.is_enabled = false;
+}
+
+inline void enable_style_stack() { 
+    detail::g_style_output.is_stack_enabled = true;
+}
+
+inline void disable_style_stack() { 
+    detail::g_style_output.is_stack_enabled = false;
+}
+
+inline constexpr detail::stylepop_t pop;
 
 }   // namespace deco
 
-#endif  // !DECOTERM_HPP
+#endif  // !DECOTERM_DECOTERM_HPP

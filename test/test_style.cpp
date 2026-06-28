@@ -22,7 +22,7 @@ int main() {
     for (int i = 0; i < style_names.size(); ++i) {
         std::print(
             "{}{}{}  ",
-            Style(static_cast<Style::StyleFlags>(1 << i)),
+            Style(1 << i),
             style_names[i],
             reset
         );

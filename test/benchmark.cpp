@@ -1,4 +1,5 @@
 #include <decoterm/decoterm.hpp>
+#include <decoterm/formatter.hpp>
 #include <chrono>
 #include <iostream>
 #include <print>
@@ -21,9 +22,6 @@ auto measure(auto&& fn) -> double {
 
 int main() {
     using namespace std::chrono_literals;
-    terminal.enable_style_track(false)
-        .restore_default_style_on_exit(false)
-        .enable_color_fallback(false);
 
     std::print(ENABLE_ALTERNATE_SCREEN);
     std::this_thread::sleep_for(10ms);

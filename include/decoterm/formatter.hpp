@@ -5,47 +5,15 @@
 
 #include <format>
 
-#ifdef DECOTERM_DETAIL_GLOBAL_TERMINAL
-#include "terminal.hpp"
-#endif // DECOTERM_DETAIL_GLOBAL_TERMINAL
-
 // ╔═════════════════════════════════════════════════════════╗
 // ║                        formatter                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
 namespace std {
 
-#ifdef DECOTERM_DETAIL_GLOBAL_TERMINAL
-
-template<deco::detail::OutputableStyle StyleType>
-struct formatter<StyleType> {
-
-    constexpr formatter() = default;
-
-    constexpr auto parse(std::format_parse_context& ctx) {
-        return ctx.begin();
-    }
-
-    auto format(StyleType style, std::format_context& ctx) const {
-        return deco::terminal.style_push_and_apply(ctx.out(), style);
-    }
-};
-
-template<>
-struct formatter<deco::StylePop> {
-    constexpr auto parse(std::format_parse_context& ctx) {
-        return ctx.begin();
-    }
-
-    auto format(deco::StylePop, std::format_context &ctx) const {
-        return deco::terminal.style_pop_and_apply(ctx.out());
-    }
-};
-
-#else
-
-template<deco::detail::OutputableStyle StyleType>
-struct formatter<StyleType> {
+/// @brief std::formatter for Style and AbsoluteStyle.
+template<deco::detail::OutputableStyle StyleT>
+struct formatter<StyleT> {
 
     constexpr formatter() = default;
 
@@ -53,13 +21,28 @@ struct formatter<StyleType> {
         return ctx.begin();
     }
 
-    auto format(StyleType style, std::format_context& ctx) const {
+    auto format(StyleT style, std::format_context& ctx) const {
+        using namespace deco::detail;
+        g_style_output.push_style_if(style);
+        if (!g_style_output.is_enabled) return ctx.out();
         return style.to_escape(ctx.out());
     }
 };
 
-#endif // DECOTERM_DETAIL_GLOBAL_TERMINAL
+/// @brief std::formatter for pop.
+template <>
+struct formatter<deco::detail::stylepop_t> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
 
+    auto format(deco::detail::stylepop_t, std::format_context& ctx) const {
+        using namespace deco::detail;
+        auto current = g_style_output.pop_style_if();
+        if (!g_style_output.is_enabled) return ctx.out();
+        return current.to_escape(ctx.out());
+    }
+};
 
 
 };  // namespace std
