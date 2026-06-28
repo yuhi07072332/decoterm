@@ -3,9 +3,7 @@
 
 #include <cstdint>
 
-namespace deco {
-
-namespace colors {
+namespace deco::colors {
 
 /// non-system colors
 /// color names are from https://www.ditig.com/256-colors-cheat-sheet#google_vignette
@@ -252,8 +250,6 @@ enum Color256 : uint8_t {
     Grey93            = 255
 };
 
-} // namespace colors
-
-}   // namespace deco
+} // namespace deco::colors
 
 #endif // !DECOTERM_COLOR256_HPP

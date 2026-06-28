@@ -1,6 +1,3 @@
-#ifndef DECOTERM_DECOTERM_HPP
-#define DECOTERM_DECOTERM_HPP
-
 // MIT Licence
 //
 // Copyright (c) 2026 Yuhi0707
@@ -23,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#ifndef DECOTERM_DECOTERM_HPP
+#define DECOTERM_DECOTERM_HPP
 
 // TODO:
 // - Detect terminal color support info & provide fallback system color for true color
@@ -36,8 +35,6 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
-#include <iterator>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -53,10 +50,8 @@ template <typename T>
 concept OutputableStyle = std::same_as<T, Style>
     || std::same_as<T, AbsoluteStyle>;
 
-// tag types
 struct defaultcol_t {};
 struct nullcol_t {};
-struct stylepop_t {};
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
@@ -387,7 +382,6 @@ struct Style {
         to_escape(std::back_inserter(esc));
         return esc;
     }
-
 };
 
 struct AbsoluteStyle {
@@ -460,14 +454,10 @@ public:
 
     // ----- style -----
 
-    auto current_style() const -> AbsoluteStyle {
-        if (style_stack_.empty()) return reset;
-        return style_stack_.back();
-    }
-
     void push_style_if(Style style) {
         if (!is_stack_enabled) return;
-        AbsoluteStyle absolute = style_stack_.back();
+        AbsoluteStyle absolute = (style_stack_.empty()) 
+            ? reset : style_stack_.back();
         absolute.style |= style;
         style_stack_.push_back(absolute);
     }
@@ -477,12 +467,15 @@ public:
         style_stack_.push_back(style);
     }
 
-    auto pop_style_if() -> AbsoluteStyle {
-        if (is_stack_enabled && style_stack_.size() > 1) 
+    void pop_style_if() {
+        if (is_stack_enabled && !style_stack_.empty()) 
             style_stack_.pop_back();
-        return current_style();
     }
 
+    auto current_style() const -> AbsoluteStyle {
+        if (style_stack_.empty()) return reset;
+        return style_stack_.back();
+    }
 private:
     std::vector<AbsoluteStyle> style_stack_;
 };
@@ -491,7 +484,12 @@ inline StyleOutput g_style_output;
 
 }   // namespace detail
 
-/// @brief ostream output operator for Style and AbsoluteStyle.
+struct stylepop_t {};
+inline constexpr stylepop_t pop{};
+
+// ----- ostream operators -----
+
+/// @brief ostream operator for Style and AbsoluteStyle.
 template <detail::OutputableStyle StyleT>
 inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
     using namespace detail;
@@ -504,17 +502,21 @@ inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
     return os;
 }
 
-/// @brief ostream output operator for pop.
-inline auto operator<<(std::ostream& os, detail::stylepop_t) -> std::ostream& {
+
+/// @brief ostream operator for pop.
+inline auto operator<<(std::ostream& os, stylepop_t) -> std::ostream& {
     using namespace detail;
 
-    auto current = g_style_output.pop_style_if();
+    g_style_output.pop_style_if();
+    auto current = g_style_output.current_style();
     if (!g_style_output.is_enabled) return os;
     std::array<char, AbsoluteStyle::MAX_ESCAPE_CODE_SIZE> buf;
     auto end = current.to_escape(buf.begin());
     os.write(buf.data(), end - buf.begin());
     return os;
 }
+
+// ----- style output options -----
 
 inline void enable_style_output() { 
     detail::g_style_output.is_enabled = true;
@@ -532,7 +534,6 @@ inline void disable_style_stack() {
     detail::g_style_output.is_stack_enabled = false;
 }
 
-inline constexpr detail::stylepop_t pop;
 
 }   // namespace deco
 

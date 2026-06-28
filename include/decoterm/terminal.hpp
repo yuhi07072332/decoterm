@@ -1,10 +1,6 @@
 #ifndef DECOTERM_TERMINAL_HPP
 #define DECOTERM_TERMINAL_HPP
 
-#ifndef DECOTERM_NO_GLOBAL_TERMINAL
-#define DECOTERM_DETAIL_GLOBAL_TERMINAL
-#endif // !DECOTERM_NO_GLOBAL_TERMINAL
-
 #include "decoterm.hpp"
 
 #if defined(__linux__) || defined(__unix__)
@@ -26,16 +22,6 @@ enum class ColorSupport {
 };
 
 namespace detail {
-
-/// @brief make writter write to buffer, and emit to ostream.
-/// @detail max buffer size is Style::MAX_ESCAPE_CODE_SIZE + 1
-/// @param writter function: (OutputIt) -> OutputIt, where OutputIt is char*
-inline void write_style_to_ostream(std::invocable<char*> auto&& writter,
-                         std::ostream& os) {
-    std::array<char, Style::MAX_ESCAPE_CODE_SIZE + 1> buf;
-    auto out = writter(buf.begin());
-    os.write(buf.data(), out - buf.begin());
-}
 
 inline void write_stdout(std::string_view s) {
     write(STDOUT_FILENO, s.data(), s.size());
@@ -60,7 +46,7 @@ inline auto get_color_support() -> ColorSupport {
         return ColorSupport::TrueColor; 
 
     //fallback to DECRQSS if $COLORTERM is not set.
-    // FIXME: this is slow as hell
+    // OPTIMIZE: this is slow as hell
 
     termios original_termios;
     tcgetattr(STDIN_FILENO, &original_termios);

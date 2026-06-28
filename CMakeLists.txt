@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.30)
 
-option(DECOTERM_BUILD_TEST "enable test" OFF)
+option(DECOTERM_BUILD_TEST "build test" OFF)
+option(DECOTERM_BUILD_EXAMPLE "build example" OFF)
 
 project(decoterm
     VERSION 0.1.0
@@ -21,3 +22,6 @@ if(DECOTERM_BUILD_TEST)
     add_subdirectory(test)
 endif()
 
+if(DECOTERM_BUILD_EXAMPLE)
+    add_subdirectory(example)
+endif()

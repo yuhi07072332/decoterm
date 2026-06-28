@@ -31,14 +31,15 @@ struct formatter<StyleT> {
 
 /// @brief std::formatter for pop.
 template <>
-struct formatter<deco::detail::stylepop_t> {
+struct formatter<deco::stylepop_t> {
     constexpr auto parse(std::format_parse_context& ctx) {
         return ctx.begin();
     }
 
-    auto format(deco::detail::stylepop_t, std::format_context& ctx) const {
+    auto format(deco::stylepop_t, std::format_context& ctx) const {
         using namespace deco::detail;
-        auto current = g_style_output.pop_style_if();
+        g_style_output.pop_style_if();
+        auto current = g_style_output.current_style();
         if (!g_style_output.is_enabled) return ctx.out();
         return current.to_escape(ctx.out());
     }

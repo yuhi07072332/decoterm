@@ -8,7 +8,7 @@
 
 using namespace deco;
 
-constexpr long TIMES = 1000000;
+constexpr long TIMES = 100000;
 constexpr std::string_view ENABLE_ALTERNATE_SCREEN = "\x1b[?1049h";
 constexpr std::string_view DISABLE_ALTERNATE_SCREEN = "\x1b[?1049l";
 
@@ -26,54 +26,62 @@ int main() {
     std::print(ENABLE_ALTERNATE_SCREEN);
     std::this_thread::sleep_for(10ms);
 
+    measure([]{
+        for (int i = 0; i < TIMES; ++i) {
+            std::cout << "\x1b[34m\x1b[m";
+        }
+    });
+
     // SECTION1
 
     auto os_raw = measure([]{
         for (int i = 0; i < TIMES; ++i) {
-            std::cout << "\x1b[34mtest\x1b[m";
+            std::cout << "\x1b[34m\x1b[m";
         }
     });
 
     auto os_style = measure([]{
+        constexpr Style style = fg(blue);
         for (int i = 0; i < TIMES; ++i) {
-            std::cout << fg(blue) << "test" << deco::reset;
+            std::cout << style << deco::reset;
         }
     });
 
     auto fmt_raw = measure([]{
         for (int i = 0; i < TIMES; ++i) {
-            std::print("\x1b[34mtest\x1b[m");
+            std::print("\x1b[34m\x1b[m");
         }
     });
 
     auto fmt_style = measure([]{
+        constexpr Style style = fg(blue);
         for (int i = 0; i < TIMES; ++i) {
-            std::print("{}test{}", fg(blue), reset);
+            std::print("{}{}", style, reset);
         }
     });
 
     // SECTION2
     auto os_raw_2 = measure([]{
         for (int i = 0; i < TIMES; ++i) {
-            std::cout << "\x1b[48;2;156;234;108m  \x1b[;m";
+            std::cout << "\x1b[48;2;156;234;108m\x1b[;m";
         }
     });
 
     auto os_style_2 = measure([]{
         for (int i = 0; i < TIMES; ++i) {
-            std::cout << bg(rgb(156, 234, 108)) << "  " << reset;
+            std::cout << bg(rgb(156, 234, 108)) << reset;
         }
     });
 
     auto fmt_raw_2 = measure([]{
         for (int i = 0; i < TIMES; ++i) {
-            std::print("\x1b[48;2;156;234;108m  \x1b[;m");
+            std::print("\x1b[48;2;156;234;108m\x1b[;m");
         }
     });
 
     auto fmt_style_2 = measure([]{
         for (int i = 0; i < TIMES; ++i) {
-            std::print("{}  {}", bg(rgb(156, 234, 108)), reset);
+            std::print("{}{}", bg(rgb(156, 234, 108)), reset);
         }
     });
 
@@ -84,21 +92,21 @@ int main() {
                 << (i&255) << ';'
                 << ((i>>8)&255) << ';'
                 << ((i>>16)&255)
-                << "m  \x1b[;m";
+                << "m\x1b[;m";
         }
     });
 
     auto os_style_3 = measure([]{
         for (int i = 0; i < TIMES; ++i) {
             std::cout << bg(rgb(i&255, (i>>8)&255, (i>>16)&255))
-                << "  " << reset;
+                      << reset;
         }
     });
 
     auto fmt_raw_3 = measure([]{
         for (int i = 0; i < TIMES; ++i) {
             std::print(
-                "\x1b[48;2;{};{};{}m  \x1b[;m",
+                "\x1b[48;2;{};{};{}m\x1b[;m",
                 i&255,
                 (i>>8)&225,
                 (i>>16)&255
@@ -108,7 +116,7 @@ int main() {
 
     auto fmt_style_3 = measure([]{
         for (int i = 0; i < TIMES; ++i) {
-            std::print("{}  {}", bg(rgb(i&255, (i>>8)&255, (i>>16)&255)), reset);
+            std::print("{}{}", bg(rgb(i&255, (i>>8)&255, (i>>16)&255)), reset);
         }
     });
 
