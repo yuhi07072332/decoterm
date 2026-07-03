@@ -5,10 +5,6 @@
 
 #include <format>
 
-// ╔═════════════════════════════════════════════════════════╗
-// ║                        formatter                        ║
-// ╚═════════════════════════════════════════════════════════╝
-
 namespace std {
 
 /// @brief std::formatter for Style and AbsoluteStyle.
@@ -39,7 +35,6 @@ struct formatter<deco::stylepop_t> {
 
     auto format(deco::stylepop_t, std::format_context& ctx) const {
         using namespace deco::detail;
-
         g_style_output.pop_style_if();
         auto current = g_style_output.current_style();
         if (!g_style_output.is_enabled) return ctx.out();

@@ -221,7 +221,8 @@ inline constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
 /// @pre rgb <= 0xFFFFFF
 inline constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
-    if (hex > 0xffffff) throw std::invalid_argument("deco::Color::rgb(): rgb > 0xffffff");
+    if (hex > 0xffffff) 
+        throw std::invalid_argument("deco::Color::rgb(): rgb > 0xffffff");
     return Color((hex >> 16) & 0xFF,
                       (hex >> 8) & 0xFF,
                       hex & 0xFF);
