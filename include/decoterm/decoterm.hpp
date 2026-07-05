@@ -30,6 +30,7 @@
 // - Windows API fallback for Windows8 or lower versions
 
 #include <array>
+#include <concepts>
 #include <iostream>
 #include <cassert>
 #include <charconv>
@@ -41,14 +42,13 @@
 
 namespace deco {
 
-struct Style;
-struct AbsoluteStyle;
-
 namespace detail {
 
 template <typename T>
-concept OutputableStyle = std::same_as<T, Style>
-    || std::same_as<T, AbsoluteStyle>;
+concept OutputableStyle = requires (T style, char* out) {
+    { T::MAX_ESCAPE_CODE_SIZE } -> std::convertible_to<const std::size_t>;
+    { style.to_escape(out) } -> std::convertible_to<char*>;
+};
 
 struct defaultcol_t {};
 struct nullcol_t {};
@@ -129,7 +129,7 @@ struct Color {
     constexpr Color(detail::nullcol_t) : type_(Type::Null), data_({0, 0, 0}) {}
 
     constexpr explicit Color(uint8_t index)
-        : type_(Type::Colors), data_({static_cast<uint8_t>(index), 0, 0}) {}
+        : type_(Type::Colors), data_({index, 0, 0}) {}
 
     constexpr explicit Color(uint8_t r, uint8_t g, uint8_t b)
         : type_(Type::TrueColor), data_({r, g, b}) {}

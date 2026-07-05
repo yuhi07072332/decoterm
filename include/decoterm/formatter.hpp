@@ -10,10 +10,7 @@ namespace std {
 /// @brief std::formatter for Style and AbsoluteStyle.
 template<deco::detail::OutputableStyle StyleT>
 struct formatter<StyleT> {
-
-    constexpr formatter() = default;
-
-    constexpr auto parse(std::format_parse_context& ctx) {
+    constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
@@ -29,7 +26,7 @@ struct formatter<StyleT> {
 /// @brief std::formatter for pop.
 template <>
 struct formatter<deco::stylepop_t> {
-    constexpr auto parse(std::format_parse_context& ctx) {
+    constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
