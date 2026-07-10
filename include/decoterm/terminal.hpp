@@ -24,18 +24,14 @@
 
 #else // POSIX
 
-#include <unistd.h>
 #include <termios.h>
+#include <unistd.h>
 
 #endif
 
 namespace deco {
 
-enum class ColorSupport {
-    TrueColor,
-    Color256,
-    Color16
-};
+enum class ColorSupport { TrueColor, Color256, Color16 };
 
 namespace detail {
 
@@ -47,7 +43,7 @@ inline auto enable_virtual_terminal_mode() -> bool {
     mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     return SetConsoleMode(h_stdout, mode);
 }
-#endif  // _WIN32
+#endif // _WIN32
 
 [[nodiscard]]
 inline auto is_stdout_terminal() -> bool {
@@ -66,29 +62,29 @@ inline auto is_stdout_terminal() -> bool {
 // https://www.xfree86.org/current/ctlseqs.html
 [[nodiscard]]
 inline auto get_color_support() -> ColorSupport {
-    const char* colorterm_p = std::getenv("COLORTERM");
+    const char *colorterm_p = std::getenv("COLORTERM");
 
     std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
     if (env_colorterm == "truecolor" || env_colorterm == "24bit")
-        return ColorSupport::TrueColor; 
+        return ColorSupport::TrueColor;
 
     return ColorSupport::Color16;
 
     ////fallback to DECRQSS if $COLORTERM is not set.
     //
-    //termios original_termios;
-    //tcgetattr(STDIN_FILENO, &original_termios);
+    // termios original_termios;
+    // tcgetattr(STDIN_FILENO, &original_termios);
     //
-    //termios raw = original_termios;
-    //cfmakeraw(&raw);
-    //raw.c_cc[VTIME] = 1;
-    //raw.c_cc[VMIN] = 0;
-    //tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    // termios raw = original_termios;
+    // cfmakeraw(&raw);
+    // raw.c_cc[VTIME] = 1;
+    // raw.c_cc[VMIN] = 0;
+    // tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
     //
-    //write(STDOUT_FILENO, "\x1b[48;2;1;2;3m\x1bP$qm\x1b\\",20);
+    // write(STDOUT_FILENO, "\x1b[48;2;1;2;3m\x1bP$qm\x1b\\",20);
     //
-    //std::array<char, 24> buf;
-    //for (std::size_t i = 0; i < buf.size() - 1; ++i) {
+    // std::array<char, 24> buf;
+    // for (std::size_t i = 0; i < buf.size() - 1; ++i) {
     //    if (read(STDIN_FILENO, &buf[i], 1) != 1
     //        || (i >= 2 && buf[i - 1] == '\\' && buf[i - 2] == '\x1b')) {
     //            buf[i + 1] = '\0';
@@ -96,19 +92,19 @@ inline auto get_color_support() -> ColorSupport {
     //    }
     //}
     //
-    //tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
+    // tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
     //
-    //std::string_view receive(buf.begin());
-    //if (receive.starts_with("\x1bP1$r")
+    // std::string_view receive(buf.begin());
+    // if (receive.starts_with("\x1bP1$r")
     //    && receive.find("48:2:1:2:3m") != receive.npos)
     //    return ColorSupport::TrueColor;
     //
-    //return ColorSupport::Color16;
+    // return ColorSupport::Color16;
 };
 
-#endif  // !_WIN32
+#endif // !_WIN32
 
-}   // namespace detail
+} // namespace detail
 
 enum class StyleMode { CheckStdout, Manual };
 
@@ -119,14 +115,16 @@ struct TerminalOption {
 };
 
 class Terminal {
-public:
-    explicit Terminal(TerminalOption option = TerminalOption()) : option_(option) {
-		// enable virtual terminal processing on Windows to support ANSI escape codes
+  public:
+    explicit Terminal(TerminalOption option = TerminalOption())
+        : option_(option) {
+        // enable virtual terminal processing on Windows to support ANSI escape
+        // codes
 #if defined(_WIN32)
-		if (detail::enable_virtual_terminal_mode()) 
-		    cashed_color_support_ = ColorSupport::TrueColor;
+        if (detail::enable_virtual_terminal_mode())
+            cashed_color_support_ = ColorSupport::TrueColor;
 
-#else 
+#else
         if (option_.use_color_fallback) {
             cashed_color_support_ = detail::get_color_support();
             if (cashed_color_support_ != ColorSupport::TrueColor)
@@ -136,7 +134,6 @@ public:
 
         if (option_.style_mode == StyleMode::CheckStdout)
             detail::output_state().set_style(detail::is_stdout_terminal());
-
     }
 
     ~Terminal() {
@@ -147,11 +144,11 @@ public:
         return cashed_color_support_;
     }
 
-private:
+  private:
     const TerminalOption option_;
     std::optional<ColorSupport> cashed_color_support_;
 };
 
-}   // namespace deco
+} // namespace deco
 
 #endif // !DECOTERM_TERMINAL_HPP

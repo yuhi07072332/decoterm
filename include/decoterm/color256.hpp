@@ -12,6 +12,8 @@
 
 namespace deco::colors {
 
+// clang-format off
+
 /// non-system colors
 /// color names are from https://www.ditig.com/256-colors-cheat-sheet#google_vignette
 enum Color256 : uint8_t {
@@ -256,6 +258,8 @@ enum Color256 : uint8_t {
     Grey89            = 254,
     Grey93            = 255
 };
+
+// clang-format on
 
 } // namespace deco::colors
 
