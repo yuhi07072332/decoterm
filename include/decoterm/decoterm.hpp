@@ -1,3 +1,6 @@
+// Terminal styling library for C++20
+//
+// SPDX-License-Identifier: MIT
 // MIT Licence
 //
 // Copyright (c) 2026 Yuhi0707
