@@ -4,8 +4,6 @@
 int main() {
     using namespace deco;
 
-    static_assert(detail::OutputableStyle<Style>);
-
     set_style_stack(true);
 
     constexpr Style style_info = fg(rgb(0x71cfde)) | underline;

@@ -33,12 +33,12 @@ enum class ColorSupport {
 namespace detail {
 
 #if defined(_WIN32)
-inline void enable_virtual_terminal_mode() {
+inline auto enable_virtual_terminal_mode() -> bool {
     HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD mode;
-    if (!GetConsoleMode(h_stdout, &mode)) return;
+    if (!GetConsoleMode(h_stdout, &mode)) return false;
     mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(h_stdout, mode);
+    return SetConsoleMode(h_stdout, mode);
 }
 #endif  // _WIN32
 
@@ -53,17 +53,16 @@ inline auto is_stdout_terminal() -> bool {
 #endif
 };
 
+#if !defined(_WIN32)
+
 // see https://github.com/termstandard/colors?tab=readme-ov-file,
 // https://www.xfree86.org/current/ctlseqs.html
 [[nodiscard]]
 inline auto get_color_support() -> ColorSupport {
-    auto sv_from_pointer = [](const char* ch) -> std::string_view {
-        if (ch) return ch;
-        else return "";
-    };
+    const char* colorterm_p = std::getenv("COLORTERM");
 
-    std::string_view colorterm = sv_from_pointer(std::getenv("COLORTERM"));
-    if (colorterm.contains("truecolor") || colorterm.contains("24bit"))
+    std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
+    if (env_colorterm == "truecolor" || env_colorterm == "24bit")
         return ColorSupport::TrueColor; 
 
     return ColorSupport::Color16;
@@ -100,6 +99,8 @@ inline auto get_color_support() -> ColorSupport {
     //return ColorSupport::Color16;
 };
 
+#endif  // !_WIN32
+
 }   // namespace detail
 
 enum class StyleMode { CheckStdout, Manual };
@@ -113,18 +114,22 @@ struct TerminalOption {
 class Terminal {
 public:
     explicit Terminal(TerminalOption option = TerminalOption()) : option_(option) {
-        if (option_.style_mode == StyleMode::CheckStdout)
-            detail::output_state().enable_style(detail::is_stdout_terminal());
+		// enable virtual terminal processing on Windows to support ANSI escape codes
+#if defined(_WIN32)
+		if (detail::enable_virtual_terminal_mode()) 
+		    cashed_color_support_ = ColorSupport::TrueColor;
+
+#else 
         if (option_.use_color_fallback) {
             cashed_color_support_ = detail::get_color_support();
             if (cashed_color_support_ != ColorSupport::TrueColor)
                 detail::output_state().enable_color_fallback(true);
         }
-
-		// enable virtual terminal processing on Windows to support ANSI escape codes
-#if defined(_WIN32)
-		detail::enable_virtual_terminal_mode();
 #endif
+
+        if (option_.style_mode == StyleMode::CheckStdout)
+            detail::output_state().enable_style(detail::is_stdout_terminal());
+
     }
 
     ~Terminal() {

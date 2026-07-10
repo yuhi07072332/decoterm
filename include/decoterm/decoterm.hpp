@@ -212,7 +212,7 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
 [[nodiscard]]
-inline auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
+inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
     // clang-format off
     if (h < 0 || h >= 360) throw std::invalid_argument(
         "deco::Color::hsv(): h is not in range [0, 360)");
