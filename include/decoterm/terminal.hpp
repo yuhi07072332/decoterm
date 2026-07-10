@@ -3,10 +3,16 @@
 
 #include "decoterm.hpp"
 
+#include <optional>
+
 #if defined(_WIN32)
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif // !WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif // !NOMINMAX
 #include <windows.h>
 
 #else // POSIX
@@ -25,6 +31,16 @@ enum class ColorSupport {
 };
 
 namespace detail {
+
+#if defined(_WIN32)
+inline void enable_virtual_terminal_mode() {
+    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode;
+    if (!GetConsoleMode(h_stdout, &mode)) return;
+    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(h_stdout, mode);
+}
+#endif  // _WIN32
 
 [[nodiscard]]
 inline auto is_stdout_terminal() -> bool {
@@ -104,6 +120,11 @@ public:
             if (cashed_color_support_ != ColorSupport::TrueColor)
                 detail::output_state().enable_color_fallback(true);
         }
+
+		// enable virtual terminal processing on Windows to support ANSI escape codes
+#if defined(_WIN32)
+		detail::enable_virtual_terminal_mode();
+#endif
     }
 
     ~Terminal() {

@@ -6,7 +6,7 @@ int main() {
 
     static_assert(detail::OutputableStyle<Style>);
 
-    style_stack(true);
+    set_style_stack(true);
 
     constexpr Style style_info = fg(rgb(0x71cfde)) | underline;
 

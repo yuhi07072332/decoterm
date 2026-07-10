@@ -134,8 +134,9 @@ struct Color {
             std::array<char, 3> buf;
             auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
             assert(ec == std::errc{});
-            for (auto it = buf.begin(); it != ptr; ++it)
-                *out++ = *it;
+            auto len = ptr - buf.data();
+            for (int i = 0; i < len; ++i)
+                *out++ = buf[i];
         };
 
         switch (type_) {
@@ -211,7 +212,7 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
 [[nodiscard]]
-inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
+inline auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
     // clang-format off
     if (h < 0 || h >= 360) throw std::invalid_argument(
         "deco::Color::hsv(): h is not in range [0, 360)");
