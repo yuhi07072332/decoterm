@@ -123,12 +123,12 @@ public:
         if (option_.use_color_fallback) {
             cashed_color_support_ = detail::get_color_support();
             if (cashed_color_support_ != ColorSupport::TrueColor)
-                detail::output_state().enable_color_fallback(true);
+                detail::output_state().set_color_fallback(true);
         }
 #endif
 
         if (option_.style_mode == StyleMode::CheckStdout)
-            detail::output_state().enable_style(detail::is_stdout_terminal());
+            detail::output_state().set_style(detail::is_stdout_terminal());
 
     }
 

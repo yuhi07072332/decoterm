@@ -456,40 +456,42 @@ public:
         return color_fallback_enabled_;
     }
 
-    void enable_style(bool enable) { style_enabled_ = enable; }
-    void enable_style_stack(bool enable) { style_stack_enabled_ = enable; }
-    void enable_color_fallback(bool enable) { color_fallback_enabled_ = enable; }
+    void set_style(bool enable) { style_enabled_ = enable; }
+    void set_style_stack(bool enable) { style_stack_enabled_ = enable; }
+    void set_color_fallback(bool enable) { color_fallback_enabled_ = enable; }
 
-    // ----- style -----
+    // ----- style operations -----
 
     auto current_style() const -> AbsoluteStyle {
-        if (style_stack_.empty()) return AbsoluteStyle();
-        return style_stack_.back();
+        if (!style_stack_enabled_ || style_stack_.empty()) return current_;
+        else return style_stack_.back();
     }
 
     void push_style(Style style) {
-        if (!style_stack_enabled_) return;
-        style_stack_.push_back(
-            absolute(current_style().style | style)
-        );
+        AbsoluteStyle new_style = absolute(current_style().style | style);
+        if (!style_stack_enabled_) current_ = new_style;
+        else style_stack_.push_back(new_style);
     }
 
     void push_style(AbsoluteStyle style) {
-        if (!style_stack_enabled_) return;
-        style_stack_.push_back(style);
+        if (!style_stack_enabled_) current_ = style;
+        else style_stack_.push_back(style);
     }
 
     void pop_style() {
         if (style_stack_enabled_ && !style_stack_.empty()) 
             style_stack_.pop_back();
+        else current_ = absolute();
     }
 
     void reset_style_stack() {
-        style_stack_.clear();
+        if (style_stack_enabled_) style_stack_.clear();
+        else current_ = absolute();
     }
 
 private:
     std::vector<AbsoluteStyle> style_stack_;
+    AbsoluteStyle current_ = absolute();     // if style stack is not enabled
 
     bool style_enabled_ = true;
     bool style_stack_enabled_ = false;
@@ -549,11 +551,11 @@ inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
 // ----- style output options -----
 
 inline void set_style_output(bool enable) { 
-    detail::output_state().enable_style(enable);
+    detail::output_state().set_style(enable);
 }
 
 inline void set_style_stack(bool enable) { 
-    detail::output_state().enable_style_stack(enable);
+    detail::output_state().set_style_stack(enable);
 }
 
 }   // namespace deco
