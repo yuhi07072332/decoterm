@@ -44,15 +44,15 @@ TEST_CASE("Color special colors generate escape sequences") {
     using namespace deco;
 
 
-    CHECK(nullcol.is_empty());
-    CHECK_FALSE(static_cast<bool>(nullcol));
-    CHECK(nullcol.to_escape(false) == esc(""));
-    CHECK(nullcol.to_escape(true) == esc(""));
+    CHECK(null_color.is_empty());
+    CHECK_FALSE(static_cast<bool>(null_color));
+    CHECK(null_color.to_escape(false) == esc(""));
+    CHECK(null_color.to_escape(true) == esc(""));
 
-    CHECK_FALSE(defaultcol.is_empty());
-    CHECK(static_cast<bool>(defaultcol));
-    CHECK(defaultcol.to_escape(false) == esc("39"));
-    CHECK(defaultcol.to_escape(true) == esc("49"));
+    CHECK_FALSE(default_color.is_empty());
+    CHECK(static_cast<bool>(default_color));
+    CHECK(default_color.to_escape(false) == esc("39"));
+    CHECK(default_color.to_escape(true) == esc("49"));
 }
 
 TEST_CASE("Color system colors use SGR foreground and background parameters") {

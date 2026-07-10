@@ -17,25 +17,40 @@ struct formatter<StyleT> {
     auto format(StyleT style, std::format_context& ctx) const {
         using namespace deco::detail;
 
-        output_control().push_style_if(style);
-        if (!output_control().is_enabled) return ctx.out();
+        output_state().push_style(style);
+        if (!output_state().style_enabled()) return ctx.out();
         return style.to_escape(ctx.out());
     }
 };
 
-/// @brief std::formatter for pop.
+/// @brief std::formatter for deco::pop.
 template <>
-struct formatter<deco::stylepop_t> {
+struct formatter<deco::style_pop_t> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(deco::stylepop_t, std::format_context& ctx) const {
+    auto format(deco::style_pop_t, std::format_context& ctx) const {
         using namespace deco::detail;
-        output_control().pop_style_if();
-        auto current = output_control().current_style();
-        if (!output_control().is_enabled) return ctx.out();
+        output_state().pop_style();
+        auto current = output_state().current_style();
+        if (!output_state().style_enabled()) return ctx.out();
         return current.to_escape(ctx.out());
+    }
+};
+
+/// @brief std::formatter for deco::reset.
+template <>
+struct formatter<deco::style_reset_t> {
+    constexpr auto parse(std::format_parse_context& ctx) const {
+        return ctx.begin();
+    }
+
+    auto format(deco::style_reset_t, std::format_context& ctx) const {
+        using namespace deco::detail;
+        output_state().reset_style_stack();
+        if (!output_state().style_enabled()) return ctx.out();
+        return deco::absolute().to_escape(ctx.out());
     }
 };
 

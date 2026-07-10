@@ -48,7 +48,7 @@ int main() {
             color_names[i + 8],
             fg(col),
             color(color_fg, col),
-            color(colorlight, defaultcol),
+            color(colorlight, default_color),
             color(color_fg, colorlight),
             reset
         );

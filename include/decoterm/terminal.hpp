@@ -28,13 +28,13 @@ enum class ColorSupport {
 namespace detail {
 
 [[nodiscard]]
-inline auto is_stdout_redirected() -> bool {
+inline auto is_stdout_terminal() -> bool {
 #if defined(_WIN32)
     HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD mode;
-    return !GetConsoleMode(h_stdout, &mode);
+    return GetConsoleMode(h_stdout, &mode);
 #else // POSIX
-    return !isatty(STDOUT_FILENO);
+    return isatty(STDOUT_FILENO);
 #endif
 };
 
@@ -88,11 +88,11 @@ inline auto get_color_support() -> ColorSupport {
 }   // namespace detail
 
 enum class StyleMode { CheckStdout, Manual };
-enum class ColorFallbackMode { };
+enum class ColorFallbackMode { CheckColorSupport, Manual };
 
 struct TerminalOption {
     StyleMode style_mode = StyleMode::CheckStdout;
-    bool color_fallback = true;
+    bool use_color_fallback = true;
     bool restore_default_style_on_exit = true;
 };
 
@@ -100,26 +100,25 @@ class Terminal {
 public:
     explicit Terminal(TerminalOption option = TerminalOption()) : option_(option) {
         if (option_.style_mode == StyleMode::CheckStdout)
-            detail::output_control().is_enabled = !detail::is_stdout_redirected();
-        if (option_.color_fallback) 
-            color_support_ = detail::get_color_support();
+            detail::output_state().enable_style(detail::is_stdout_terminal());
+        if (option_.use_color_fallback) {
+            cashed_color_support_ = detail::get_color_support();
+            if (cashed_color_support_ != ColorSupport::TrueColor)
+                detail::output_state().enable_color_fallback(true);
+        }
     }
 
     ~Terminal() {
         if (option_.restore_default_style_on_exit) std::cout << reset;
     }
 
-    auto is_style_enabled() const -> bool {
-        return detail::output_control().is_enabled;
-    }
-
     auto color_support() const -> std::optional<ColorSupport> {
-        return color_support_;
+        return cashed_color_support_;
     }
 
 private:
-    TerminalOption option_;
-    std::optional<ColorSupport> color_support_;
+    const TerminalOption option_;
+    std::optional<ColorSupport> cashed_color_support_;
 };
 
 }   // namespace deco

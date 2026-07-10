@@ -51,8 +51,8 @@ concept OutputableStyle = requires (T style, char* out) {
     { style.to_escape(out) } -> std::convertible_to<char*>;
 };
 
-struct defaultcol_t {};
-struct nullcol_t {};
+struct default_color_t {};
+struct null_color_t {};
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
@@ -92,29 +92,6 @@ inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
 // ║                          Color                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-namespace colors {
-
-/// system colors
-enum Color16 : uint8_t {
-    Black             = 0,
-    Red               = 1,
-    Green             = 2,
-    Yellow            = 3,
-    Blue              = 4,
-    Magenta           = 5,
-    Cyan              = 6,
-    White             = 7,
-    BlackLight        = 8,
-    RedLight          = 9,
-    GreenLight        = 10,
-    YellowLight       = 11,
-    BlueLight         = 12,
-    MagentaLight      = 13,
-    CyanLight         = 14,
-    WhiteLight        = 15,
-};
-
-}   // namespace colors
 
 struct Color {
     enum class Type : uint8_t { Null = 0, Default, Colors, TrueColor };
@@ -126,8 +103,8 @@ struct Color {
     /// @brief Create Color::None
     constexpr Color();
 
-    constexpr Color(detail::defaultcol_t) : type_(Type::Default), data_({0, 0, 0}) {}
-    constexpr Color(detail::nullcol_t) : type_(Type::Null), data_({0, 0, 0}) {}
+    constexpr Color(detail::default_color_t) : type_(Type::Default), data_({0, 0, 0}) {}
+    constexpr Color(detail::null_color_t) : type_(Type::Null), data_({0, 0, 0}) {}
 
     constexpr explicit Color(uint8_t index)
         : type_(Type::Colors), data_({index, 0, 0}) {}
@@ -169,7 +146,7 @@ struct Color {
                 else out = write_to(out, "39");
                 return out;
             case Type::Colors : {
-                if (is_system_color()) {
+                if (data_[0] < 16) {
                     out = write_to(out, is_bg ? SGR_PARAM_BG[data_[0]]
                                  : SGR_PARAM_FG[data_[0]]);
                 } else {
@@ -208,10 +185,6 @@ struct Color {
     }
 
 private:
-    constexpr auto is_system_color() const -> bool {
-        return data_[0] < 16;
-    }
-
     Type type_;
     std::array<uint8_t, 3> data_;
 };
@@ -264,10 +237,34 @@ inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
     // clang-format on
 }
 
+namespace colors {
+
+/// system colors
+enum Color16 : uint8_t {
+    Black             = 0,
+    Red               = 1,
+    Green             = 2,
+    Yellow            = 3,
+    Blue              = 4,
+    Magenta           = 5,
+    Cyan              = 6,
+    White             = 7,
+    BlackLight        = 8,
+    RedLight          = 9,
+    GreenLight        = 10,
+    YellowLight       = 11,
+    BlueLight         = 12,
+    MagentaLight      = 13,
+    CyanLight         = 14,
+    WhiteLight        = 15,
+};
+
+}   // namespace colors
+
 // ----- color constants -----
 
-inline constexpr Color defaultcol   = Color(detail::defaultcol_t{});
-inline constexpr Color nullcol      = Color(detail::nullcol_t{});
+inline constexpr Color default_color   = Color(detail::default_color_t{});
+inline constexpr Color null_color      = Color(detail::null_color_t{});
 
 inline constexpr Color black        = Color(colors::Black);
 inline constexpr Color red          = Color(colors::Red);
@@ -307,12 +304,12 @@ struct Style {
         Color::MAX_ESCAPE_CODE_SIZE * 2 + 13 + 3;
 
     uint8_t flags   = None;
-    Color fg        = nullcol;
-    Color bg        = nullcol;
+    Color fg        = null_color;
+    Color bg        = null_color;
 
     constexpr Style() = default;
 
-    constexpr Style(uint8_t flags, Color fg = nullcol, Color bg = nullcol)
+    constexpr Style(uint8_t flags, Color fg = null_color, Color bg = null_color)
         : flags(flags), fg(fg), bg(bg) {}
 
     // ----- operators -----
@@ -413,7 +410,7 @@ struct AbsoluteStyle {
     }
 };
 
-inline constexpr auto absolute(Style style) -> AbsoluteStyle {
+inline constexpr auto absolute(Style style = Style()) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
@@ -426,7 +423,7 @@ inline constexpr auto fg(Color fg) -> Style {
 }
 
 inline constexpr auto bg(Color bg) -> Style { 
-    return Style(Style::None, nullcol, bg);
+    return Style(Style::None, null_color, bg);
 }
 
 // ----- style constants -----
@@ -440,61 +437,76 @@ inline constexpr Style invert            = Style(Style::Invert);
 inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
-inline constexpr AbsoluteStyle reset = AbsoluteStyle();
-
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         output                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
 namespace detail {
 
-class OutputControl {
+class OutputState {
 public:
-    OutputControl() = default;
+    OutputState() = default;
 
     // ----- options -----
 
-    bool is_enabled = true;
-    bool is_stack_enabled = false;
-    bool is_colorfallback_enabled = false;
+    auto style_enabled() const -> bool { return style_enabled_; }
+    auto style_stack_enabled() const -> bool { return style_stack_enabled_; }
+    auto color_fallback_enabled() const -> bool {
+        return color_fallback_enabled_;
+    }
+
+    void enable_style(bool enable) { style_enabled_ = enable; }
+    void enable_style_stack(bool enable) { style_stack_enabled_ = enable; }
+    void enable_color_fallback(bool enable) { color_fallback_enabled_ = enable; }
 
     // ----- style -----
 
-    void push_style_if(Style style) {
-        if (!is_stack_enabled) return;
-        AbsoluteStyle absolute = (style_stack_.empty()) 
-            ? reset : style_stack_.back();
-        absolute.style |= style;
-        style_stack_.push_back(absolute);
+    auto current_style() const -> AbsoluteStyle {
+        if (style_stack_.empty()) return AbsoluteStyle();
+        return style_stack_.back();
     }
 
-    void push_style_if(AbsoluteStyle style) {
-        if (!is_stack_enabled) return;
+    void push_style(Style style) {
+        if (!style_stack_enabled_) return;
+        style_stack_.push_back(
+            absolute(current_style().style | style)
+        );
+    }
+
+    void push_style(AbsoluteStyle style) {
+        if (!style_stack_enabled_) return;
         style_stack_.push_back(style);
     }
 
-    void pop_style_if() {
-        if (is_stack_enabled && !style_stack_.empty()) 
+    void pop_style() {
+        if (style_stack_enabled_ && !style_stack_.empty()) 
             style_stack_.pop_back();
     }
 
-    auto current_style() const -> AbsoluteStyle {
-        if (style_stack_.empty()) return reset;
-        return style_stack_.back();
+    void reset_style_stack() {
+        style_stack_.clear();
     }
+
 private:
     std::vector<AbsoluteStyle> style_stack_;
+
+    bool style_enabled_ = true;
+    bool style_stack_enabled_ = false;
+    bool color_fallback_enabled_ = false;
 };
 
-inline auto output_control() -> OutputControl& {
-    static OutputControl instance;
+inline auto output_state() -> OutputState& {
+    static OutputState instance;
     return instance;
 }
 
 }   // namespace detail
 
-struct stylepop_t {};
-inline constexpr stylepop_t pop{};
+struct style_pop_t {};
+struct style_reset_t {};
+
+inline constexpr style_pop_t pop{};
+inline constexpr style_reset_t reset{};
 
 // ----- ostream operators -----
 
@@ -503,32 +515,41 @@ template <detail::OutputableStyle StyleT>
 inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
     using namespace detail;
 
-    output_control().push_style_if(rhs);
-    if (!output_control().is_enabled) return os;
+    output_state().push_style(rhs);
+    if (!output_state().style_enabled()) return os;
     rhs.to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
 
-
-/// @brief ostream operator for pop.
-inline auto operator<<(std::ostream& os, stylepop_t) -> std::ostream& {
+/// @brief ostream operator for deco::pop.
+inline auto operator<<(std::ostream& os, style_pop_t) -> std::ostream& {
     using namespace detail;
 
-    output_control().pop_style_if();
-    auto current = output_control().current_style();
-    if (!output_control().is_enabled) return os;
+    output_state().pop_style();
+    if (!output_state().style_enabled()) return os;
+    auto current = output_state().current_style();
     current.to_escape(std::ostreambuf_iterator<char>(os));
+    return os;
+}
+
+/// @brief ostream operator for deco::reset.
+inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
+    using namespace detail;
+
+    output_state().reset_style_stack();
+    if (!output_state().style_enabled()) return os;
+    AbsoluteStyle().to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
 
 // ----- style output options -----
 
-inline void style_output(bool enable) { 
-    detail::output_control().is_enabled = enable;
+inline void enable_style_output(bool enable) { 
+    detail::output_state().enable_style(enable);
 }
 
-inline void style_stack(bool enable) { 
-    detail::output_control().is_stack_enabled = enable;
+inline void enable_style_stack(bool enable) { 
+    detail::output_state().enable_style_stack(enable);
 }
 
 }   // namespace deco
