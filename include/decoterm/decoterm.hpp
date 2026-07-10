@@ -448,9 +448,9 @@ inline constexpr AbsoluteStyle reset = AbsoluteStyle();
 
 namespace detail {
 
-class StyleOutput {
+class OutputControl {
 public:
-    StyleOutput() = default;
+    OutputControl() = default;
 
     // ----- options -----
 
@@ -486,7 +486,10 @@ private:
     std::vector<AbsoluteStyle> style_stack_;
 };
 
-inline StyleOutput g_style_output;
+inline auto output_control() -> OutputControl& {
+    static OutputControl instance;
+    return instance;
+}
 
 }   // namespace detail
 
@@ -500,8 +503,8 @@ template <detail::OutputableStyle StyleT>
 inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
     using namespace detail;
 
-    g_style_output.push_style_if(rhs);
-    if (!g_style_output.is_enabled) return os;
+    output_control().push_style_if(rhs);
+    if (!output_control().is_enabled) return os;
     rhs.to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
@@ -511,9 +514,9 @@ inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
 inline auto operator<<(std::ostream& os, stylepop_t) -> std::ostream& {
     using namespace detail;
 
-    g_style_output.pop_style_if();
-    auto current = g_style_output.current_style();
-    if (!g_style_output.is_enabled) return os;
+    output_control().pop_style_if();
+    auto current = output_control().current_style();
+    if (!output_control().is_enabled) return os;
     current.to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
@@ -521,11 +524,11 @@ inline auto operator<<(std::ostream& os, stylepop_t) -> std::ostream& {
 // ----- style output options -----
 
 inline void style_output(bool enable) { 
-    detail::g_style_output.is_enabled = enable;
+    detail::output_control().is_enabled = enable;
 }
 
 inline void style_stack(bool enable) { 
-    detail::g_style_output.is_stack_enabled = enable;
+    detail::output_control().is_stack_enabled = enable;
 }
 
 }   // namespace deco

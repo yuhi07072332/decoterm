@@ -17,8 +17,8 @@ struct formatter<StyleT> {
     auto format(StyleT style, std::format_context& ctx) const {
         using namespace deco::detail;
 
-        g_style_output.push_style_if(style);
-        if (!g_style_output.is_enabled) return ctx.out();
+        output_control().push_style_if(style);
+        if (!output_control().is_enabled) return ctx.out();
         return style.to_escape(ctx.out());
     }
 };
@@ -32,9 +32,9 @@ struct formatter<deco::stylepop_t> {
 
     auto format(deco::stylepop_t, std::format_context& ctx) const {
         using namespace deco::detail;
-        g_style_output.pop_style_if();
-        auto current = g_style_output.current_style();
-        if (!g_style_output.is_enabled) return ctx.out();
+        output_control().pop_style_if();
+        auto current = output_control().current_style();
+        if (!output_control().is_enabled) return ctx.out();
         return current.to_escape(ctx.out());
     }
 };

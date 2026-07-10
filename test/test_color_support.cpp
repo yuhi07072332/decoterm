@@ -5,8 +5,9 @@
 
 int main() {
     using namespace deco;
-    Terminal term;
+    Terminal term({
+        .color_fallback = true
+    });
     std::print("color support: {}", 
-               term.color_support() == ColorSupport::TrueColor ? "TrueColor" : "Color16");
-
+               *(term.color_support()) == ColorSupport::TrueColor ? "TrueColor" : "Color16");
 }
