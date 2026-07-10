@@ -31,7 +31,6 @@ set(OUTPUT_TEST_NAMES
     test_style
     test_color
     test_color_support
-    benchmark
 )
 
 foreach(test_name IN LISTS OUTPUT_TEST_NAMES)

@@ -20,12 +20,8 @@ enum class ColorSupport {
 
 namespace detail {
 
-inline void write_stdout(std::string_view s) {
-    write(STDOUT_FILENO, s.data(), s.size());
-}
-
 [[nodiscard]]
-inline auto is_stdout_tty() -> bool {
+inline auto is_stdout_terminal() -> bool {
     return isatty(STDOUT_FILENO);
 };
 
@@ -91,7 +87,7 @@ public:
 
     explicit Terminal(TerminalOption option) : TerminalOption(option) {
         if (style_mode == StyleMode::CheckStdout)
-            detail::g_style_output.is_enabled = detail::is_stdout_tty();
+            detail::g_style_output.is_enabled = detail::is_stdout_terminal();
         if (color_fallback) 
             color_support_ = detail::get_color_support();
     }

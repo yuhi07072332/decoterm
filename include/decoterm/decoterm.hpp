@@ -36,6 +36,7 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -141,7 +142,10 @@ struct Color {
     constexpr auto operator==(const Color&) const -> bool = default;
     constexpr auto operator!=(const Color&) const -> bool = default;
 
+    // ----- observe -----
+
     constexpr auto is_empty() const -> bool { return type_ == Type::Null; }
+    constexpr auto type() const -> Type { return type_; }
 
     // ----- output -----
     
@@ -151,9 +155,9 @@ struct Color {
         using namespace detail;
         auto write_converted = [&out](int value) {
             std::array<char, 3> buf;
-            auto [ptr, ec] = std::to_chars(buf.begin(), buf.end(), value);
+            auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
             assert(ec == std::errc{});
-            for (char* it = buf.begin(); it != ptr; ++it)
+            for (auto it = buf.begin(); it != ptr; ++it)
                 *out++ = *it;
         };
 
@@ -224,8 +228,8 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
     if (hex > 0xffffff) 
         throw std::invalid_argument("deco::Color::rgb(): rgb > 0xffffff");
     return Color((hex >> 16) & 0xFF,
-                      (hex >> 8) & 0xFF,
-                      hex & 0xFF);
+                    (hex >> 8) & 0xFF,
+                    hex & 0xFF);
     // clang-format on
 }
 
@@ -452,6 +456,7 @@ public:
 
     bool is_enabled = true;
     bool is_stack_enabled = false;
+    bool is_colorfallback_enabled = false;
 
     // ----- style -----
 
@@ -490,16 +495,14 @@ inline constexpr stylepop_t pop{};
 
 // ----- ostream operators -----
 
-/// @brief ostream operator for Style and AbsoluteStyle.
+/// @brief ostream operator for StyleTypes.
 template <detail::OutputableStyle StyleT>
 inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
     using namespace detail;
 
     g_style_output.push_style_if(rhs);
     if (!g_style_output.is_enabled) return os;
-    std::array<char, StyleT::MAX_ESCAPE_CODE_SIZE> buf;
-    auto end = rhs.to_escape(buf.begin());
-    os.write(buf.data(), end - buf.begin());
+    rhs.to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
 
@@ -511,30 +514,19 @@ inline auto operator<<(std::ostream& os, stylepop_t) -> std::ostream& {
     g_style_output.pop_style_if();
     auto current = g_style_output.current_style();
     if (!g_style_output.is_enabled) return os;
-    std::array<char, AbsoluteStyle::MAX_ESCAPE_CODE_SIZE> buf;
-    auto end = current.to_escape(buf.begin());
-    os.write(buf.data(), end - buf.begin());
+    current.to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
 
 // ----- style output options -----
 
-inline void enable_style_output() { 
-    detail::g_style_output.is_enabled = true;
+inline void style_output(bool enable) { 
+    detail::g_style_output.is_enabled = enable;
 }
 
-inline void disable_style_output() { 
-    detail::g_style_output.is_enabled = false;
+inline void style_stack(bool enable) { 
+    detail::g_style_output.is_stack_enabled = enable;
 }
-
-inline void enable_style_stack() { 
-    detail::g_style_output.is_stack_enabled = true;
-}
-
-inline void disable_style_stack() { 
-    detail::g_style_output.is_stack_enabled = false;
-}
-
 
 }   // namespace deco
 
