@@ -514,9 +514,10 @@ inline constexpr style_reset_t reset{};
 template <detail::OutputableStyle StyleT>
 inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
     using namespace detail;
+    auto output = output_state();
 
-    output_state().push_style(rhs);
-    if (!output_state().style_enabled()) return os;
+    output.push_style(rhs);
+    if (!output.style_enabled()) return os;
     rhs.to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
@@ -524,10 +525,11 @@ inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
 /// @brief ostream operator for deco::pop.
 inline auto operator<<(std::ostream& os, style_pop_t) -> std::ostream& {
     using namespace detail;
+    auto output = output_state();
 
-    output_state().pop_style();
-    if (!output_state().style_enabled()) return os;
-    auto current = output_state().current_style();
+    output.pop_style();
+    if (!output.style_enabled()) return os;
+    auto current = output.current_style();
     current.to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
@@ -535,20 +537,21 @@ inline auto operator<<(std::ostream& os, style_pop_t) -> std::ostream& {
 /// @brief ostream operator for deco::reset.
 inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
     using namespace detail;
+    auto output = output_state();
 
-    output_state().reset_style_stack();
-    if (!output_state().style_enabled()) return os;
+    output.reset_style_stack();
+    if (!output.style_enabled()) return os;
     AbsoluteStyle().to_escape(std::ostreambuf_iterator<char>(os));
     return os;
 }
 
 // ----- style output options -----
 
-inline void enable_style_output(bool enable) { 
+inline void set_style_output(bool enable) { 
     detail::output_state().enable_style(enable);
 }
 
-inline void enable_style_stack(bool enable) { 
+inline void set_style_stack(bool enable) { 
     detail::output_state().enable_style_stack(enable);
 }
 

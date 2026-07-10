@@ -8,7 +8,6 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
-#include <io.h>                         // for _isatty, _fileno
 
 #else // POSIX
 
@@ -88,7 +87,6 @@ inline auto get_color_support() -> ColorSupport {
 }   // namespace detail
 
 enum class StyleMode { CheckStdout, Manual };
-enum class ColorFallbackMode { CheckColorSupport, Manual };
 
 struct TerminalOption {
     StyleMode style_mode = StyleMode::CheckStdout;
