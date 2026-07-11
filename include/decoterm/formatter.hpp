@@ -14,7 +14,7 @@
 
 namespace std {
 
-/// @brief std::formatter for Style and AbsoluteStyle.
+/// @brief std::formatter for Style types.
 template <deco::detail::OutputableStyle StyleT> struct formatter<StyleT> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();

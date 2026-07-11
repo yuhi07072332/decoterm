@@ -548,11 +548,11 @@ inline constexpr style_reset_t reset {};
 
 // ----- ostream operators -----
 
-/// @brief ostream operator for StyleTypes.
+/// @brief ostream operator for Style types.
 template <detail::OutputableStyle StyleT>
 inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
     using namespace detail;
-    auto output = output_state();
+    auto& output = output_state();
 
     output.push_style(rhs);
     if (!output.style_enabled()) return os;
@@ -563,7 +563,7 @@ inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
 /// @brief ostream operator for deco::pop.
 inline auto operator<<(std::ostream& os, style_pop_t) -> std::ostream& {
     using namespace detail;
-    auto output = output_state();
+    auto& output = output_state();
 
     output.pop_style();
     if (!output.style_enabled()) return os;
@@ -575,7 +575,7 @@ inline auto operator<<(std::ostream& os, style_pop_t) -> std::ostream& {
 /// @brief ostream operator for deco::reset.
 inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
     using namespace detail;
-    auto output = output_state();
+    auto& output = output_state();
 
     output.reset_style_stack();
     if (!output.style_enabled()) return os;
@@ -585,6 +585,8 @@ inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
 
 // ----- style output options -----
 
+namespace output {
+
 inline void set_style_output(bool enable) {
     detail::output_state().set_style(enable);
 }
@@ -592,6 +594,29 @@ inline void set_style_output(bool enable) {
 inline void set_style_stack(bool enable) {
     detail::output_state().set_style_stack(enable);
 }
+
+inline void set_color_fallback(bool enable) {
+    detail::output_state().set_color_fallback(enable);
+}
+
+inline auto style_enabled() -> bool {
+    return detail::output_state().style_enabled();
+}
+
+inline auto style_stack_enabled() -> bool {
+    return detail::output_state().style_stack_enabled();
+}
+
+inline auto color_fallback_enabled() -> bool {
+    return detail::output_state().color_fallback_enabled();
+}
+
+inline auto current_style() -> AbsoluteStyle {
+    return detail::output_state().current_style();
+}
+
+}
+
 
 } // namespace deco
 

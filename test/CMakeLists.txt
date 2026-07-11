@@ -28,9 +28,7 @@ add_test(NAME decoterm_test COMMAND decoterm_test)
 # output test
 
 set(OUTPUT_TEST_NAMES
-    test_style
-    test_color
-    test_color_support
+    test_output
 )
 
 foreach(test_name IN LISTS OUTPUT_TEST_NAMES)
