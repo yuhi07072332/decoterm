@@ -62,7 +62,7 @@ inline auto is_stdout_terminal() -> bool {
 // https://www.xfree86.org/current/ctlseqs.html
 [[nodiscard]]
 inline auto get_color_support() -> ColorSupport {
-    const char *colorterm_p = std::getenv("COLORTERM");
+    const char* colorterm_p = std::getenv("COLORTERM");
 
     std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
     if (env_colorterm == "truecolor" || env_colorterm == "24bit")

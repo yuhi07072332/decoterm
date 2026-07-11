@@ -12,4 +12,5 @@ IncludeBlocks: Preserve
 SpaceBeforeCpp11BracedList: true
 BinPackArguments: false
 PackConstructorInitializers: CurrentLine
+PointerAlignment: Left
 BinPackParameters: OnePerLine

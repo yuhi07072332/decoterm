@@ -16,11 +16,11 @@ namespace std {
 
 /// @brief std::formatter for Style and AbsoluteStyle.
 template <deco::detail::OutputableStyle StyleT> struct formatter<StyleT> {
-    constexpr auto parse(std::format_parse_context &ctx) const {
+    constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(StyleT style, std::format_context &ctx) const {
+    auto format(StyleT style, std::format_context& ctx) const {
         using namespace deco::detail;
 
         output_state().push_style(style);
@@ -31,11 +31,11 @@ template <deco::detail::OutputableStyle StyleT> struct formatter<StyleT> {
 
 /// @brief std::formatter for deco::pop.
 template <> struct formatter<deco::style_pop_t> {
-    constexpr auto parse(std::format_parse_context &ctx) const {
+    constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(deco::style_pop_t, std::format_context &ctx) const {
+    auto format(deco::style_pop_t, std::format_context& ctx) const {
         using namespace deco::detail;
         output_state().pop_style();
         auto current = output_state().current_style();
@@ -46,11 +46,11 @@ template <> struct formatter<deco::style_pop_t> {
 
 /// @brief std::formatter for deco::reset.
 template <> struct formatter<deco::style_reset_t> {
-    constexpr auto parse(std::format_parse_context &ctx) const {
+    constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(deco::style_reset_t, std::format_context &ctx) const {
+    auto format(deco::style_reset_t, std::format_context& ctx) const {
         using namespace deco::detail;
         output_state().reset_style_stack();
         if (!output_state().style_enabled()) return ctx.out();

@@ -51,9 +51,9 @@ namespace deco {
 namespace detail {
 
 template <typename T>
-concept OutputableStyle = requires(T style, char *out) {
+concept OutputableStyle = requires(T style, char* out) {
     { T::MAX_ESCAPE_CODE_SIZE } -> std::convertible_to<const std::size_t>;
-    { style.to_escape(out) } -> std::convertible_to<char *>;
+    { style.to_escape(out) } -> std::convertible_to<char*>;
 };
 
 struct default_color_t {};
@@ -85,7 +85,7 @@ inline constexpr std::array<std::string_view, 8> SGR_PARAM_STYLE {
 };
 // clang-format on
 
-template <std::output_iterator<const char &> OutputIt>
+template <std::output_iterator<const char&> OutputIt>
 inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
     for (auto c : sv)
         *out++ = c;
@@ -127,8 +127,8 @@ struct Color {
 
     constexpr explicit operator bool() const { return !is_empty(); }
 
-    constexpr auto operator==(const Color &) const -> bool = default;
-    constexpr auto operator!=(const Color &) const -> bool = default;
+    constexpr auto operator==(const Color&) const -> bool = default;
+    constexpr auto operator!=(const Color&) const -> bool = default;
 
     // ----- observe -----
 
@@ -138,7 +138,7 @@ struct Color {
     // ----- output -----
 
     /// @brief write SGR parameters to out.
-    template <std::output_iterator<const char &> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out, bool is_bg) const -> OutputIt {
         using namespace detail;
         auto write_converted = [&out](int value) {
@@ -186,7 +186,7 @@ struct Color {
         }
     }
 
-    template <std::output_iterator<const char &> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out, bool is_bg) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
         out = to_sgr_params(out, is_bg);
@@ -355,8 +355,8 @@ struct Style {
         // clang-format on
     }
 
-    constexpr auto operator==(const Style &) const -> bool = default;
-    constexpr auto operator!=(const Style &) const -> bool = default;
+    constexpr auto operator==(const Style&) const -> bool = default;
+    constexpr auto operator!=(const Style&) const -> bool = default;
 
     constexpr explicit operator bool() const { return !is_empty(); }
 
@@ -366,7 +366,7 @@ struct Style {
 
     // ----- output -----
 
-    template <std::output_iterator<const char &> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
         using namespace detail;
         if (is_empty()) return out;
@@ -397,7 +397,7 @@ struct Style {
         return out;
     }
 
-    template <std::output_iterator<const char &> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
         out = to_sgr_params(out);
@@ -421,7 +421,7 @@ struct AbsoluteStyle {
 
     constexpr explicit AbsoluteStyle(Style style = Style()) : style(style) {}
 
-    template <std::output_iterator<const char &> OutputIt>
+    template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[;");
         out = style.to_sgr_params(out);
@@ -533,7 +533,7 @@ class OutputState {
     bool color_fallback_enabled_ = false;
 };
 
-inline auto output_state() -> OutputState & {
+inline auto output_state() -> OutputState& {
     static OutputState instance;
     return instance;
 }
@@ -550,7 +550,7 @@ inline constexpr style_reset_t reset {};
 
 /// @brief ostream operator for StyleTypes.
 template <detail::OutputableStyle StyleT>
-inline auto operator<<(std::ostream &os, StyleT rhs) -> std::ostream & {
+inline auto operator<<(std::ostream& os, StyleT rhs) -> std::ostream& {
     using namespace detail;
     auto output = output_state();
 
@@ -561,7 +561,7 @@ inline auto operator<<(std::ostream &os, StyleT rhs) -> std::ostream & {
 }
 
 /// @brief ostream operator for deco::pop.
-inline auto operator<<(std::ostream &os, style_pop_t) -> std::ostream & {
+inline auto operator<<(std::ostream& os, style_pop_t) -> std::ostream& {
     using namespace detail;
     auto output = output_state();
 
@@ -573,7 +573,7 @@ inline auto operator<<(std::ostream &os, style_pop_t) -> std::ostream & {
 }
 
 /// @brief ostream operator for deco::reset.
-inline auto operator<<(std::ostream &os, style_reset_t) -> std::ostream & {
+inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
     using namespace detail;
     auto output = output_state();
 
