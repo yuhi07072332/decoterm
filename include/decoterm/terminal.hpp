@@ -8,7 +8,7 @@
 #ifndef DECOTERM_TERMINAL_HPP
 #define DECOTERM_TERMINAL_HPP
 
-#include "decoterm.hpp"
+#include "style.hpp"
 
 #include <optional>
 
@@ -106,54 +106,6 @@ inline auto get_color_support() -> ColorSupport {
 #endif // !_WIN32
 
 } // namespace detail
-
-enum class StyleMode { CheckStdout, Manual };
-
-struct TerminalOption {
-    StyleMode style_mode = StyleMode::CheckStdout;
-    bool use_color_fallback = true;
-    bool restore_default_style_on_exit = true;
-};
-
-class Terminal {
-  public:
-    explicit Terminal(TerminalOption option = TerminalOption())
-        : option_(option) {
-
-#if defined(_WIN32)
-        // Windows console doesn't support ANSI escape sequences by default, so we need to enable it.
-        // NOTE: There is no way to check color support on Windows, so we just assume it supports TrueColor,
-        // if VT mode is enabled successfully.
-        if (detail::enable_virtual_terminal_mode())
-            if (option_.use_color_fallback)
-                cashed_color_support_ = ColorSupport::TrueColor;
-
-#else
-        if (option_.use_color_fallback) {
-            cashed_color_support_ = detail::get_color_support();
-            if (cashed_color_support_ != ColorSupport::TrueColor)
-                detail::output_state().set_color_fallback(true);
-        }
-#endif
-
-        if (option_.style_mode == StyleMode::CheckStdout)
-            detail::output_state().set_style(detail::is_stdout_terminal());
-    }
-
-    ~Terminal() {
-        if (option_.restore_default_style_on_exit) std::cout << reset;
-    }
-
-    /// @brief return the color support if use_color_fallback is enabled.
-    [[nodiscard]]
-    auto color_support() const -> std::optional<ColorSupport> {
-        return cashed_color_support_;
-    }
-
-  private:
-    const TerminalOption option_;
-    std::optional<ColorSupport> cashed_color_support_;
-};
 
 } // namespace deco
 

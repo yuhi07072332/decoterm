@@ -8,53 +8,31 @@
 #ifndef DECOTERM_FORMATTER_HPP
 #define DECOTERM_FORMATTER_HPP
 
-#include "decoterm.hpp"
+#include "style.hpp"
 
 #include <format>
 
 namespace std {
 
-/// @brief std::formatter for Style types.
-template <deco::detail::OutputableStyle StyleT> struct formatter<StyleT> {
+/// @brief std::formatter for Style
+template <> struct formatter<deco::Style> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(StyleT style, std::format_context& ctx) const {
-        using namespace deco::detail;
-
-        output_state().push_style(style);
-        if (!output_state().style_enabled()) return ctx.out();
+    auto format(deco::Style style, std::format_context& ctx) const {
         return style.to_escape(ctx.out());
     }
 };
 
-/// @brief std::formatter for deco::pop.
-template <> struct formatter<deco::style_pop_t> {
+/// @brief std::formatter for AbsoluteStyle
+template <> struct formatter<deco::AbsoluteStyle> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(deco::style_pop_t, std::format_context& ctx) const {
-        using namespace deco::detail;
-        output_state().pop_style();
-        auto current = output_state().current_style();
-        if (!output_state().style_enabled()) return ctx.out();
-        return current.to_escape(ctx.out());
-    }
-};
-
-/// @brief std::formatter for deco::reset.
-template <> struct formatter<deco::style_reset_t> {
-    constexpr auto parse(std::format_parse_context& ctx) const {
-        return ctx.begin();
-    }
-
-    auto format(deco::style_reset_t, std::format_context& ctx) const {
-        using namespace deco::detail;
-        output_state().reset_style_stack();
-        if (!output_state().style_enabled()) return ctx.out();
-        return deco::absolute().to_escape(ctx.out());
+    auto format(deco::AbsoluteStyle style, std::format_context& ctx) const {
+        return style.to_escape(ctx.out());
     }
 };
 
