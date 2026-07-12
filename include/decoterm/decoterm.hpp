@@ -221,7 +221,7 @@ inline constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
 inline constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
     if (hex > 0xffffff) 
-        throw std::invalid_argument("deco::Color::rgb(): rgb > 0xffffff");
+        throw std::invalid_argument("deco::rgb(): rgb > 0xffffff");
     return Color((hex >> 16) & 0xFF,
                     (hex >> 8) & 0xFF,
                     hex & 0xFF);
@@ -236,7 +236,7 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
     // clang-format off
     if (h < 0 || h >= 360) throw std::invalid_argument(
-        "deco::Color::hsv(): h is not in range [0, 360)");
+        "deco::hsv(): h is not in range [0, 360)");
 
     float hp = h / 60.f;
     float sp = s / 255.0f;
