@@ -37,5 +37,6 @@
 #include "style.hpp"
 #include "formatter.hpp"
 #include "terminal.hpp"
+#include "color256.hpp"
 
 #endif // !DECOTERM_DECOTERM_HPP
