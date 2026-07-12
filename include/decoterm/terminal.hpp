@@ -36,6 +36,7 @@ enum class ColorSupport { TrueColor, Color256, Color16 };
 namespace detail {
 
 #if defined(_WIN32)
+[[nodiscard]]
 inline auto enable_virtual_terminal_mode() -> bool {
     HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD mode;
@@ -118,11 +119,14 @@ class Terminal {
   public:
     explicit Terminal(TerminalOption option = TerminalOption())
         : option_(option) {
-        // enable virtual terminal processing on Windows to support ANSI escape
-        // codes
+
 #if defined(_WIN32)
+        // Windows console doesn't support ANSI escape sequences by default, so we need to enable it.
+        // NOTE: There is no way to check color support on Windows, so we just assume it supports TrueColor,
+        // if VT mode is enabled successfully.
         if (detail::enable_virtual_terminal_mode())
-            cashed_color_support_ = ColorSupport::TrueColor;
+            if (option_.use_color_fallback)
+                cashed_color_support_ = ColorSupport::TrueColor;
 
 #else
         if (option_.use_color_fallback) {
@@ -140,6 +144,8 @@ class Terminal {
         if (option_.restore_default_style_on_exit) std::cout << reset;
     }
 
+    /// @brief return the color support if use_color_fallback is enabled.
+    [[nodiscard]]
     auto color_support() const -> std::optional<ColorSupport> {
         return cashed_color_support_;
     }

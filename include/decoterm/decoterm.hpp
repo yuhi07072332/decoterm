@@ -98,15 +98,13 @@ inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
 // ║                          Color                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief A class representing a terminal color.
 struct Color {
-    enum class Type : uint8_t { Null = 0, Default, Colors, TrueColor };
+    enum class Type : uint8_t { Null = 0, Default, AnsiColor, TrueColor };
 
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE = 19;
 
     // ----- constructors -----
-
-    /// @brief Create Color::None
-    constexpr Color();
 
     constexpr Color(detail::default_color_t)
         : type_(Type::Default),
@@ -115,8 +113,9 @@ struct Color {
         : type_(Type::Null),
           data_({0, 0, 0}) {}
 
+    /// @brief Create a color by index (0-255)
     constexpr explicit Color(uint8_t index)
-        : type_(Type::Colors),
+        : type_(Type::AnsiColor),
           data_({index, 0, 0}) {}
 
     constexpr explicit Color(uint8_t r, uint8_t g, uint8_t b)
@@ -125,19 +124,23 @@ struct Color {
 
     // ----- operators -----
 
-    constexpr explicit operator bool() const { return !is_empty(); }
+    /// @brief equivalent to !empty()
+    constexpr explicit operator bool() const { return !empty(); }
 
     constexpr auto operator==(const Color&) const -> bool = default;
     constexpr auto operator!=(const Color&) const -> bool = default;
 
     // ----- observe -----
 
-    constexpr auto is_empty() const -> bool { return type_ == Type::Null; }
+    /// @brief check if the color is Color::None
+    constexpr auto empty() const -> bool { return type_ == Type::Null; }
+
     constexpr auto type() const -> Type { return type_; }
 
     // ----- output -----
 
-    /// @brief write SGR parameters to out.
+    /// @brief write SGR parameters to output iterator
+    /// @details format: "P1;P2;...;Pn"
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out, bool is_bg) const -> OutputIt {
         using namespace detail;
@@ -159,7 +162,7 @@ struct Color {
             else
                 out = write_to(out, "39");
             return out;
-        case Type::Colors: {
+        case Type::AnsiColor: {
             if (data_[0] < 16) {
                 out = write_to(out,
                                is_bg ? SGR_PARAM_BG[data_[0]]
@@ -186,6 +189,7 @@ struct Color {
         }
     }
 
+    /// @brief write escape sequence to output iterator
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out, bool is_bg) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
@@ -194,7 +198,7 @@ struct Color {
         return out;
     }
 
-    /// @brief generate full escape code
+    /// @brief write escape sequence to string
     [[nodiscard]]
     auto to_escape(bool is_bg) const -> std::string {
         std::string esc;
@@ -309,6 +313,7 @@ inline constexpr Color whitelight   = Color(colors::WhiteLight);
 // ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief A class representing a terminal style (color + text attributes).
 struct Style {
     // clang-format off
     enum Flags : uint8_t {
@@ -340,12 +345,7 @@ struct Style {
 
     // ----- operators -----
 
-    constexpr void operator|=(Style rhs) {
-        flags = flags | rhs.flags;
-        fg = rhs.fg ? rhs.fg : fg;
-        bg = rhs.bg ? rhs.bg : bg;
-    }
-
+    /// @brief combine two styles, with rhs taking precedence
     constexpr auto operator|(Style rhs) const -> Style {
         // clang-format off
         return Style(
@@ -355,21 +355,28 @@ struct Style {
         // clang-format on
     }
 
+    constexpr void operator|=(Style rhs) {
+        *this = *this | rhs;
+    }
+
     constexpr auto operator==(const Style&) const -> bool = default;
     constexpr auto operator!=(const Style&) const -> bool = default;
 
-    constexpr explicit operator bool() const { return !is_empty(); }
+    /// @brief equivalent to !empty()
+    constexpr explicit operator bool() const { return !empty(); }
 
-    constexpr auto is_empty() const -> bool {
-        return flags == None && fg.is_empty() && bg.is_empty();
+    constexpr auto empty() const -> bool {
+        return flags == None && fg.empty() && bg.empty();
     }
 
     // ----- output -----
 
+    /// @brief write SGR parameters to output iterator
+    /// @details format: "P1;P2;...;Pn"
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
         using namespace detail;
-        if (is_empty()) return out;
+        if (empty()) return out;
         bool needs_separate = false;
 
         if (fg) {
@@ -397,6 +404,7 @@ struct Style {
         return out;
     }
 
+    /// @brief write escape sequence to output iterator
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
@@ -405,6 +413,7 @@ struct Style {
         return out;
     }
 
+    /// @brief write escape sequence to string
     [[nodiscard]]
     auto to_escape() const -> std::string {
         std::string esc;
@@ -413,6 +422,8 @@ struct Style {
     }
 };
 
+/// @brief A wrapper for Style for representing an absolute style 
+///        (not relative to the current style).
 struct AbsoluteStyle {
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
         Style::MAX_ESCAPE_CODE_SIZE + 1;
@@ -437,16 +448,20 @@ struct AbsoluteStyle {
     }
 };
 
+/// @brief create an AbsoluteStyle from a Style
 inline constexpr auto absolute(Style style = Style()) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
+/// @brief create a Style with foreground and background colors
 inline constexpr auto color(Color fg, Color bg) -> Style {
     return Style(Style::None, fg, bg);
 }
 
+/// @brief create a Style with foreground color
 inline constexpr auto fg(Color fg) -> Style { return Style(Style::None, fg); }
 
+/// @brief create a Style with background color
 inline constexpr auto bg(Color bg) -> Style {
     return Style(Style::None, null_color, bg);
 }
@@ -526,7 +541,7 @@ class OutputState {
 
   private:
     std::vector<AbsoluteStyle> style_stack_;
-    AbsoluteStyle current_ = absolute(); // if style stack is not enabled
+    AbsoluteStyle current_ = absolute(); // 
 
     bool style_enabled_ = true;
     bool style_stack_enabled_ = false;
@@ -584,6 +599,7 @@ inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
 }
 
 // ----- style output options -----
+// These functions control the behavior of the style output system.
 
 namespace output {
 
@@ -615,8 +631,7 @@ inline auto current_style() -> AbsoluteStyle {
     return detail::output_state().current_style();
 }
 
-}
-
+} // namespace output
 
 } // namespace deco
 

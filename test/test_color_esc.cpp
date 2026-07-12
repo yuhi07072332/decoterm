@@ -44,12 +44,12 @@ TEST_CASE("Color special colors generate escape sequences") {
     using namespace deco;
 
 
-    CHECK(null_color.is_empty());
+    CHECK(null_color.empty());
     CHECK_FALSE(static_cast<bool>(null_color));
     CHECK(null_color.to_escape(false) == esc(""));
     CHECK(null_color.to_escape(true) == esc(""));
 
-    CHECK_FALSE(default_color.is_empty());
+    CHECK_FALSE(default_color.empty());
     CHECK(static_cast<bool>(default_color));
     CHECK(default_color.to_escape(false) == esc("39"));
     CHECK(default_color.to_escape(true) == esc("49"));

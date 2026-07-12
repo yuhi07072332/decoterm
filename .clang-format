@@ -11,6 +11,6 @@ FixNamespaceComments: true
 IncludeBlocks: Preserve
 SpaceBeforeCpp11BracedList: true
 BinPackArguments: false
+BinPackParameters: OnePerLine
 PackConstructorInitializers: CurrentLine
 PointerAlignment: Left
-BinPackParameters: OnePerLine

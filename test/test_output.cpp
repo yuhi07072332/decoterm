@@ -44,7 +44,7 @@ void print_color_cell(int color_index, bool is_fg_white) {
     std::print("{}{:^4}{}", color(foreground, background), color_index, reset);
 }
 
-int main() {
+auto main() -> int {
     Terminal term;
 
     Style style_h1 = fg(bluelight) | bold | invert;
