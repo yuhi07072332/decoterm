@@ -10,7 +10,6 @@
 
 #include "style.hpp"
 
-#include <iterator>
 #include <ostream>
 #include <vector>
 #include <variant>
@@ -19,7 +18,14 @@ namespace deco {
 
 namespace detail {
 
+template <typename T>
+concept OstreamOutputable = requires(std::ostream& os, T&& value) {
+    operator<<(os, std::forward<T>(value));
+};
+
 }
+
+inline constexpr struct style_pop_t {} pop;
 
 /// @brief A class representing Style output state.
 class StyleOutputState {
@@ -91,33 +97,45 @@ protected:
         }
     }
 
+    void reset_style() {
+        if (nesting_enabled_) {
+            nested().resize(1);
+        } else single() = absolute(default_style);
+    }
+
     std::variant<AbsoluteStyle, NestedState> style_state_;
     bool output_enabled_ = true;
     bool nesting_enabled_ = true;
     bool color_fallback_enabled_ = false;
 };
 
-/// @brief A lightweight stateful writer over an existing std::ostream.
-class StyledOut : StyleOutputState{
+/// @brief A stateful writer over an existing std::ostream.
+/// @warning passed in std::ostream object must be valid in this life time.
+class StyledOut : public StyleOutputState{
 public:
     StyledOut(std::ostream& os) : os_(os) {}
 
-    template <typename T>
+    template <detail::OstreamOutputable T>
     friend auto operator<<(StyledOut& sout, T&& value) -> StyledOut& {
         if constexpr (std::is_same_v<T, Style> || std::is_same_v<T, AbsoluteStyle>) {
-            if (sout.output_enabled_) value.to_escape(std::ostreambuf_iterator(sout.os_));
+            if (sout.output_enabled_) sout << value;
             sout.push_style(value);
+        } else if constexpr (std::is_same_v<T, style_reset_t>) {
+            sout.reset_style();
         } else {
             sout.os_ << std::forward<T>(value);
         }
         return sout;
     }
 
+    friend auto operator<<(StyledOut& sout, style_pop_t) -> StyledOut& {
+        sout.pop_style();
+        return sout;
+    }
+
 private:
     std::ostream& os_;
 };
-
-
 
 } // namespace deco
 

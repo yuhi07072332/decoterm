@@ -279,6 +279,8 @@ inline constexpr Color whitelight   = Color(colors::WhiteLight);
 // ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+inline constexpr struct style_reset_t {} reset;
+
 /// @brief A class representing a terminal style (color + text attributes).
 struct Style {
     // clang-format off
@@ -302,6 +304,7 @@ struct Style {
     Color bg        = null_color;
     // clang-format on
 
+    /// @brief create a default style
     constexpr Style() = default;
 
     constexpr Style(uint8_t flags, Color fg = null_color, Color bg = null_color)
@@ -417,7 +420,7 @@ struct AbsoluteStyle {
 // ----- helper functions -----
 
 /// @brief create an AbsoluteStyle from a Style
-inline constexpr auto absolute(Style style = Style()) -> AbsoluteStyle {
+inline constexpr auto absolute(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
@@ -446,6 +449,11 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle style) -> std::ostream& {
     return os;
 }
 
+inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
+    absolute(Style()).to_escape(std::ostreambuf_iterator(os));
+    return os;
+}
+
 // ----- style constants -----
 
 // clang-format off
@@ -460,7 +468,6 @@ inline constexpr Style invert            = Style(Style::Invert);
 inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
-inline constexpr AbsoluteStyle reset     = AbsoluteStyle(default_style);
 
 // clang-format on
 
