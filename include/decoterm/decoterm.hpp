@@ -36,6 +36,7 @@
 #define DECOTERM_DECOTERM_HPP
 
 #include "style.hpp"
+#include "styled.hpp"
 #include "formatter.hpp"
 #include "terminal.hpp"
 #include "color256.hpp"

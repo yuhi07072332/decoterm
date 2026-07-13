@@ -42,7 +42,7 @@ template <> struct formatter<deco::style_reset_t> {
         return ctx.begin();
     }
 
-    auto format(deco::AbsoluteStyle style, std::format_context& ctx) const {
+    auto format(deco::style_reset_t, std::format_context& ctx) const {
         return deco::absolute(deco::Style()).to_escape(ctx.out());
     }
 };
