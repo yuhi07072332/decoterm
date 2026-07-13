@@ -26,6 +26,14 @@ concept OstreamOutputable = requires(std::ostream& os, T&& value) {
     { os << std::forward<T>(value) } -> std::same_as<std::ostream&>;
 };
 
+template <typename T>
+struct Ref {
+
+
+private:
+
+};
+
 /// @brief represents a nullable single or multiple(vector) AbsoluteStyle
 /// storage.
 class StyleStack {
@@ -47,7 +55,9 @@ class StyleStack {
     }
 
     [[nodiscard]]
-    auto is_multiple() const -> bool { return is_multiple_; }
+    auto is_multiple() const -> bool {
+        return is_multiple_;
+    }
 
     // Stack operations:
 
@@ -102,11 +112,15 @@ class StyleStack {
 // ║                        StyledRef                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
-// TODO:
+template <typename T, detail::OutputableStyle StyleType>
+struct StyledRef : detail::Ref<T>{
+};
 
-template <typename T> struct StyledRef {};
-
-template <typename T> inline constexpr auto styled(T&& value) -> StyledRef<T>;
+template <typename T, detail::OutputableStyle StyleType>
+inline constexpr auto styled(T&& value, StyleType style)
+    -> StyledRef<std::remove_cvref_t<T>, StyleType> {
+    return StyledRef(std::forward<T>(value), style);
+}
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                    StyleOutputState                     ║
@@ -203,7 +217,7 @@ class StyledOstream : public StyleOutputState {
 
         if constexpr (std::is_same_v<ValueType, Style>) {
             so.push_style(value);
-            //TODO: avoid same style output
+            // TODO: avoid same style output
             so.output_style(value);
         } else if constexpr (std::is_same_v<ValueType, AbsoluteStyle>) {
             so.push_style(value);

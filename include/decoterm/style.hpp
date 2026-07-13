@@ -12,18 +12,31 @@
 #include <cassert>
 #include <charconv>
 #include <cmath>
+#include <concepts>
 #include <cstdint>
-#include <ostream>
 #include <iterator>
+#include <ostream>
 #include <string>
 #include <string_view>
 
 namespace deco {
 
+struct Style;
+
 namespace detail {
 
 struct default_color_t {};
 struct null_color_t {};
+struct style_type {
+    constexpr auto operator==(const style_type&) const -> bool = default;
+    constexpr auto operator!=(const style_type&) const -> bool = default;
+};
+
+template <typename T>
+concept OutputableStyle =
+    std::derived_from<T, style_type> && requires(T style, char* out) {
+        { style.to_escape(out) } -> std::same_as<char*>;
+    };
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
@@ -279,10 +292,11 @@ inline constexpr Color whitelight   = Color(colors::WhiteLight);
 // ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-inline constexpr struct style_reset_t {} reset;
+inline constexpr struct style_reset_t {
+} reset;
 
 /// @brief A class representing a terminal style (color + text attributes).
-struct Style {
+struct Style : detail::style_type {
     // clang-format off
     enum Flags : uint8_t {
         None            = 0,
@@ -324,9 +338,7 @@ struct Style {
         // clang-format on
     }
 
-    constexpr void operator|=(Style rhs) {
-        *this = *this | rhs;
-    }
+    constexpr void operator|=(Style rhs) { *this = *this | rhs; }
 
     constexpr auto operator==(const Style&) const -> bool = default;
     constexpr auto operator!=(const Style&) const -> bool = default;
@@ -391,9 +403,9 @@ struct Style {
     }
 };
 
-/// @brief A wrapper for Style for representing an absolute style 
+/// @brief A Style wrapper for representing an absolute style
 ///        (not relative to the current style).
-struct AbsoluteStyle {
+struct AbsoluteStyle : detail::style_type {
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
         Style::MAX_ESCAPE_CODE_SIZE + 1;
 
@@ -443,12 +455,8 @@ inline constexpr auto bg(Color bg) -> Style {
 
 // ----- ostream operators -----
 
-inline auto operator<<(std::ostream& os, Style style) -> std::ostream& {
-    style.to_escape(std::ostreambuf_iterator(os));
-    return os;
-}
-
-inline auto operator<<(std::ostream& os, AbsoluteStyle style) -> std::ostream& {
+template <detail::OutputableStyle StyleType>
+inline auto operator<<(std::ostream& os, StyleType style) -> std::ostream& {
     style.to_escape(std::ostreambuf_iterator(os));
     return os;
 }
@@ -471,7 +479,6 @@ inline constexpr Style blink             = Style(Style::Blink);
 inline constexpr Style invert            = Style(Style::Invert);
 inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
-
 
 // clang-format on
 
