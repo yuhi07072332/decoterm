@@ -203,10 +203,13 @@ class StyledOstream : public StyleOutputState {
     friend auto operator<<(StyledOstream& so, T&& value) -> StyledOstream& {
         using ValueType = std::remove_cvref_t<T>;
 
-        if constexpr (std::is_same_v<ValueType, Style>
-                      || std::is_same_v<ValueType, AbsoluteStyle>) {
+        if constexpr (std::is_same_v<ValueType, Style>) {
             so.push_style(value);
-            so.output_style(value);
+            //TODO: 
+            if (value) so.output_style(value);
+        } else if constexpr (std::is_same_v<ValueType, AbsoluteStyle>) {
+            so.push_style(value);
+            if (value != so.current_style()) so.output_style(value);
         } else if constexpr (std::is_same_v<ValueType, style_reset_t>) {
             so.reset_style();
             so.output_style(so.current_style());
