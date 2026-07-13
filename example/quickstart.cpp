@@ -4,13 +4,13 @@
 int main() {
     using namespace deco;
 
-    output::set_style_stack(true);
-
     constexpr Style style_info = fg(rgb(0x71cfde)) | underline;
 
     std::cout << fg(bluelight) << "Hello, " << invert << "world!" << reset;
 
-    std::cout   << style_info
+    StyledOstream sout(std::cout);
+
+    sout        << style_info
                 << (invert | bold) << "INFO" << pop   // nested style
                 << " pop is same as reset if style stack is not enabled.\n"
                 << pop;
