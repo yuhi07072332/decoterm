@@ -46,6 +46,7 @@ class StyleStack {
         return single_;
     }
 
+    [[nodiscard]]
     auto is_multiple() const -> bool { return is_multiple_; }
 
     // Stack operations:
@@ -170,11 +171,8 @@ class StyleOutputState {
 
   protected:
     void pop_style() { stack_.pop(); }
-
     void reset_style() { stack_.clear(); }
-
     void push_style(AbsoluteStyle style) { stack_.push(style); }
-
     void push_style(Style style) {
         stack_.push(absolute(current_style().style | style));
     }
