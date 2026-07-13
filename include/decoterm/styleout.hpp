@@ -64,6 +64,18 @@ public:
     // ----- observe -----
 
     [[nodiscard]]
+    auto base_style() const -> Style { return base_style_.style; }
+    
+    [[nodiscard]]
+    auto style_nesting_enabled() const -> bool { return nesting_enabled_; }
+
+    [[nodiscard]]
+    auto style_output_enabled() const -> bool { return output_enabled_; }
+
+    [[nodiscard]]
+    auto color_fallback_enabled() const -> bool { return color_fallback_enabled_; }
+
+    [[nodiscard]]
     auto current_style() const -> Style {
         if (nesting_enabled_) {
             const auto& nested_state = nested();
@@ -128,12 +140,12 @@ protected:
 
 /// @brief A stateful writer over an existing std::ostream.
 /// @warning passed in std::ostream object must be valid in this life time.
-class StyledOut : public StyleOutputState{
+class StyledOstream : public StyleOutputState{
 public:
-    StyledOut(std::ostream& os) : os_(os) {}
+    StyledOstream(std::ostream& os) : os_(os) {}
 
     template <detail::OstreamOutputable T>
-    friend auto operator<<(StyledOut& sout, T&& value) -> StyledOut& {
+    friend auto operator<<(StyledOstream& sout, T&& value) -> StyledOstream& {
         if constexpr (std::is_same_v<T, Style> || std::is_same_v<T, AbsoluteStyle>) {
             if (sout.output_enabled_) sout << value;
             sout.push_style(value);
@@ -145,7 +157,7 @@ public:
         return sout;
     }
 
-    friend auto operator<<(StyledOut& sout, style_pop_t) -> StyledOut& {
+    friend auto operator<<(StyledOstream& sout, style_pop_t) -> StyledOstream& {
         sout.pop_style();
         return sout;
     }
