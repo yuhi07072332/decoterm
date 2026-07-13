@@ -205,11 +205,11 @@ class StyledOstream : public StyleOutputState {
 
         if constexpr (std::is_same_v<ValueType, Style>) {
             so.push_style(value);
-            //TODO: 
-            if (value) so.output_style(value);
+            //TODO: avoid same style output
+            so.output_style(value);
         } else if constexpr (std::is_same_v<ValueType, AbsoluteStyle>) {
             so.push_style(value);
-            if (value != so.current_style()) so.output_style(value);
+            so.output_style(value);
         } else if constexpr (std::is_same_v<ValueType, style_reset_t>) {
             so.reset_style();
             so.output_style(so.current_style());

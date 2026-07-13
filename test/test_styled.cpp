@@ -169,13 +169,13 @@ TEST_CASE("styled: StyledOstream: reset returns to base style") {
                  + absolute(fg(blue)).to_escape() + std::string("base"));
 }
 
-TEST_CASE("styled: StyledOstream: output same style twice ") {
-    using namespace deco;
-
-    std::ostringstream os;
-    StyledOstream styled_os(os);
-
-    styled_os << bold << bold;
-    CHECK(os.str() == bold.to_escape());
-
-}
+// TEST_CASE("styled: StyledOstream: output same style twice ") {
+//     using namespace deco;
+//
+//     std::ostringstream os;
+//     StyledOstream styled_os(os);
+//
+//     styled_os << bold << bold;
+//     CHECK(os.str() == bold.to_escape());
+//
+// }

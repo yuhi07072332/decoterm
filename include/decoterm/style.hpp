@@ -402,6 +402,7 @@ struct AbsoluteStyle {
     constexpr explicit AbsoluteStyle(Style style = Style()) : style(style) {}
 
     constexpr auto operator==(const AbsoluteStyle&) const -> bool = default;
+    constexpr auto operator!=(const AbsoluteStyle&) const -> bool = default;
 
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
