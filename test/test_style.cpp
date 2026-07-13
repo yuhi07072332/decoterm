@@ -26,7 +26,7 @@ auto sgr_params(deco::Style style) -> std::string {
 
 } // namespace
 
-TEST_CASE("Style::to_sgr_params writes separators only between parameters") {
+TEST_CASE("Style: Style::to_sgr_params") {
     using namespace deco;
 
     CHECK(sgr_params(Style()) == "");
@@ -38,7 +38,7 @@ TEST_CASE("Style::to_sgr_params writes separators only between parameters") {
     CHECK(sgr_params(bold | fg(red) | bg(blue) | underline) == "31;44;1;4");
 }
 
-TEST_CASE("Style composition merges flags and lets rhs colors override") {
+TEST_CASE("Style: Style composition") {
     using namespace deco;
 
     const Style composed = fg(red) | bg(blue) | bold | fg(green) | italic;
@@ -54,17 +54,25 @@ TEST_CASE("Style composition merges flags and lets rhs colors override") {
     CHECK(sgr_params(rhs_without_colors | italic) == "31;44;1;3");
 }
 
-TEST_CASE("Style::to_escape wraps SGR params") {
+TEST_CASE("Style: Style::to_escape") {
     using namespace deco;
 
     CHECK(Style().to_escape() == esc(""));
     CHECK((fg(red) | bg(blue) | bold).to_escape() == esc("31;44;1"));
 }
 
-TEST_CASE("Style formatter writes escape sequences") {
+TEST_CASE("Style: Style formatter") {
     using namespace deco;
 
     CHECK(std::format("{}text", fg(red) | bg(blue) | bold) ==
           esc("31;44;1") + "text");
     CHECK(std::format("{}", Style()) == esc(""));
+}
+
+TEST_CASE("Style: AbsoluteStyle::to_escape") {
+    using namespace deco;
+
+    // Shouldn't output ';' when inner Style is default.
+    CHECK(absolute(default_style).to_escape() == "\x1b[m");
+    CHECK(absolute(bold).to_escape() == "\x1b[;1m");
 }

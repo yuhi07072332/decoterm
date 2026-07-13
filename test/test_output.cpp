@@ -140,49 +140,4 @@ auto main() -> int {
 
     std::cout << style_h1 << "\nSECTION3: Terminal / Output control" << reset << "\n\n";
 
-    output::set_style_stack(true);
-    ColorSupport color_support = *term.color_support();
-
-    std::cout << style_h2 << "[info]" << reset << "\n\n";
-
-    std::println("Color support: {}",
-                 color_support == ColorSupport::TrueColor  ? "TrueColor"
-                 : color_support == ColorSupport::Color256 ? "Color256"
-                                                           : "Color16");
-
-    std::println("Color fallback: {}", output::color_fallback_enabled());
-    std::println("Style output: {}", output::style_enabled());
-    std::println("Style stack: {}", output::style_stack_enabled());
-
-    std::cout << style_h2 << "\n[Disable style output]" << reset << "\n\n";
-
-    auto print_sample_text = []{
-        std::cout   << (fg(greenlight) | underline) << "Lorem" 
-                    << absolute(bg(rgb(0x1823FF))) << "ipsum"
-                    << absolute() << "dolor"
-                    << pop << "sit"
-                    << pop << "amet"
-                    << reset << '\n';
-    };
-
-    std::cout << "Enabled: ";
-    print_sample_text();
-
-    output::set_style_output(false);
-    std::cout << "Disabled: ";
-    print_sample_text();
-
-    output::set_style_output(true);
-
-    std::cout << style_h2 << "\n[Style stack]" << reset << "\n\n";
-
-    std::cout << "Enabled: ";
-    print_sample_text();
-
-    output::set_style_stack(false);
-    std::cout << "Disabled: ";
-    print_sample_text();
-
-    output::set_style_stack(true);
-
 }

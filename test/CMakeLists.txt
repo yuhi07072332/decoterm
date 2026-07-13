@@ -11,8 +11,8 @@ FetchContent_MakeAvailable(doctest)
 include("${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake")
 
 add_executable(decoterm_test
-    test_color_esc.cpp
-    test_style_esc.cpp
+    test_color.cpp
+    test_style.cpp
 )
 
 target_link_libraries(decoterm_test
