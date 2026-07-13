@@ -2,6 +2,7 @@
 #include <decoterm/formatter.hpp>
 #include <decoterm/terminal.hpp>
 
+#include <iostream>
 #include <print>
 #include <string_view>
 
@@ -45,8 +46,6 @@ void print_color_cell(int color_index, bool is_fg_white) {
 }
 
 auto main() -> int {
-    Terminal term;
-
     Style style_h1 = fg(bluelight) | bold | invert;
     Style style_h2 = fg(yellowlight) | underline;
 

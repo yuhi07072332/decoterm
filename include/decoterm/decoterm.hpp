@@ -25,6 +25,7 @@
 // SOFTWARE.
 
 // TODO:
+// - Should AbsoluteStyle be able to convert implicitly to Style
 // - Detect terminal color support info & provide fallback system color for true
 // color
 // - styled()

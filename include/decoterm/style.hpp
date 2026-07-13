@@ -403,7 +403,8 @@ struct AbsoluteStyle {
 
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
-        out = detail::write_to(out, "\x1b[;");
+        out = detail::write_to(out, "\x1b[");
+        if (style) *out++ = ';';
         out = style.to_sgr_params(out);
         *out++ = 'm';
         return out;

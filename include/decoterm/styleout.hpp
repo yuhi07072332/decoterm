@@ -30,28 +30,44 @@ inline constexpr struct style_pop_t {} pop;
 /// @brief A class representing Style output state.
 class StyleOutputState {
 public:
-    StyleOutputState() : style_state_(NestedState({ absolute(default_style) })) {}
+    StyleOutputState() = default;
 
     // ----- options -----
 
-    void set_style_output(bool enable) { output_enabled_ = enable; }
-
-    void set_style_nesting(bool enable) { 
-        if (nesting_enabled_ && !enable) {
-            style_state_.emplace<SingleState>(std::get<NestedState>(style_state_).back());
-        } else if (!nesting_enabled_ && enable) {
-            style_state_.emplace<NestedState> ({ std::get<SingleState>(style_state_) });
-        }
-        nesting_enabled_ = enable;
+    auto base_style(Style base) -> StyleOutputState& {
+        base_style_ = absolute(base);
+        return *this;
     }
 
-    void set_color_fallback(bool enable) { color_fallback_enabled_ = enable; }
+    auto enable_style_nesting(bool enable) -> StyleOutputState& { 
+        if (nesting_enabled_ && !enable) {
+            style_state_.emplace<SingleState>(nested().back());
+        } else if (!nesting_enabled_ && enable) {
+            if (base_style_.style != single().style)
+                style_state_.emplace<NestedState>({ single() });
+            else style_state_.emplace<NestedState>();
+        }
+        nesting_enabled_ = enable;
+        return *this;
+    }
+
+    auto enable_style_output(bool enable) -> StyleOutputState& {
+        output_enabled_ = enable;
+        return *this;
+    }
+
+    auto enable_color_fallback(bool enable) -> StyleOutputState& {
+        color_fallback_enabled_ = enable;
+        return *this;
+    }
 
     // ----- observe -----
 
+    [[nodiscard]]
     auto current_style() const -> Style {
         if (nesting_enabled_) {
-            return nested().back().style;
+            const auto& nested_state = nested();
+            return nested_state.empty() ? base_style_.style : nested_state.back().style;
         } else 
             return single().style;
     }
@@ -91,19 +107,20 @@ protected:
     void pop_style() {
         if (nesting_enabled_) {
             auto& nested_state = nested();
-            if (nested_state.size() > 1) nested_state.pop_back();
+            if (!nested_state.empty()) nested_state.pop_back();
         } else {
-            single() = absolute(default_style);
+            single() = base_style_;
         }
     }
 
     void reset_style() {
         if (nesting_enabled_) {
-            nested().resize(1);
-        } else single() = absolute(default_style);
+            nested().clear();
+        } else single() = base_style_;
     }
 
-    std::variant<AbsoluteStyle, NestedState> style_state_;
+    std::variant<SingleState, NestedState> style_state_ = NestedState();
+    AbsoluteStyle base_style_ = absolute(Style());
     bool output_enabled_ = true;
     bool nesting_enabled_ = true;
     bool color_fallback_enabled_ = false;
