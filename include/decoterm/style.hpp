@@ -450,6 +450,7 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle style) -> std::ostream& {
 
 // clang-format off
 
+inline constexpr Style default_style     = Style();
 inline constexpr Style bold              = Style(Style::Bold);
 inline constexpr Style dim               = Style(Style::Dim);
 inline constexpr Style italic            = Style(Style::Italic);
@@ -459,7 +460,7 @@ inline constexpr Style invert            = Style(Style::Invert);
 inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
-inline constexpr AbsoluteStyle reset     = AbsoluteStyle();
+inline constexpr AbsoluteStyle reset     = AbsoluteStyle(default_style);
 
 // clang-format on
 
