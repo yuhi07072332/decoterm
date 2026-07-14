@@ -7,6 +7,7 @@ ColumnLimit: 80
 AlignOperands: Align
 AllowShortIfStatementsOnASingleLine: true
 BreakBeforeBinaryOperators: NonAssignment
+BreakTemplateDeclarations: Leave
 FixNamespaceComments: true
 IncludeBlocks: Preserve
 SpaceBeforeCpp11BracedList: true

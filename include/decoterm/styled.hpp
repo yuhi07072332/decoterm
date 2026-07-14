@@ -15,6 +15,7 @@
 #include <ostream>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace deco {
@@ -26,12 +27,29 @@ concept OstreamOutputable = requires(std::ostream& os, T&& value) {
     { os << std::forward<T>(value) } -> std::same_as<std::ostream&>;
 };
 
+/// @brief A wrapper borrows an lvalue or owns an rvalue.
 template <typename T>
-struct Ref {
+struct ConstRef {
+    ConstRef(const T& value) : value_(&value) {}
+    constexpr ConstRef(T&& value) : value_(std::move(value)) {}
 
+    // A ConstRef is only movable.
+    constexpr ConstRef(const ConstRef&) = delete;
+    constexpr auto operator=(const ConstRef&) -> ConstRef& = delete;
+    constexpr ConstRef(ConstRef&&) noexcept = default;
+    constexpr auto operator=(ConstRef&&) noexcept -> ConstRef& = default;
 
-private:
+    constexpr auto operator*() const -> const T& { return get(); }
 
+    constexpr auto get() const -> const T& {
+        if (std::holds_alternative<T>(value_))
+            return std::get<T>(value_);
+        else
+            return *std::get<const T*>(value_);
+    }
+
+  private:
+    std::variant<T, const T*> value_;
 };
 
 /// @brief represents a nullable single or multiple(vector) AbsoluteStyle
@@ -113,13 +131,28 @@ class StyleStack {
 // ╚═════════════════════════════════════════════════════════╝
 
 template <typename T, detail::OutputableStyle StyleType>
-struct StyledRef : detail::Ref<T>{
+struct StyledRef : detail::ConstRef<T> {
+    StyledRef(const T& value, StyleType style)
+        : detail::ConstRef<T>(value),
+          style(style) {}
+
+    constexpr StyledRef(T&& value, StyleType style)
+        : detail::ConstRef<T>(std::move(value)),
+          style(style) {}
+
+    StyleType style;
 };
 
 template <typename T, detail::OutputableStyle StyleType>
-inline constexpr auto styled(T&& value, StyleType style)
-    -> StyledRef<std::remove_cvref_t<T>, StyleType> {
+inline constexpr auto styled(T&& value, StyleType style) {
     return StyledRef(std::forward<T>(value), style);
+}
+
+template <typename T, detail::OutputableStyle StyleType>
+auto operator<<(std::ostream& os, const StyledRef<T, StyleType>& styled_ref) {
+    styled_ref.style.to_escape(std::ostreambuf_iterator(os));
+    os << *styled_ref << reset;
+    return os;
 }
 
 // ╔═════════════════════════════════════════════════════════╗

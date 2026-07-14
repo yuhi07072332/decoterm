@@ -292,12 +292,13 @@ inline constexpr Color whitelight   = Color(colors::WhiteLight);
 // ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-inline constexpr struct style_reset_t {
-} reset;
+struct style_reset_t {};
+inline constexpr style_reset_t reset;
 
 /// @brief A class representing a terminal style (color + text attributes).
 struct Style : detail::style_type {
     // clang-format off
+
     enum Flags : uint8_t {
         None            = 0,
         Bold            = 1 << 0,
@@ -309,13 +310,13 @@ struct Style : detail::style_type {
         Strikethrough   = 1 << 6,
         UnderlineDouble = 1 << 7,
     };
-
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
         Color::MAX_ESCAPE_CODE_SIZE * 2 + 13 + 3;
 
     uint8_t flags   = None;
     Color fg        = null_color;
     Color bg        = null_color;
+
     // clang-format on
 
     /// @brief create a default style
@@ -401,6 +402,7 @@ struct Style : detail::style_type {
         to_escape(std::back_inserter(esc));
         return esc;
     }
+
 };
 
 /// @brief A Style wrapper for representing an absolute style
