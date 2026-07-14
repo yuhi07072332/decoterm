@@ -34,9 +34,10 @@ struct style_type {
 
 template <typename T>
 concept OutputableStyle =
-    std::derived_from<T, style_type> && requires(T style, char* out) {
-        { style.to_escape(out) } -> std::same_as<char*>;
-    };
+    std::derived_from<T, style_type> 
+    && requires(T style, char* out) {
+    { style.to_escape(out) } -> std::same_as<char*>;
+};
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {

@@ -11,6 +11,7 @@
 #include "style.hpp"
 
 #include <concepts>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <type_traits>
@@ -30,36 +31,47 @@ concept OstreamOutputable = requires(std::ostream& os, T&& value) {
 /// @brief A wrapper borrows an lvalue or owns an rvalue.
 template <typename T>
 struct ConstRef {
-    ConstRef(const T& value) : value_(&value) {}
-    constexpr ConstRef(T&& value) : value_(std::move(value)) {}
+    constexpr explicit ConstRef(const T& value)
+        : value_(std::in_place_index<0>, std::addressof(value)) {}
+
+    constexpr explicit ConstRef(T&& value)
+        : value_(std::in_place_index<1>, std::move(value)) {}
+
+    ConstRef(const T&&) = delete;
 
     // A ConstRef is only movable.
     constexpr ConstRef(const ConstRef&) = delete;
     constexpr auto operator=(const ConstRef&) -> ConstRef& = delete;
-    constexpr ConstRef(ConstRef&&) noexcept = default;
-    constexpr auto operator=(ConstRef&&) noexcept -> ConstRef& = default;
 
-    constexpr auto operator*() const -> const T& { return get(); }
+    constexpr ConstRef(ConstRef&&) noexcept(
+        std::is_nothrow_move_constructible_v<Storage>) = default;
+    constexpr auto operator=(ConstRef&&) noexcept(
+        std::is_nothrow_move_constructible_v<Storage>) -> ConstRef& = default;
 
+    [[nodiscard]]
+    constexpr auto operator*() const -> const T& {
+        return get();
+    }
+
+    [[nodiscard]]
     constexpr auto get() const -> const T& {
-        if (std::holds_alternative<T>(value_))
-            return std::get<T>(value_);
+        if (std::holds_alternative<0>(value_))
+            return *std::get<0>(value_);
         else
-            return *std::get<const T*>(value_);
+            return std::get<1>(value_);
     }
 
   private:
-    std::variant<T, const T*> value_;
+    using Storage = std::variant<const T*, T>;
+    Storage value_;
 };
 
 /// @brief represents a nullable single or multiple(vector) AbsoluteStyle
-/// storage.
+/// stack.
 class StyleStack {
   public:
     // single by default
     StyleStack() = default;
-
-    // Observe:
 
     [[nodiscard]]
     auto top() const -> std::optional<AbsoluteStyle> {
@@ -76,8 +88,6 @@ class StyleStack {
     auto is_multiple() const -> bool {
         return is_multiple_;
     }
-
-    // Stack operations:
 
     void push(AbsoluteStyle style) {
         if (is_multiple_) {
@@ -99,8 +109,6 @@ class StyleStack {
         else
             single_ = std::nullopt;
     }
-
-    // Transform:
 
     void to_multiple() {
         if (is_multiple_) return;
@@ -242,43 +250,48 @@ inline constexpr style_pop_t pop;
 /// @warning The passed std::ostream object must outlive this object.
 class StyledOstream : public StyleOutputState {
   public:
-    StyledOstream(std::ostream& os) : os_(os) {}
+    StyledOstream(std::ostream& os) : ostream_(os) {}
 
     template <detail::OstreamOutputable T>
     friend auto operator<<(StyledOstream& so, T&& value) -> StyledOstream& {
         using ValueType = std::remove_cvref_t<T>;
+        if (so.is_first_output_) {
+            so.output_style(so.base_style_);
+            so.is_first_output_ = false;
+        }
 
-        if constexpr (std::is_same_v<ValueType, Style>) {
-            so.push_style(value);
-            // TODO: avoid same style output
-            so.output_style(value);
-        } else if constexpr (std::is_same_v<ValueType, AbsoluteStyle>) {
-            so.push_style(value);
+        if constexpr (detail::OutputableStyle<T>) {
+            if constexpr (std::is_same_v<T, Style>
+                          || std::is_same_v<T, AbsoluteStyle>)
+                so.push_style(value);
             so.output_style(value);
         } else if constexpr (std::is_same_v<ValueType, style_reset_t>) {
             so.reset_style();
             so.output_style(so.current_style());
         } else {
-            so.os_ << std::forward<T>(value);
+            so.ostream_ << std::forward<T>(value);
         }
         return so;
     }
 
     friend auto operator<<(StyledOstream& so, style_pop_t) -> StyledOstream& {
         so.pop_style();
-        if (so.style_enabled_) so.os_ << so.current_style();
+        if (so.style_enabled_) so.ostream_ << so.current_style();
         return so;
     }
 
+    [[nodiscard]]
+    auto ostream() -> std::ostream& { return ostream_; }
+
   private:
-    void output_style(Style style) {
-        if (style_enabled_) os_ << style;
-    }
-    void output_style(AbsoluteStyle absolute) {
-        if (style_enabled_) os_ << absolute;
+    template <detail::OutputableStyle StyleType>
+    void output_style(StyleType style) {
+        if (style_enabled_) ostream_ << style;
     }
 
-    std::ostream& os_;
+    std::ostream& ostream_;
+
+    bool is_first_output_ = true;
 };
 
 } // namespace deco
