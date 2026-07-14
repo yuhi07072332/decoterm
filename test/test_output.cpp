@@ -139,5 +139,4 @@ auto main() -> int {
     }
 
     std::cout << style_h1 << "\nSECTION3: Terminal / Output control" << reset << "\n\n";
-
 }
