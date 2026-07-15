@@ -458,12 +458,14 @@ inline constexpr auto bg(Color bg) -> Style {
 
 // ----- ostream operators -----
 
+/// @brief ostream operator for Style types e.g. Style, AbsoluteStyle
 template <detail::OutputableStyle StyleType>
 inline auto operator<<(std::ostream& os, StyleType style) -> std::ostream& {
     style.to_escape(std::ostreambuf_iterator(os));
     return os;
 }
 
+/// @brief ostream operator for `reset`.
 inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
     absolute(Style()).to_escape(std::ostreambuf_iterator(os));
     return os;

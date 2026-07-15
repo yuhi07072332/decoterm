@@ -11,60 +11,67 @@
 #include "style.hpp"
 
 #include <concepts>
-#include <memory>
+#include <functional>
 #include <optional>
 #include <ostream>
 #include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace deco {
 
 namespace detail {
 
+// Extract InnerType from std::reference_wrapper<InnerType>.
+// This can also check if T is a std::reference_wrapper.
+template <typename T>
+struct remove_reference_wrapper : std::false_type {
+    using type = T;
+};
+
+template <typename Inner>
+struct remove_reference_wrapper<std::reference_wrapper<Inner>>
+    : std::true_type {
+    using type = Inner;
+};
+
+template <typename T>
+using remove_reference_wrapper_t = remove_reference_wrapper<T>::type;
+
+template <typename T>
+inline constexpr bool is_reference_wrapper_v =
+    remove_reference_wrapper<T>::value;
+
+// Whether T has operator<<(std::ostream&, T)
 template <typename T>
 concept OstreamOutputable = requires(std::ostream& os, T&& value) {
     { os << std::forward<T>(value) } -> std::same_as<std::ostream&>;
 };
 
-/// @brief A class borrows an lvalue or owns an rvalue.
-template <typename T>
-struct Storage {
-    constexpr explicit Storage(T& value)
-        : value_(std::in_place_index<0>, std::addressof(value)) {}
+template <typename T, detail::OutputableStyle StyleType>
+struct StyledValue {
+    using ValueType = remove_reference_wrapper_t<T>;
 
-    constexpr explicit Storage(T&& value)
-        : value_(std::in_place_index<1>, std::move(value)) {}
+    constexpr explicit StyledValue(T value, StyleType style)
+        : value_(std::move(value)),
+          style_(style) {}
 
-    // A Ref is only movable.
-    constexpr Storage(const Storage&) = delete;
-    constexpr auto operator=(const Storage&) -> Storage& = delete;
-
-    constexpr Storage(Storage&&) noexcept(
-        std::is_nothrow_move_constructible_v<Variant>) = default;
-    constexpr auto operator=(Storage&&) noexcept(
-        std::is_nothrow_move_constructible_v<Variant>) -> Storage& = default;
-
-    [[nodiscard]]
-    constexpr auto operator*() const -> const T& {
-        return get();
+    constexpr auto value() -> ValueType& { 
+        if constexpr (is_reference_wrapper_v<T>) return value_.get();
+        return value_; 
     }
-
-    [[nodiscard]]
-    constexpr auto get() const -> const T& {
-        if (std::holds_alternative<0>(value_))
-            return *std::get<0>(value_);
-        else
-            return std::get<1>(value_);
+    constexpr auto value() const -> const ValueType& { 
+        if constexpr (is_reference_wrapper_v<T>) return value_.get();
+        return value_; 
     }
+    constexpr auto style() const -> StyleType { return style_; }
 
   private:
-    using Variant = std::variant<T*, T>;
-    Variant value_;
+    T value_;
+    StyleType style_;
 };
 
-/// @brief represents a nullable single or multiple(vector) AbsoluteStyle
+/// @brief represents a nullable, single or multiple(vector) AbsoluteStyle
 /// stack.
 class StyleStack {
   public:
@@ -133,19 +140,52 @@ class StyleStack {
 } // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                        StyledRef                        ║
+// ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-
+/// @brief create StyledValue from lvalue reference.
 template <typename T, detail::OutputableStyle StyleType>
-inline constexpr auto styled(T&& value, StyleType style) {
-    return StyledRef(std::forward<T>(value), style);
+inline constexpr auto styled(T& value, StyleType style)
+    -> detail::StyledValue<std::reference_wrapper<T>, StyleType> {
+    return detail::StyledValue(std::ref(value), style);
 }
 
+/// @brief create StyledValue from rvalue.
 template <typename T, detail::OutputableStyle StyleType>
-auto operator<<(std::ostream& os, const StyledRef<T, StyleType>& styled_ref) {
-    styled_ref.style.to_escape(std::ostreambuf_iterator(os));
-    os << *styled_ref << reset;
+inline constexpr auto styled(T&& value, StyleType style)
+    -> detail::StyledValue<std::remove_cvref_t<T>, StyleType> {
+    // This overloaded version must only take rvalue reference.
+    static_assert(std::is_rvalue_reference_v<T&&>);
+    return detail::StyledValue(std::move(value), style);
+}
+
+/// @brief ostream operator for styled()
+template <typename T, detail::OutputableStyle StyleType>
+auto operator<<(std::ostream& os,
+                const detail::StyledValue<T, StyleType>& styled)
+    -> std::ostream& {
+    styled.style().to_escape(std::ostreambuf_iterator(os));
+    os << styled.value() << reset;
+    return os;
+}
+
+/// @brief ostream operator for styled()
+template <typename T, detail::OutputableStyle StyleType>
+auto operator<<(std::ostream& os,
+                detail::StyledValue<T, StyleType>& styled)
+    -> std::ostream& {
+    styled.style().to_escape(std::ostreambuf_iterator(os));
+    os << styled.value() << reset;
+    return os;
+}
+
+/// @brief ostream operator for styled()
+template <typename T, detail::OutputableStyle StyleType>
+auto operator<<(std::ostream& os,
+                detail::StyledValue<T, StyleType>&& styled)
+    -> std::ostream& {
+    styled.style().to_escape(std::ostreambuf_iterator(os));
+    os << styled.value() << reset;
     return os;
 }
 
@@ -267,7 +307,9 @@ class StyledOstream : public StyleOutputState {
     }
 
     [[nodiscard]]
-    auto ostream() -> std::ostream& { return ostream_; }
+    auto ostream() const -> std::ostream& {
+        return ostream_;
+    }
 
   private:
     template <detail::OutputableStyle StyleType>
