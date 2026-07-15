@@ -28,25 +28,23 @@ concept OstreamOutputable = requires(std::ostream& os, T&& value) {
     { os << std::forward<T>(value) } -> std::same_as<std::ostream&>;
 };
 
-/// @brief A wrapper borrows an lvalue or owns an rvalue.
+/// @brief A class borrows an lvalue or owns an rvalue.
 template <typename T>
-struct ConstRef {
-    constexpr explicit ConstRef(const T& value)
+struct Storage {
+    constexpr explicit Storage(T& value)
         : value_(std::in_place_index<0>, std::addressof(value)) {}
 
-    constexpr explicit ConstRef(T&& value)
+    constexpr explicit Storage(T&& value)
         : value_(std::in_place_index<1>, std::move(value)) {}
 
-    ConstRef(const T&&) = delete;
+    // A Ref is only movable.
+    constexpr Storage(const Storage&) = delete;
+    constexpr auto operator=(const Storage&) -> Storage& = delete;
 
-    // A ConstRef is only movable.
-    constexpr ConstRef(const ConstRef&) = delete;
-    constexpr auto operator=(const ConstRef&) -> ConstRef& = delete;
-
-    constexpr ConstRef(ConstRef&&) noexcept(
-        std::is_nothrow_move_constructible_v<Storage>) = default;
-    constexpr auto operator=(ConstRef&&) noexcept(
-        std::is_nothrow_move_constructible_v<Storage>) -> ConstRef& = default;
+    constexpr Storage(Storage&&) noexcept(
+        std::is_nothrow_move_constructible_v<Variant>) = default;
+    constexpr auto operator=(Storage&&) noexcept(
+        std::is_nothrow_move_constructible_v<Variant>) -> Storage& = default;
 
     [[nodiscard]]
     constexpr auto operator*() const -> const T& {
@@ -62,8 +60,8 @@ struct ConstRef {
     }
 
   private:
-    using Storage = std::variant<const T*, T>;
-    Storage value_;
+    using Variant = std::variant<T*, T>;
+    Variant value_;
 };
 
 /// @brief represents a nullable single or multiple(vector) AbsoluteStyle
@@ -138,18 +136,6 @@ class StyleStack {
 // ║                        StyledRef                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
-template <typename T, detail::OutputableStyle StyleType>
-struct StyledRef : detail::ConstRef<T> {
-    StyledRef(const T& value, StyleType style)
-        : detail::ConstRef<T>(value),
-          style(style) {}
-
-    constexpr StyledRef(T&& value, StyleType style)
-        : detail::ConstRef<T>(std::move(value)),
-          style(style) {}
-
-    StyleType style;
-};
 
 template <typename T, detail::OutputableStyle StyleType>
 inline constexpr auto styled(T&& value, StyleType style) {
@@ -233,7 +219,7 @@ class StyleOutputState {
     }
 
     detail::StyleStack stack_;
-    AbsoluteStyle base_style_ = absolute(Style());
+    AbsoluteStyle base_style_ = absolute(default_style);
 
     bool style_enabled_ = true;
     bool color_fallback_enabled_ = false;
