@@ -5,7 +5,7 @@ Standard: c++20
 ColumnLimit: 80
 
 AlignOperands: Align
-AllowShortIfStatementsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 BreakBeforeBinaryOperators: NonAssignment
 BreakTemplateDeclarations: Leave
 FixNamespaceComments: true
