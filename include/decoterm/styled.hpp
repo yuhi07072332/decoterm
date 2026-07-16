@@ -22,25 +22,10 @@ namespace deco {
 
 namespace detail {
 
-// Extract InnerType from std::reference_wrapper<InnerType>.
-// This can also check if T is a std::reference_wrapper.
+/// @brief A wrapper owns a rvalue or references lvalue by owning
+/// std::reference_wrapper.
 template <typename T>
-struct remove_reference_wrapper : std::false_type {
-    using type = T;
-};
-
-template <typename Inner>
-struct remove_reference_wrapper<std::reference_wrapper<Inner>>
-    : std::true_type {
-    using type = Inner;
-};
-
-template <typename T>
-using remove_reference_wrapper_t = remove_reference_wrapper<T>::type;
-
-template <typename T>
-inline constexpr bool is_reference_wrapper_v =
-    remove_reference_wrapper<T>::value;
+struct Storage;
 
 // Whether T has operator<<(std::ostream&, T)
 template <typename T>
@@ -48,28 +33,62 @@ concept ostream_outputable = requires(std::ostream& os, T&& value) {
     { os << std::forward<T>(value) } -> std::same_as<std::ostream&>;
 };
 
-template <typename T, detail::outputable_style StyleType>
-struct StyledValue {
-    using ValueType = remove_reference_wrapper_t<T>;
+template <typename T>
+struct is_storage : std::false_type {};
 
-    constexpr explicit StyledValue(T value, StyleType style)
-        : value_(std::move(value)),
-          style_(style) {}
+template <typename Inner>
+struct is_storage<Storage<Inner>> : std::true_type {};
 
-    constexpr auto value() -> ValueType& { 
-        if constexpr (is_reference_wrapper_v<T>) return value_.get();
-        return value_; 
-    }
-    constexpr auto value() const -> const ValueType& { 
-        if constexpr (is_reference_wrapper_v<T>) return value_.get();
-        return value_; 
-    }
-    constexpr auto style() const -> StyleType { return style_; }
+template <typename T>
+concept storage = is_storage<T>::value;
+
+template <typename T>
+struct Storage {
+    using value_type = T;
+
+    static_assert(!std::is_reference_v<T>);
+    static_assert(!std::is_const_v<T>);
+
+    constexpr explicit Storage(T value) : value_(std::move(value)) {}
+
+    constexpr auto get() -> T& { return value_; }
+    constexpr auto get() const -> const T& { return value_; }
 
   private:
     T value_;
-    StyleType style_;
 };
+
+template <typename T>
+struct Storage<std::reference_wrapper<T>> {
+    using value_type = T;
+
+    constexpr explicit Storage(T& value) : value_(std::ref(value)) {}
+
+    constexpr auto get() const -> T& { return value_; }
+
+  private:
+    std::reference_wrapper<T> value_;
+};
+
+/// @brief Make Storage from lvalue.
+template <typename T>
+    requires (!std::is_rvalue_reference_v<T>)
+inline constexpr auto make_storage(T& value)
+    -> Storage<std::reference_wrapper<T>> {
+    return Storage<std::reference_wrapper<T>>(value);
+}
+
+/// @brief Make Storage from rvalue.
+template <typename T>
+    requires(!std::is_lvalue_reference_v<T>)
+inline constexpr auto make_storage(T&& value)
+    -> Storage<T> {
+    return Storage<T>(std::move(value));
+}
+
+/// Cannot make Storage from const rvalue reference.
+template <typename T>
+inline constexpr auto make_storage(const T&&) = delete;
 
 /// @brief represents a nullable, single or multiple(vector) AbsoluteStyle
 /// stack.
@@ -143,49 +162,44 @@ class StyleStack {
 // ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief create StyledValue from lvalue reference.
+template <detail::storage StorageType, detail::outputable_style StyleType>
+struct StyledStorage : public StorageType {
+    constexpr explicit StyledStorage(StorageType storage, StyleType style)
+        : StorageType(std::move(storage)),
+          style_(style) {}
+
+    constexpr auto style() const -> StyleType { return style_; }
+
+  private:
+    StyleType style_;
+};
+
 template <typename T, detail::outputable_style StyleType>
-inline constexpr auto styled(T& value, StyleType style)
-    -> detail::StyledValue<std::reference_wrapper<T>, StyleType> {
-    return detail::StyledValue(std::ref(value), style);
+inline constexpr auto styled(T&& value, StyleType style) {
+    return StyledStorage(detail::make_storage(std::forward<T>(value)), style);
 }
 
-/// @brief create StyledValue from rvalue.
-template <typename T, detail::outputable_style StyleType>
-inline constexpr auto styled(T&& value, StyleType style)
-    -> detail::StyledValue<std::remove_cvref_t<T>, StyleType> {
-    // This overloaded version must only take rvalue reference.
-    static_assert(std::is_rvalue_reference_v<T&&>);
-    return detail::StyledValue(std::move(value), style);
-}
-
-/// @brief ostream operator for styled()
-template <typename T, detail::outputable_style StyleType>
-auto operator<<(std::ostream& os,
-                const detail::StyledValue<T, StyleType>& styled)
+template <detail::storage StorageType, detail::outputable_style StyleType>
+inline auto operator<<(std::ostream& os,
+                       StyledStorage<StorageType, StyleType>& styled)
     -> std::ostream& {
-    styled.style().to_escape(std::ostreambuf_iterator(os));
-    os << styled.value() << reset;
+    os << styled.style() << styled.get() << reset;
     return os;
 }
 
-/// @brief ostream operator for styled()
-template <typename T, detail::outputable_style StyleType>
-auto operator<<(std::ostream& os,
-                detail::StyledValue<T, StyleType>& styled)
+template <detail::storage StorageType, detail::outputable_style StyleType>
+inline auto operator<<(std::ostream& os,
+                       const StyledStorage<StorageType, StyleType>& styled)
     -> std::ostream& {
-    styled.style().to_escape(std::ostreambuf_iterator(os));
-    os << styled.value() << reset;
+    os << styled.style() << styled.get() << reset;
     return os;
 }
 
-/// @brief ostream operator for styled()
-template <typename T, detail::outputable_style StyleType>
-auto operator<<(std::ostream& os,
-                detail::StyledValue<T, StyleType>&& styled)
+template <detail::storage StorageType, detail::outputable_style StyleType>
+inline auto operator<<(std::ostream& os,
+                       StyledStorage<StorageType, StyleType>&& styled)
     -> std::ostream& {
-    styled.style().to_escape(std::ostreambuf_iterator(os));
-    os << styled.value() << reset;
+    os << styled.style() << styled.get() << reset;
     return os;
 }
 
