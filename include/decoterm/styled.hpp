@@ -44,11 +44,11 @@ inline constexpr bool is_reference_wrapper_v =
 
 // Whether T has operator<<(std::ostream&, T)
 template <typename T>
-concept OstreamOutputable = requires(std::ostream& os, T&& value) {
+concept ostream_outputable = requires(std::ostream& os, T&& value) {
     { os << std::forward<T>(value) } -> std::same_as<std::ostream&>;
 };
 
-template <typename T, detail::OutputableStyle StyleType>
+template <typename T, detail::outputable_style StyleType>
 struct StyledValue {
     using ValueType = remove_reference_wrapper_t<T>;
 
@@ -144,14 +144,14 @@ class StyleStack {
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief create StyledValue from lvalue reference.
-template <typename T, detail::OutputableStyle StyleType>
+template <typename T, detail::outputable_style StyleType>
 inline constexpr auto styled(T& value, StyleType style)
     -> detail::StyledValue<std::reference_wrapper<T>, StyleType> {
     return detail::StyledValue(std::ref(value), style);
 }
 
 /// @brief create StyledValue from rvalue.
-template <typename T, detail::OutputableStyle StyleType>
+template <typename T, detail::outputable_style StyleType>
 inline constexpr auto styled(T&& value, StyleType style)
     -> detail::StyledValue<std::remove_cvref_t<T>, StyleType> {
     // This overloaded version must only take rvalue reference.
@@ -160,7 +160,7 @@ inline constexpr auto styled(T&& value, StyleType style)
 }
 
 /// @brief ostream operator for styled()
-template <typename T, detail::OutputableStyle StyleType>
+template <typename T, detail::outputable_style StyleType>
 auto operator<<(std::ostream& os,
                 const detail::StyledValue<T, StyleType>& styled)
     -> std::ostream& {
@@ -170,7 +170,7 @@ auto operator<<(std::ostream& os,
 }
 
 /// @brief ostream operator for styled()
-template <typename T, detail::OutputableStyle StyleType>
+template <typename T, detail::outputable_style StyleType>
 auto operator<<(std::ostream& os,
                 detail::StyledValue<T, StyleType>& styled)
     -> std::ostream& {
@@ -180,7 +180,7 @@ auto operator<<(std::ostream& os,
 }
 
 /// @brief ostream operator for styled()
-template <typename T, detail::OutputableStyle StyleType>
+template <typename T, detail::outputable_style StyleType>
 auto operator<<(std::ostream& os,
                 detail::StyledValue<T, StyleType>&& styled)
     -> std::ostream& {
@@ -278,7 +278,7 @@ class StyledOstream : public StyleOutputState {
   public:
     StyledOstream(std::ostream& os) : ostream_(os) {}
 
-    template <detail::OstreamOutputable T>
+    template <detail::ostream_outputable T>
     friend auto operator<<(StyledOstream& so, T&& value) -> StyledOstream& {
         using ValueType = std::remove_cvref_t<T>;
         if (so.is_first_output_) {
@@ -286,7 +286,7 @@ class StyledOstream : public StyleOutputState {
             so.is_first_output_ = false;
         }
 
-        if constexpr (detail::OutputableStyle<T>) {
+        if constexpr (detail::outputable_style<T>) {
             if constexpr (std::is_same_v<T, Style>
                           || std::is_same_v<T, AbsoluteStyle>)
                 so.push_style(value);
@@ -312,7 +312,7 @@ class StyledOstream : public StyleOutputState {
     }
 
   private:
-    template <detail::OutputableStyle StyleType>
+    template <detail::outputable_style StyleType>
     void output_style(StyleType style) {
         if (style_enabled_) ostream_ << style;
     }
