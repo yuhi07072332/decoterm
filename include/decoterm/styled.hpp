@@ -294,18 +294,18 @@ class StyledOstream : public StyleOutputState {
 
     template <detail::ostream_outputable T>
     friend auto operator<<(StyledOstream& so, T&& value) -> StyledOstream& {
-        using ValueType = std::remove_cvref_t<T>;
+        using value_type = std::remove_cvref_t<T>;
         if (so.is_first_output_) {
             so.output_style(so.base_style_);
             so.is_first_output_ = false;
         }
 
-        if constexpr (detail::outputable_style<T>) {
-            if constexpr (std::is_same_v<T, Style>
-                          || std::is_same_v<T, AbsoluteStyle>)
+        if constexpr (detail::outputable_style<value_type>) {
+            if constexpr (std::is_same_v<value_type, Style>
+                          || std::is_same_v<value_type, AbsoluteStyle>)
                 so.push_style(value);
             so.output_style(value);
-        } else if constexpr (std::is_same_v<ValueType, style_reset_t>) {
+        } else if constexpr (std::is_same_v<value_type, style_reset_t>) {
             so.reset_style();
             so.output_style(so.current_style());
         } else {
