@@ -39,13 +39,30 @@ template <typename T> struct is_storage<Storage<T>> : std::true_type {};
 
 // Whether T is a Storage.
 template <typename T>
-concept storage = is_storage<T>::value;
+concept storage = is_storage<std::remove_cvref_t<T>>::value;
+
+} // namespace detail
+
+template <detail::storage StorageType, detail::outputable_style StyleType>
+struct StyledStorage;
+
+namespace detail {
+
+template <typename T> struct is_styled_storage : std::false_type {};
+
+template <typename T, typename U>
+struct is_styled_storage<StyledStorage<T, U>> : std::true_type {};
+
+template <typename T>
+concept styled_storage = is_styled_storage<std::remove_cvref_t<T>>::value;
 
 /* ----- Storage ----- */
 
 /// @brief Specialization of Storage for rvalue.
 template <typename T>
 struct Storage {
+    using value_type = T;
+
     static_assert(!std::is_reference_v<T>);
     static_assert(!std::is_const_v<T>);
 
@@ -61,6 +78,8 @@ struct Storage {
 /// @brief Specialization of Storage for lvalue reference.
 template <typename T>
 struct Storage<T&> {
+    using value_type = T;
+
     constexpr explicit Storage(T& value) : value_(value) {}
     constexpr auto get() const -> T& { return value_; }
 
@@ -153,8 +172,9 @@ class StyleStack {
 
 /// @brief A wrapper for styling a value.
 template <detail::storage StorageType, detail::outputable_style StyleType>
-struct StyledValue : public StorageType {
-    constexpr explicit StyledValue(StorageType storage, StyleType style)
+struct StyledStorage : public StorageType {
+
+    constexpr explicit StyledStorage(StorageType storage, StyleType style)
         : StorageType(std::move(storage)),
           style_(style) {}
 
@@ -167,28 +187,11 @@ struct StyledValue : public StorageType {
 /// @brief Create a StyledValue.
 template <typename T, detail::outputable_style StyleType>
 inline constexpr auto styled(T&& value, StyleType style) {
-    return StyledValue(detail::make_storage(std::forward<T>(value)), style);
+    return StyledStorage(detail::make_storage(std::forward<T>(value)), style);
 }
 
-template <detail::storage StorageType, detail::outputable_style StyleType>
-inline auto operator<<(std::ostream& os,
-                       StyledValue<StorageType, StyleType>& styled)
-    -> std::ostream& {
-    os << styled.style() << styled.get() << reset;
-    return os;
-}
-
-template <detail::storage StorageType, detail::outputable_style StyleType>
-inline auto operator<<(std::ostream& os,
-                       const StyledValue<StorageType, StyleType>& styled)
-    -> std::ostream& {
-    os << styled.style() << styled.get() << reset;
-    return os;
-}
-
-template <detail::storage StorageType, detail::outputable_style StyleType>
-inline auto operator<<(std::ostream& os,
-                       StyledValue<StorageType, StyleType>&& styled)
+template <detail::styled_storage StyledStorageType>
+inline auto operator<<(std::ostream& os, StyledStorageType&& styled)
     -> std::ostream& {
     os << styled.style() << styled.get() << reset;
     return os;
@@ -301,35 +304,16 @@ class StyledOstream : public StyleOutputState {
         return so;
     }
 
+    /// @brief ostream operator for pop
     friend auto operator<<(StyledOstream& so, style_pop_t) -> StyledOstream& {
         so.pop_style();
         if (so.style_enabled_) so.ostream_ << so.current_style();
         return so;
     }
 
-    template <detail::storage StorageType, detail::outputable_style StyleType>
-    friend auto operator<<(StyledOstream& so,
-                           StyledValue<StorageType, StyleType>& styled)
-        -> StyledOstream& {
-        so.output_style(styled.style());
-        so.ostream_ << styled.get() << reset;
-        so.reset_style();
-        return so;
-    }
-
-    template <detail::storage StorageType, detail::outputable_style StyleType>
-    friend auto operator<<(StyledOstream& so,
-                           const StyledValue<StorageType, StyleType>& styled)
-        -> StyledOstream& {
-        so.output_style(styled.style());
-        so.ostream_ << styled.get() << reset;
-        so.reset_style();
-        return so;
-    }
-
-    template <detail::storage StorageType, detail::outputable_style StyleType>
-    friend auto operator<<(StyledOstream& so,
-                           StyledValue<StorageType, StyleType>&& styled)
+    /// @brief ostream operator for styled()
+    template <detail::styled_storage StyledStorageType>
+    friend auto operator<<(StyledOstream& so, StyledStorageType&& styled)
         -> StyledOstream& {
         so.output_style(styled.style());
         so.ostream_ << styled.get() << reset;
