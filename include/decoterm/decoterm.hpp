@@ -25,10 +25,8 @@
 // SOFTWARE.
 
 // TODO:
-// - Should AbsoluteStyle be able to convert implicitly to Style
 // - Detect terminal color support info & provide fallback system color for true
 // color
-// - styled()
 // - markup string
 // - Windows API fallback for Windows8 or lower versions
 

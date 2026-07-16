@@ -11,7 +11,6 @@
 #include "style.hpp"
 
 #include <concepts>
-#include <functional>
 #include <optional>
 #include <ostream>
 #include <type_traits>
@@ -39,9 +38,11 @@ struct is_storage : std::false_type {};
 template <typename Inner>
 struct is_storage<Storage<Inner>> : std::true_type {};
 
+// Whether T is a Storage.
 template <typename T>
 concept storage = is_storage<T>::value;
 
+/// @brief Specialization of Storage for rvalue.
 template <typename T>
 struct Storage {
     using value_type = T;
@@ -58,24 +59,24 @@ struct Storage {
     T value_;
 };
 
+/// @brief Specialization of Storage for lvalue reference.
 template <typename T>
-struct Storage<std::reference_wrapper<T>> {
+struct Storage<T&> {
     using value_type = T;
 
-    constexpr explicit Storage(T& value) : value_(std::ref(value)) {}
-
+    constexpr explicit Storage(T& value) : value_(value) {}
     constexpr auto get() const -> T& { return value_; }
 
   private:
-    std::reference_wrapper<T> value_;
+    T& value_;
 };
 
 /// @brief Make Storage from lvalue.
 template <typename T>
     requires (!std::is_rvalue_reference_v<T>)
 inline constexpr auto make_storage(T& value)
-    -> Storage<std::reference_wrapper<T>> {
-    return Storage<std::reference_wrapper<T>>(value);
+    -> Storage<T&> {
+    return Storage<T&>(value);
 }
 
 /// @brief Make Storage from rvalue.
@@ -162,9 +163,10 @@ class StyleStack {
 // ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief A wrapper for styling a value.
 template <detail::storage StorageType, detail::outputable_style StyleType>
-struct StyledStorage : public StorageType {
-    constexpr explicit StyledStorage(StorageType storage, StyleType style)
+struct StyledValue : public StorageType {
+    constexpr explicit StyledValue(StorageType storage, StyleType style)
         : StorageType(std::move(storage)),
           style_(style) {}
 
@@ -174,14 +176,16 @@ struct StyledStorage : public StorageType {
     StyleType style_;
 };
 
+/// @brief Create a StyledValue.
 template <typename T, detail::outputable_style StyleType>
 inline constexpr auto styled(T&& value, StyleType style) {
-    return StyledStorage(detail::make_storage(std::forward<T>(value)), style);
+    return StyledValue(detail::make_storage(std::forward<T>(value)), style);
 }
+
 
 template <detail::storage StorageType, detail::outputable_style StyleType>
 inline auto operator<<(std::ostream& os,
-                       StyledStorage<StorageType, StyleType>& styled)
+                       StyledValue<StorageType, StyleType>& styled)
     -> std::ostream& {
     os << styled.style() << styled.get() << reset;
     return os;
@@ -189,7 +193,7 @@ inline auto operator<<(std::ostream& os,
 
 template <detail::storage StorageType, detail::outputable_style StyleType>
 inline auto operator<<(std::ostream& os,
-                       const StyledStorage<StorageType, StyleType>& styled)
+                       const StyledValue<StorageType, StyleType>& styled)
     -> std::ostream& {
     os << styled.style() << styled.get() << reset;
     return os;
@@ -197,7 +201,7 @@ inline auto operator<<(std::ostream& os,
 
 template <detail::storage StorageType, detail::outputable_style StyleType>
 inline auto operator<<(std::ostream& os,
-                       StyledStorage<StorageType, StyleType>&& styled)
+                       StyledValue<StorageType, StyleType>&& styled)
     -> std::ostream& {
     os << styled.style() << styled.get() << reset;
     return os;
@@ -291,6 +295,8 @@ inline constexpr style_pop_t pop;
 class StyledOstream : public StyleOutputState {
   public:
     StyledOstream(std::ostream& os) : ostream_(os) {}
+    StyledOstream(const StyleOutputState& state, std::ostream& os) 
+        : StyleOutputState(state), ostream_(os) {}
 
     template <detail::ostream_outputable T>
     friend auto operator<<(StyledOstream& so, T&& value) -> StyledOstream& {
@@ -321,9 +327,7 @@ class StyledOstream : public StyleOutputState {
     }
 
     [[nodiscard]]
-    auto ostream() const -> std::ostream& {
-        return ostream_;
-    }
+    auto ostream() const -> std::ostream& { return ostream_; }
 
   private:
     template <detail::outputable_style StyleType>
