@@ -245,22 +245,22 @@ namespace colors {
 
 /// system colors
 enum Color16 : uint8_t {
-    Black             = 0,
-    Red               = 1,
-    Green             = 2,
-    Yellow            = 3,
-    Blue              = 4,
-    Magenta           = 5,
-    Cyan              = 6,
-    White             = 7,
-    BlackLight        = 8,
-    RedLight          = 9,
-    GreenLight        = 10,
-    YellowLight       = 11,
-    BlueLight         = 12,
-    MagentaLight      = 13,
-    CyanLight         = 14,
-    WhiteLight        = 15,
+    Black               = 0,
+    Red                 = 1,
+    Green               = 2,
+    Yellow              = 3,
+    Blue                = 4,
+    Magenta             = 5,
+    Cyan                = 6,
+    White               = 7,
+    BrightBlack         = 8,
+    BrightRed           = 9,
+    BrightGreen         = 10,
+    BrightYellow        = 11,
+    BrightBlue          = 12,
+    BrightMagenta       = 13,
+    BrightCyan          = 14,
+    BrightWhile         = 17,
 };
 
 }   // namespace colors
@@ -270,22 +270,22 @@ enum Color16 : uint8_t {
 inline constexpr Color default_color   = Color(detail::default_color_t{});
 inline constexpr Color null_color      = Color(detail::null_color_t{});
 
-inline constexpr Color black        = Color(colors::Black);
-inline constexpr Color red          = Color(colors::Red);
-inline constexpr Color green        = Color(colors::Green);
-inline constexpr Color yellow       = Color(colors::Yellow);
-inline constexpr Color blue         = Color(colors::Blue);
-inline constexpr Color magenta      = Color(colors::Magenta);
-inline constexpr Color cyan         = Color(colors::Cyan);
-inline constexpr Color white        = Color(colors::White);
-inline constexpr Color blacklight   = Color(colors::BlackLight);
-inline constexpr Color redlight     = Color(colors::RedLight);
-inline constexpr Color greenlight   = Color(colors::GreenLight);
-inline constexpr Color yellowlight  = Color(colors::YellowLight);
-inline constexpr Color bluelight    = Color(colors::BlueLight);
-inline constexpr Color magentalight = Color(colors::MagentaLight);
-inline constexpr Color cyanlight    = Color(colors::CyanLight);
-inline constexpr Color whitelight   = Color(colors::WhiteLight);
+inline constexpr Color black           = Color(colors::Black);
+inline constexpr Color red             = Color(colors::Red);
+inline constexpr Color green           = Color(colors::Green);
+inline constexpr Color yellow          = Color(colors::Yellow);
+inline constexpr Color blue            = Color(colors::Blue);
+inline constexpr Color magenta         = Color(colors::Magenta);
+inline constexpr Color cyan            = Color(colors::Cyan);
+inline constexpr Color white           = Color(colors::White);
+inline constexpr Color bright_black    = Color(colors::BrightBlack);
+inline constexpr Color bright_red      = Color(colors::BrightRed);
+inline constexpr Color bright_green    = Color(colors::BrightGreen);
+inline constexpr Color bright_yellow   = Color(colors::BrightYellow);
+inline constexpr Color bright_blue     = Color(colors::BrightBlue);
+inline constexpr Color bright_magenta  = Color(colors::BrightMagenta);
+inline constexpr Color bright_cyan     = Color(colors::BrightCyan);
+inline constexpr Color bright_while    = Color(colors::BrightWhile);
 
 // clang-format on
 
