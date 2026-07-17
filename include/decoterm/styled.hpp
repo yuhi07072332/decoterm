@@ -242,16 +242,21 @@ class StyleOutputState {
 
     // ----- observe -----
 
+    [[nodiscard]]
     auto base_style() const -> Style { return base_style_.style; }
 
+    [[nodiscard]]
     auto nesting_enabled() const -> bool { return stack_.is_multiple(); }
 
+    [[nodiscard]]
     auto style_enabled() const -> bool { return style_enabled_; }
 
+    [[nodiscard]]
     auto color_fallback_enabled() const -> bool {
         return color_fallback_enabled_;
     }
 
+    [[nodiscard]]
     auto current_style() const -> AbsoluteStyle {
         return stack_.top().value_or(base_style_);
     }
@@ -296,10 +301,7 @@ class StyledOstream : public StyleOutputState {
         requires (!detail::styled_storage<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         using value_type = std::remove_cvref_t<T>;
-        if (detail::g_style_output_context != &out) {
-            out.output_style(out.current_style());
-            detail::g_style_output_context = &out;
-        }
+        out.check_context();
 
         if constexpr (detail::outputable_style<value_type>) {
             if constexpr (std::is_same_v<value_type, Style>
@@ -317,6 +319,7 @@ class StyledOstream : public StyleOutputState {
 
     /// @brief ostream operator for pop
     friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
+        out.check_context();
         out.pop_style();
         if (out.style_enabled_) out.ostream_ << out.current_style();
         return out;
@@ -326,6 +329,7 @@ class StyledOstream : public StyleOutputState {
     template <detail::styled_storage StyledStorageType>
     friend auto operator<<(StyledOstream& out, StyledStorageType&& styled)
         -> StyledOstream& {
+        out.check_context();
         out.output_style(styled.style());
         out.ostream_ << styled.get();
         out.ostream_ << out.current_style();
@@ -335,6 +339,13 @@ class StyledOstream : public StyleOutputState {
     auto ostream() const -> std::ostream& { return ostream_; }
 
   private:
+
+    void check_context() {
+        if (detail::g_style_output_context != this) {
+            output_style(current_style());
+            detail::g_style_output_context = this;
+        }
+    }
 
     template <detail::outputable_style StyleType>
     void output_style(StyleType style) {

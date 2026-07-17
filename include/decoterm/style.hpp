@@ -260,7 +260,7 @@ enum Color16 : uint8_t {
     BrightBlue          = 12,
     BrightMagenta       = 13,
     BrightCyan          = 14,
-    BrightWhite         = 17,
+    BrightWhite         = 15,
 };
 
 }   // namespace colors

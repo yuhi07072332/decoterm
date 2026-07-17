@@ -5,7 +5,6 @@
 #include <iostream>
 #include <print>
 #include <string_view>
-#include <iomanip>
 
 using namespace deco;
 
@@ -142,7 +141,9 @@ auto main() -> int {
 
     std::cout << styled("\nSECTION3: StyledOutputState", style_h1) << "\n\n";
 
-    std::cout << styled("[Basic]\n\n", style_h2);
+    auto dout = styled_out(std::cout);
+
+    dout << styled("[Basic]\n\n", style_h2);
 
     auto out = styled_out(std::cout);
     out.base_style(color(bright_white, rgb(0x361c45)));
@@ -161,7 +162,7 @@ auto main() -> int {
         << (underline | bg(default_color)) << "{ underline | bg(default_color) }"
         << pop << " pop }" << pop << " base style";
 
-    std::cout << reset << styled("\n\n[Styled Output context]\n\n", style_h2);
+    dout << styled("\n\n[Styled Output context]\n\n", style_h2);
 
     auto out1 = styled_out(std::cout);
     out1 << (italic | fg(bright_green));
@@ -172,5 +173,14 @@ auto main() -> int {
     out2 << "{ out2 }";
     out1 << "{ out1 }";
 
+    dout << styled("\n\n[Disable style output]\n\n", style_h2);
+    out.base_style(default_style);
+
+    dout << "enabled: ";
+    out << fg(blue) << "lorem" << (fg(green) | bold | underline | invert) << "ipsum" << pop << "dolor" << pop << "sit\n";
+
+    dout << "disabled: ";
+    out.enable_style(false);
+    out << fg(blue) << "lorem" << (bold | underline) << "ipsum" << pop << "dolor" << pop << "sit\n";
 
 }
