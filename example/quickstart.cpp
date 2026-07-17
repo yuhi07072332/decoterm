@@ -6,7 +6,7 @@ int main() {
 
     constexpr Style style_info = fg(rgb(0x71cfde)) | underline;
 
-    std::cout << fg(bluelight) << "Hello, " << invert << "world!" << reset;
+    std::cout << fg(bright_blue) << "Hello, " << invert << "world!" << reset;
 
     StyledOstream sout(std::cout);
 

@@ -71,8 +71,8 @@ TEST_CASE("Color: predefined constants match system color escape sequences") {
 
     constexpr std::array constants {
         black, red, green, yellow, blue, magenta, cyan, white,
-        blacklight, redlight, greenlight, yellowlight, bluelight,
-        magentalight, cyanlight, whitelight,
+        bright_black, bright_red, bright_green, bright_yellow, bright_blue,
+        bright_magenta, bright_cyan, bright_white,
     };
 
     for (std::size_t i = 0; i < constants.size(); ++i) {

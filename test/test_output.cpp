@@ -47,8 +47,8 @@ void print_color_cell(int color_index, bool is_fg_white) {
 }
 
 auto main() -> int {
-    Style style_h1 = color(yellowlight, rgb(0x1f1e55)) | bold;
-    Style style_h2 = fg(yellowlight) | underline;
+    Style style_h1 = color(bright_yellow, rgb(0x1f1e55)) | bold;
+    Style style_h2 = fg(bright_yellow) | underline;
 
     std::cout << styled("SECTION1: Color output", style_h1) << "\n\n";
     std::cout << styled("[Ansi Colors]", style_h2) << "\n\n";
@@ -145,9 +145,9 @@ auto main() -> int {
     std::cout << styled("[Basic]\n\n", style_h2);
 
     auto out = styled_out(std::cout);
-    out.base_style(color(whitelight, rgb(0x361c45)));
+    out.base_style(color(bright_white, rgb(0x361c45)));
     out << "base style "
-        << styled("{ styled: italic fg(yellowlight) }", italic | fg(yellowlight))
+        << styled("{ styled: italic fg(yellowlight) }", italic | fg(bright_yellow))
         << " base style "
         << absolute(default_style) << "{ absolute(default_style) }" << reset
         << " base style";
@@ -164,7 +164,7 @@ auto main() -> int {
     std::cout << reset << styled("\n\n[Styled Output context]\n\n", style_h2);
 
     auto out1 = styled_out(std::cout);
-    out1 << (italic | fg(greenlight));
+    out1 << (italic | fg(bright_green));
 
     auto out2 = styled_out(std::cout);
 

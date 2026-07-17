@@ -260,7 +260,7 @@ enum Color16 : uint8_t {
     BrightBlue          = 12,
     BrightMagenta       = 13,
     BrightCyan          = 14,
-    BrightWhile         = 17,
+    BrightWhite         = 17,
 };
 
 }   // namespace colors
@@ -285,7 +285,7 @@ inline constexpr Color bright_yellow   = Color(colors::BrightYellow);
 inline constexpr Color bright_blue     = Color(colors::BrightBlue);
 inline constexpr Color bright_magenta  = Color(colors::BrightMagenta);
 inline constexpr Color bright_cyan     = Color(colors::BrightCyan);
-inline constexpr Color bright_while    = Color(colors::BrightWhile);
+inline constexpr Color bright_white    = Color(colors::BrightWhite);
 
 // clang-format on
 
