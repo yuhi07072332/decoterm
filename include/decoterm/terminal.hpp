@@ -8,9 +8,9 @@
 #ifndef DECOTERM_TERMINAL_HPP
 #define DECOTERM_TERMINAL_HPP
 
-#include "style.hpp"
+#include "styled.hpp"
 
-#include <optional>
+#include <iostream>
 
 #if defined(_WIN32)
 
@@ -31,7 +31,16 @@
 
 namespace deco {
 
-enum class ColorSupport { TrueColor, Color256, Color16 };
+/* ----- forward declarations ----- */
+
+enum class ColorSupport { TrueColor, Color16 };
+
+namespace terminal {
+
+inline auto is_stdout_tty() -> bool;
+inline auto is_stderr_tty() -> bool;
+
+} // namespace terminal
 
 namespace detail {
 
@@ -45,17 +54,6 @@ inline auto enable_virtual_terminal_mode() -> bool {
     return SetConsoleMode(h_stdout, mode);
 }
 #endif // _WIN32
-
-[[nodiscard]]
-inline auto is_stdout_terminal() -> bool {
-#if defined(_WIN32)
-    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD mode;
-    return GetConsoleMode(h_stdout, &mode);
-#else // POSIX
-    return isatty(STDOUT_FILENO);
-#endif
-};
 
 #if !defined(_WIN32)
 
@@ -105,7 +103,60 @@ inline auto get_color_support() -> ColorSupport {
 
 #endif // !_WIN32
 
+inline auto is_ostream_tty(const std::ostream& os) -> bool {
+    if (&os == &std::cout) {
+        return terminal::is_stdout_tty();
+    } else if (&os == &std::cerr) {
+        return terminal::is_stderr_tty();
+    }
+    return false;
+}
+
+#if defined(_WIN32)
+inline bool g_virtual_terminal_mode_enabled = enable_virtual_terminal_mode();
+#endif // _WIN32
+
 } // namespace detail
+
+namespace terminal {
+
+[[nodiscard]]
+inline auto is_stdout_tty() -> bool {
+#if defined(_WIN32)
+    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode;
+    return GetConsoleMode(h_stdout, &mode);
+#else // POSIX
+    return isatty(STDOUT_FILENO);
+#endif
+};
+
+[[nodiscard]]
+inline auto is_stderr_tty() -> bool {
+#if defined(_WIN32)
+    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD mode;
+    return GetConsoleMode(h_stderr, &mode);
+#else // POSIX
+    return isatty(STDERR_FILENO);
+#endif
+};
+
+[[nodiscard]]
+inline auto cashed_color_support() -> ColorSupport {
+    static ColorSupport color_support = detail::get_color_support();
+    return color_support;
+}
+
+[[nodiscard]]
+inline auto styled_out(std::ostream& os) -> StyledOstream {
+    StyledOstream sout = StyledOstream(os);
+    sout.enable_style(detail::is_ostream_tty(os))
+        .enable_color_fallback(cashed_color_support() == ColorSupport::Color16);
+    return sout;
+}
+
+}; // namespace terminal
 
 } // namespace deco
 

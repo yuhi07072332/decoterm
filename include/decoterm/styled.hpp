@@ -21,9 +21,23 @@ namespace deco {
 
 namespace detail {
 
+/* ----- forward declarations ----- */
+
 /// @brief A wrapper owns a rvalue or references lvalue by owning
 /// std::reference_wrapper.
 template <typename T> struct Storage;
+
+template <typename T> struct is_storage;
+
+template <typename T>
+concept storage = is_storage<std::remove_cvref_t<T>>::value;
+
+} // namespace detail
+
+template <detail::storage StorageType, detail::outputable_style StyleType>
+struct StyledStorage;
+
+namespace detail {
 
 /* ----- type traits & concepts ----- */
 
@@ -37,16 +51,7 @@ template <typename T> struct is_storage : std::false_type {};
 
 template <typename T> struct is_storage<Storage<T>> : std::true_type {};
 
-// Whether T is a Storage.
-template <typename T>
-concept storage = is_storage<std::remove_cvref_t<T>>::value;
-
-} // namespace detail
-
-template <detail::storage StorageType, detail::outputable_style StyleType>
-struct StyledStorage;
-
-namespace detail {
+// Whether remove_cvref_t<T> is a Storage.
 
 template <typename T> struct is_styled_storage : std::false_type {};
 
@@ -331,6 +336,10 @@ class StyledOstream : public StyleOutputState {
 
     std::ostream& ostream_;
 };
+
+inline auto styled_out(std::ostream& os) -> StyledOstream {
+    return StyledOstream(os);
+}
 
 } // namespace deco
 
