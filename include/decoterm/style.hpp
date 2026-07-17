@@ -18,6 +18,7 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <stdexcept>
 
 namespace deco {
 
@@ -34,7 +35,7 @@ struct style_type {
 
 template <typename T>
 concept outputable_style =
-    std::derived_from<T, style_type> 
+    std::derived_from<std::remove_cvref_t<T>, style_type> 
     && requires(T style, char* out) {
     { style.to_escape(out) } -> std::same_as<char*>;
 };

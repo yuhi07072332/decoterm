@@ -11,6 +11,7 @@
 #include "styled.hpp"
 
 #include <iostream>
+#include <cstdlib>
 
 #if defined(_WIN32)
 

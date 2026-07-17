@@ -43,7 +43,8 @@ namespace detail {
 
 /* ----- global style output context ----- */
 
-inline StyleOutputState* g_style_output_context = nullptr;
+// While ostream itself is not thread-safe, we still make the style output context thread-safe.
+inline thread_local StyleOutputState* g_style_output_context = nullptr;
 
 /* ----- type traits & concepts ----- */
 
@@ -217,6 +218,11 @@ class StyleOutputState {
   public:
     StyleOutputState() = default;
 
+    ~StyleOutputState() {
+        if (detail::g_style_output_context == this) 
+            detail::g_style_output_context = nullptr;
+    }
+
     // ----- options -----
 
     auto enable_style(bool enable) -> StyleOutputState& {
@@ -339,9 +345,8 @@ class StyledOstream : public StyleOutputState {
     auto ostream() const -> std::ostream& { return ostream_; }
 
   private:
-
     void check_context() {
-        if (detail::g_style_output_context != this) {
+        if (detail::g_style_output_context != static_cast<StyleOutputState*>(this)) {
             output_style(current_style());
             detail::g_style_output_context = this;
         }
