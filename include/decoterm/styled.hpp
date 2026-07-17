@@ -37,7 +37,13 @@ concept storage = is_storage<std::remove_cvref_t<T>>::value;
 template <detail::storage StorageType, detail::outputable_style StyleType>
 struct StyledStorage;
 
+class StyleOutputState;
+
 namespace detail {
+
+/* ----- global style output context ----- */
+
+inline StyleOutputState* g_style_output_context = nullptr;
 
 /* ----- type traits & concepts ----- */
 
@@ -265,7 +271,6 @@ class StyleOutputState {
 
     bool style_enabled_ = true;
     bool color_fallback_enabled_ = false;
-    bool is_first_output_ = true;
 
   private:
     detail::StyleStack stack_;
@@ -288,47 +293,49 @@ class StyledOstream : public StyleOutputState {
           ostream_(os) {}
 
     template <detail::ostream_outputable T>
-    friend auto operator<<(StyledOstream& so, T&& value) -> StyledOstream& {
+        requires (!detail::styled_storage<T>)
+    friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         using value_type = std::remove_cvref_t<T>;
-        if (so.is_first_output_) {
-            so.output_style(so.base_style_);
-            so.is_first_output_ = false;
+        if (detail::g_style_output_context != &out) {
+            out.output_style(out.current_style());
+            detail::g_style_output_context = &out;
         }
 
         if constexpr (detail::outputable_style<value_type>) {
             if constexpr (std::is_same_v<value_type, Style>
                           || std::is_same_v<value_type, AbsoluteStyle>)
-                so.push_style(value);
-            so.output_style(value);
+                out.push_style(value);
+            out.output_style(value);
         } else if constexpr (std::is_same_v<value_type, style_reset_t>) {
-            so.reset_style();
-            so.output_style(so.current_style());
+            out.reset_style();
+            out.output_style(out.current_style());
         } else {
-            so.ostream_ << std::forward<T>(value);
+            out.ostream_ << std::forward<T>(value);
         }
-        return so;
+        return out;
     }
 
     /// @brief ostream operator for pop
-    friend auto operator<<(StyledOstream& so, style_pop_t) -> StyledOstream& {
-        so.pop_style();
-        if (so.style_enabled_) so.ostream_ << so.current_style();
-        return so;
+    friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
+        out.pop_style();
+        if (out.style_enabled_) out.ostream_ << out.current_style();
+        return out;
     }
 
     /// @brief ostream operator for styled()
     template <detail::styled_storage StyledStorageType>
-    friend auto operator<<(StyledOstream& so, StyledStorageType&& styled)
+    friend auto operator<<(StyledOstream& out, StyledStorageType&& styled)
         -> StyledOstream& {
-        so.output_style(styled.style());
-        so.ostream_ << styled.get() << reset;
-        so.reset_style();
-        return so;
+        out.output_style(styled.style());
+        out.ostream_ << styled.get();
+        out.ostream_ << out.current_style();
+        return out;
     }
 
     auto ostream() const -> std::ostream& { return ostream_; }
 
   private:
+
     template <detail::outputable_style StyleType>
     void output_style(StyleType style) {
         if (style_enabled_) ostream_ << style;

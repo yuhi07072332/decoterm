@@ -5,6 +5,7 @@
 #include <iostream>
 #include <print>
 #include <string_view>
+#include <iomanip>
 
 using namespace deco;
 
@@ -46,11 +47,11 @@ void print_color_cell(int color_index, bool is_fg_white) {
 }
 
 auto main() -> int {
-    Style style_h1 = fg(bluelight) | bold | invert;
+    Style style_h1 = color(yellowlight, rgb(0x1f1e55)) | bold;
     Style style_h2 = fg(yellowlight) | underline;
 
-    std::cout << style_h1 << "SECTION1: Color output" << reset << "\n\n";
-    std::cout << style_h2 << "[Ansi Colors]" << reset << "\n\n";
+    std::cout << styled("SECTION1: Color output", style_h1) << "\n\n";
+    std::cout << styled("[Ansi Colors]", style_h2) << "\n\n";
 
     std::println("system colors [0, 15]:\n");
     for (int i = 0; i <= 7; ++i) {
@@ -95,7 +96,7 @@ auto main() -> int {
 
     std::println();
 
-    std::cout << style_h2 << "[True Color]" << reset << "\n\n";
+    std::cout << styled("[True Color]", style_h2) << "\n\n";
 
     constexpr int step = 3;
     for (int r = 0; r <= 255; r += step)
@@ -131,12 +132,45 @@ auto main() -> int {
         std::println("{}", reset);
     }
 
-    std::cout << style_h1 << "\nSECTION2: Style output" << reset << "\n\n";
+    std::cout << styled("\nSECTION2: Style output", style_h1) << "\n\n";
+
     for (int i = 0; i < style_names.size(); ++i) {
         std::print("{}{}{}  ", Style(1 << i), style_names[i], reset);
 
         std::println();
     }
 
-    std::cout << style_h1 << "\nSECTION3: Terminal / Output control" << reset << "\n\n";
+    std::cout << styled("\nSECTION3: StyledOutputState", style_h1) << "\n\n";
+
+    std::cout << styled("[Basic]\n\n", style_h2);
+
+    auto out = styled_out(std::cout);
+    out.base_style(color(whitelight, rgb(0x361c45)));
+    out << "base style "
+        << styled("{ styled: italic fg(yellowlight) }", italic | fg(yellowlight))
+        << " base style "
+        << absolute(default_style) << "{ absolute(default_style) }" << reset
+        << " base style";
+
+    out << absolute(default_style) << "\n\n" 
+        << style_h2 << "[Style nesting]\n\n" << reset;
+
+    out.enable_nesting(true);
+    out << "base style "
+        << italic << "{ italic "
+        << (underline | bg(default_color)) << "{ underline | bg(default_color) }"
+        << pop << " pop }" << pop << " base style";
+
+    std::cout << reset << styled("\n\n[Styled Output context]\n\n", style_h2);
+
+    auto out1 = styled_out(std::cout);
+    out1 << (italic | fg(greenlight));
+
+    auto out2 = styled_out(std::cout);
+
+    out1 << "{ out1 }";
+    out2 << "{ out2 }";
+    out1 << "{ out1 }";
+
+
 }

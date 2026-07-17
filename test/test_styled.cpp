@@ -35,7 +35,7 @@ auto operator<<(std::ostream& os, const Value& value) -> std::ostream& {
 
 } // namespace
 
-TEST_CASE("styled: styled(): owns rvalues") {
+TEST_CASE("styled: styled(): own rvalues") {
     using namespace deco;
 
     auto styled_value = styled(45, bold);
@@ -52,7 +52,7 @@ TEST_CASE("styled: styled(): owns rvalues") {
     CHECK(styled_value.style() == bold);
 }
 
-TEST_CASE("styled: styled(): references lvalues") {
+TEST_CASE("styled: styled(): reference lvalues") {
     using namespace deco;
 
     int value = 30;
@@ -80,7 +80,7 @@ TEST_CASE("styled: styled(): references lvalues") {
     CHECK(const_styled_const_value.get() == 45);
 }
 
-TEST_CASE("styled: styled(): outputs owning and referenced values") {
+TEST_CASE("styled: styled(): output owning and referenced values") {
     using namespace deco;
 
     std::ostringstream os;
@@ -101,7 +101,7 @@ TEST_CASE("styled: styled(): outputs owning and referenced values") {
     CHECK(counter.value == 1);
 }
 
-TEST_CASE("styled: styled(): outputs mutable temporaries") {
+TEST_CASE("styled: styled(): output mutable temporaries") {
     using namespace deco;
 
     std::ostringstream os;
@@ -195,7 +195,7 @@ TEST_CASE("styled: StyleOutputState: nested style state") {
 }
 
 
-TEST_CASE("styled: StyledOstream: writes plain values") {
+TEST_CASE("styled: StyledOstream: write plain values") {
     using namespace deco;
 
     std::ostringstream os;
@@ -209,7 +209,7 @@ TEST_CASE("styled: StyledOstream: writes plain values") {
           == absolute(default_style).to_escape() + std::string("value=42 1.5"));
 }
 
-TEST_CASE("styled: StyledOstream: writes styles") {
+TEST_CASE("styled: StyledOstream: write styles") {
     using namespace deco;
 
     std::ostringstream os;
@@ -222,7 +222,7 @@ TEST_CASE("styled: StyledOstream: writes styles") {
                  + std::string("error") + absolute(default_style).to_escape());
 }
 
-TEST_CASE("styled: StyledOstream: can disable style output") {
+TEST_CASE("styled: StyledOstream: disable style output") {
     using namespace deco;
 
     std::ostringstream os;

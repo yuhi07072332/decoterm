@@ -25,6 +25,7 @@
 // SOFTWARE.
 
 // TODO:
+// - iomanipulator support for StyledOstream
 // - Detect terminal color support info & provide fallback system color for true
 // color
 // - markup string
