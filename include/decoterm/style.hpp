@@ -26,17 +26,8 @@ struct Style;
 
 namespace detail {
 
-struct default_color_t {};
-struct null_color_t {};
-struct style_type {
-    constexpr auto operator==(const style_type&) const -> bool = default;
-    constexpr auto operator!=(const style_type&) const -> bool = default;
-};
-
 template <typename T>
-concept outputable_style =
-    std::derived_from<std::remove_cvref_t<T>, style_type> 
-    && requires(T style, char* out) {
+concept outputable_style = requires(T style, char* out) {
     { style.to_escape(out) } -> std::same_as<char*>;
 };
 
@@ -87,14 +78,15 @@ struct Color {
 
     // ----- constructors -----
 
-    constexpr Color(detail::default_color_t)
-        : type_(Type::Default),
-          data_({0, 0, 0}) {}
-    constexpr Color(detail::null_color_t)
-        : type_(Type::Null),
-          data_({0, 0, 0}) {}
+    static constexpr auto default_color() -> Color {
+        return Color(Type::Default, {0, 0, 0});
+    }
 
-    /// @brief Create a color by index (0-255)
+    static constexpr auto null_color() -> Color {
+        return Color(Type::Null, {0, 0, 0});
+    }
+
+    /// @brief Create a color from index [0, 255]
     constexpr explicit Color(uint8_t index)
         : type_(Type::AnsiColor),
           data_({index, 0, 0}) {}
@@ -188,6 +180,9 @@ struct Color {
     }
 
   private:
+    constexpr Color(Type type, std::array<uint8_t, 3> data)
+        : type_(type), data_(data) {}
+
     Type type_;
     std::array<uint8_t, 3> data_;
 };
@@ -268,8 +263,8 @@ enum Color16 : uint8_t {
 
 // ----- color constants -----
 
-inline constexpr Color default_color   = Color(detail::default_color_t{});
-inline constexpr Color null_color      = Color(detail::null_color_t{});
+inline constexpr Color default_color   = Color::default_color();
+inline constexpr Color null_color      = Color::null_color();
 
 inline constexpr Color black           = Color(colors::Black);
 inline constexpr Color red             = Color(colors::Red);
@@ -298,7 +293,7 @@ struct style_reset_t {};
 inline constexpr style_reset_t reset;
 
 /// @brief A class representing a terminal style (color + text attributes).
-struct Style : detail::style_type {
+struct Style {
     // clang-format off
 
     enum Flags : uint8_t {
@@ -409,7 +404,7 @@ struct Style : detail::style_type {
 
 /// @brief A Style wrapper for representing an absolute style
 ///        (not relative to the current style).
-struct AbsoluteStyle : detail::style_type {
+struct AbsoluteStyle {
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
         Style::MAX_ESCAPE_CODE_SIZE + 1;
 

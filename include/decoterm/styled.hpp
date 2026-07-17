@@ -43,8 +43,7 @@ namespace detail {
 
 /* ----- global style output context ----- */
 
-// While ostream itself is not thread-safe, we still make the style output context thread-safe.
-inline thread_local StyleOutputState* g_style_output_context = nullptr;
+inline StyleOutputState* g_style_output_context = nullptr;
 
 /* ----- type traits & concepts ----- */
 
