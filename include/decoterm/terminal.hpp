@@ -10,16 +10,16 @@
 
 #include "styled.hpp"
 
-#include <iostream>
 #include <cstdlib>
+#include <iostream>
 
 #if defined(_WIN32)
 
 #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif // !WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
-    #define NOMINMAX
+#define NOMINMAX
 #endif // !NOMINMAX
 #include <windows.h>
 

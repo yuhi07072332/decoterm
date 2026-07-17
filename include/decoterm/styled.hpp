@@ -218,7 +218,7 @@ class StyleOutputState {
     StyleOutputState() = default;
 
     ~StyleOutputState() {
-        if (detail::g_style_output_context == this) 
+        if (detail::g_style_output_context == this)
             detail::g_style_output_context = nullptr;
     }
 
@@ -248,13 +248,19 @@ class StyleOutputState {
     // ----- observe -----
 
     [[nodiscard]]
-    auto base_style() const -> Style { return base_style_.style; }
+    auto base_style() const -> Style {
+        return base_style_.style;
+    }
 
     [[nodiscard]]
-    auto nesting_enabled() const -> bool { return stack_.is_multiple(); }
+    auto nesting_enabled() const -> bool {
+        return stack_.is_multiple();
+    }
 
     [[nodiscard]]
-    auto style_enabled() const -> bool { return style_enabled_; }
+    auto style_enabled() const -> bool {
+        return style_enabled_;
+    }
 
     [[nodiscard]]
     auto color_fallback_enabled() const -> bool {
@@ -303,7 +309,7 @@ class StyledOstream : public StyleOutputState {
           ostream_(os) {}
 
     template <detail::ostream_outputable T>
-        requires (!detail::styled_storage<T>)
+        requires(!detail::styled_storage<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         using value_type = std::remove_cvref_t<T>;
         out.check_context();
@@ -345,7 +351,8 @@ class StyledOstream : public StyleOutputState {
 
   private:
     void check_context() {
-        if (detail::g_style_output_context != static_cast<StyleOutputState*>(this)) {
+        if (detail::g_style_output_context
+            != static_cast<StyleOutputState*>(this)) {
             output_style(current_style());
             detail::g_style_output_context = this;
         }

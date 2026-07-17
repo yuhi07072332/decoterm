@@ -16,9 +16,9 @@
 #include <cstdint>
 #include <iterator>
 #include <ostream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <stdexcept>
 
 namespace deco {
 
@@ -130,10 +130,8 @@ struct Color {
         case Type::Null:
             return out;
         case Type::Default:
-            if (is_bg)
-                out = write_to(out, "49");
-            else
-                out = write_to(out, "39");
+            if (is_bg) out = write_to(out, "49");
+            else out = write_to(out, "39");
             return out;
         case Type::AnsiColor: {
             if (data_[0] < 16) {
@@ -181,7 +179,8 @@ struct Color {
 
   private:
     constexpr Color(Type type, std::array<uint8_t, 3> data)
-        : type_(type), data_(data) {}
+        : type_(type),
+          data_(data) {}
 
     Type type_;
     std::array<uint8_t, 3> data_;
@@ -399,7 +398,6 @@ struct Style {
         to_escape(std::back_inserter(esc));
         return esc;
     }
-
 };
 
 /// @brief A Style wrapper for representing an absolute style
