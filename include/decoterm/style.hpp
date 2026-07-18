@@ -160,7 +160,7 @@ struct Color {
         }
     }
 
-    /// @brief write escape sequence to output iterator
+    /// @brief write ANSI escape code to output iterator
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out, bool is_bg) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
@@ -169,12 +169,38 @@ struct Color {
         return out;
     }
 
-    /// @brief write escape sequence to string
+    /// @brief write ANSI escape code to string
     [[nodiscard]]
     auto to_escape(bool is_bg) const -> std::string {
         std::string esc;
         to_escape(std::back_inserter(esc), is_bg);
         return esc;
+    }
+
+    [[nodiscard]]
+    auto debug_string() const -> std::string {
+        switch(type_) {
+            case Type::Null: return "[null color]";
+            case Type::Default: return "[Default]";
+            case Type::AnsiColor: {
+                std::string debug("[type=AnsiColor");
+                return debug
+                    .append(", index=")
+                    .append(std::to_string(data_[0]))
+                    .append("]");
+            }
+            case Type::TrueColor: {
+                std::string debug("[type=TrueColor");
+                return debug
+                    .append(", rgb=")
+                    .append(std::to_string(data_[0]))
+                    .append(", ")
+                    .append(std::to_string(data_[1]))
+                    .append(", ")
+                    .append(std::to_string(data_[2]))
+                    .append("]");
+            }
+        }
     }
 
   private:
@@ -382,7 +408,7 @@ struct Style {
         return out;
     }
 
-    /// @brief write escape sequence to output iterator
+    /// @brief write ANSI escape code to output iterator
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
@@ -391,12 +417,27 @@ struct Style {
         return out;
     }
 
-    /// @brief write escape sequence to string
+    /// @brief write ANSI escape code to string
     [[nodiscard]]
     auto to_escape() const -> std::string {
         std::string esc;
         to_escape(std::back_inserter(esc));
         return esc;
+    }
+
+    [[nodiscard]]
+    auto debug_string() const -> std::string {
+        std::string debug = "[flags=";
+        for (int bit = 7; bit >= 0; --bit) {
+            if (flags >> bit) debug.push_back('1');
+            else debug.push_back('0');
+        }
+        return debug
+             .append(", fg=")
+             .append(fg.debug_string())
+             .append(", bg=")
+             .append(bg.debug_string())
+             .append("]");
     }
 };
 

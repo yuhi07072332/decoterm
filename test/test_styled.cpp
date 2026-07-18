@@ -14,21 +14,11 @@ struct TestStyleOutputState : deco::StyleOutputState {
     using deco::StyleOutputState::reset_style;
 };
 
-struct Counter {
-    int value = 0;
-};
-
-auto operator<<(std::ostream& os, Counter& counter) -> std::ostream& {
-    ++counter.value;
-    os << counter.value;
-    return os;
-}
-
 struct Value {
     int value = 128;
 };
 
-auto operator<<(std::ostream& os, const Value& value) -> std::ostream& {
+auto operator<<(std::ostream& os, Value value) -> std::ostream& {
     os << value.value;
     return os;
 }
@@ -41,13 +31,11 @@ TEST_CASE("styled: styled(): own rvalues") {
     auto styled_value = styled(45, bold);
     const auto const_styled_value = styled(100, bold);
 
-    static_assert(std::is_same_v<decltype(styled_value.get()), int&>);
+    static_assert(std::is_same_v<decltype(styled_value.get()), const int&>);
     static_assert(
         std::is_same_v<decltype(const_styled_value.get()), const int&>);
 
-    styled_value.get() = 128;
-
-    CHECK(styled_value.get() == 128);
+    CHECK(styled_value.get() == 45);
     CHECK(const_styled_value.get() == 100);
     CHECK(styled_value.style() == bold);
 }
@@ -63,19 +51,14 @@ TEST_CASE("styled: styled(): reference lvalues") {
     const auto const_styled_value = styled(value, bold);
     const auto const_styled_const_value = styled(const_value, bold);
 
-    static_assert(std::is_same_v<decltype(styled_value.get()), int&>);
+    static_assert(std::is_same_v<decltype(styled_value.get()), const int&>);
     static_assert(
         std::is_same_v<decltype(styled_const_value.get()), const int&>);
     static_assert(
-        std::is_same_v<decltype(const_styled_value.get()), int&>);
+        std::is_same_v<decltype(const_styled_value.get()), const int&>);
     static_assert(std::is_same_v<decltype(const_styled_const_value.get()),
                                  const int&>);
 
-    styled_value.get() = 256;
-    CHECK(value == 256);
-
-    const_styled_value.get() = 512;
-    CHECK(value == 512);
     CHECK(styled_const_value.get() == 45);
     CHECK(const_styled_const_value.get() == 45);
 }
@@ -84,9 +67,9 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
     using namespace deco;
 
     std::ostringstream os;
+    Value value{64};
     const auto const_owned = styled(Value {64}, bold);
-    Counter counter;
-    const auto const_reference = styled(counter, bold);
+    const auto const_reference = styled(value, bold);
 
     os << styled(Value {32}, bold) << ' ' << const_owned << ' '
        << const_reference;
@@ -96,20 +79,7 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
                  + absolute(default_style).to_escape() + std::string(" ")
                  + bold.to_escape() + std::string("64")
                  + absolute(default_style).to_escape() + std::string(" ")
-                 + bold.to_escape() + std::string("1")
-                 + absolute(default_style).to_escape());
-    CHECK(counter.value == 1);
-}
-
-TEST_CASE("styled: styled(): output mutable temporaries") {
-    using namespace deco;
-
-    std::ostringstream os;
-
-    os << styled(Counter {}, bold);
-
-    CHECK(os.str()
-          == bold.to_escape() + std::string("1")
+                 + bold.to_escape() + std::string("64")
                  + absolute(default_style).to_escape());
 }
 

@@ -23,19 +23,19 @@ namespace detail {
 
 /* ----- forward declarations ----- */
 
-/// @brief A wrapper owns a rvalue or references lvalue by owning
-/// std::reference_wrapper.
-template <typename T> struct Storage;
+/// @brief A wrapper owns a rvalue or seferences a lvalue.
+template <typename T> struct StorageRef;
 
-template <typename T> struct is_storage;
+template <typename T> struct is_storage_ref;
 
+// Whether remove_cvref_t<T> is a Storage.
 template <typename T>
-concept storage = is_storage<std::remove_cvref_t<T>>::value;
+concept storage_ref = is_storage_ref<std::remove_cvref_t<T>>::value;
 
 } // namespace detail
 
-template <detail::storage StorageType, detail::outputable_style StyleType>
-struct StyledStorage;
+template <detail::storage_ref, detail::outputable_style>
+struct StyledRef;
 
 class StyleOutputState;
 
@@ -49,67 +49,62 @@ inline StyleOutputState* g_style_output_context = nullptr;
 
 // Whether T has operator<<(std::ostream&, T)
 template <typename T>
-concept ostream_outputable = requires(std::ostream& os, T&& value) {
-    { os << std::forward<T>(value) } -> std::same_as<std::ostream&>;
+concept ostream_outputable = requires(std::ostream& os, const T& value) {
+    { os << value } -> std::same_as<std::ostream&>;
 };
 
-template <typename T> struct is_storage : std::false_type {};
+template <typename T> struct is_storage_ref : std::false_type {};
 
-template <typename T> struct is_storage<Storage<T>> : std::true_type {};
+template <typename T> struct is_storage_ref<StorageRef<T>> : std::true_type {};
 
-// Whether remove_cvref_t<T> is a Storage.
+template <typename T> struct is_styled_ref : std::false_type {};
 
-template <typename T> struct is_styled_storage : std::false_type {};
-
-template <typename T, typename U>
-struct is_styled_storage<StyledStorage<T, U>> : std::true_type {};
+template <storage_ref T, typename U>
+struct is_styled_ref<StyledRef<T, U>> : std::true_type {};
 
 template <typename T>
-concept styled_storage = is_styled_storage<std::remove_cvref_t<T>>::value;
+concept styled_ref = is_styled_ref<std::remove_cvref_t<T>>::value;
 
 /* ----- Storage ----- */
 
 /// @brief Specialization of Storage for rvalue.
 template <typename T>
-struct Storage {
+struct StorageRef {
     using value_type = T;
 
     static_assert(!std::is_reference_v<T>);
-    static_assert(!std::is_const_v<T>);
 
-    constexpr explicit Storage(T value) : value_(std::move(value)) {}
-
-    constexpr auto get() -> T& { return value_; }
+    constexpr explicit StorageRef(T value) : value_(std::move(value)) {}
     constexpr auto get() const -> const T& { return value_; }
 
   private:
     T value_;
 };
 
-/// @brief Specialization of Storage for lvalue reference.
+/// @brief Specialization of Storage for const lvalue reference.
 template <typename T>
-struct Storage<T&> {
+struct StorageRef<const T&> {
     using value_type = T;
 
-    constexpr explicit Storage(T& value) : value_(value) {}
-    constexpr auto get() const -> T& { return value_; }
+    constexpr explicit StorageRef(const T& value) : value_(value) {}
+    constexpr auto get() const -> const T& { return value_; }
 
   private:
-    T& value_;
+    const T& value_;
 };
 
 /// @brief Make Storage from lvalue.
 template <typename T>
     requires(!std::is_rvalue_reference_v<T>)
-inline constexpr auto make_storage(T& value) -> Storage<T&> {
-    return Storage<T&>(value);
+inline constexpr auto make_storage(const T& value) -> StorageRef<const T&> {
+    return StorageRef<const T&>(value);
 }
 
 /// @brief Make Storage from rvalue.
 template <typename T>
     requires(!std::is_lvalue_reference_v<T>)
-inline constexpr auto make_storage(T&& value) -> Storage<T> {
-    return Storage<T>(std::move(value));
+inline constexpr auto make_storage(T&& value) -> StorageRef<const T> {
+    return StorageRef<const T>(std::move(value));
 }
 
 /// Cannot make Storage from const rvalue reference.
@@ -182,10 +177,9 @@ class StyleStack {
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief A wrapper for styling a value.
-template <detail::storage StorageType, detail::outputable_style StyleType>
-struct StyledStorage : public StorageType {
-
-    constexpr explicit StyledStorage(StorageType storage, StyleType style)
+template <detail::storage_ref StorageType, detail::outputable_style StyleType>
+struct StyledRef : public StorageType {
+    constexpr explicit StyledRef(StorageType storage, StyleType style)
         : StorageType(std::move(storage)),
           style_(style) {}
 
@@ -198,11 +192,13 @@ struct StyledStorage : public StorageType {
 /// @brief Create a StyledValue.
 template <typename T, detail::outputable_style StyleType>
 inline constexpr auto styled(T&& value, StyleType style) {
-    return StyledStorage(detail::make_storage(std::forward<T>(value)), style);
+    return StyledRef(detail::make_storage(std::forward<T>(value)), style);
 }
 
-template <detail::styled_storage StyledStorageType>
-inline auto operator<<(std::ostream& os, StyledStorageType&& styled)
+template <detail::ostream_outputable T, detail::outputable_style StyleType>
+inline auto
+operator<<(std::ostream& os,
+           const StyledRef<detail::StorageRef<T>, StyleType>& styled)
     -> std::ostream& {
     os << styled.style() << styled.get() << reset;
     return os;
@@ -309,7 +305,7 @@ class StyledOstream : public StyleOutputState {
           ostream_(os) {}
 
     template <detail::ostream_outputable T>
-        requires(!detail::styled_storage<T>)
+        requires(!detail::styled_ref<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         using value_type = std::remove_cvref_t<T>;
         out.check_context();
@@ -337,8 +333,11 @@ class StyledOstream : public StyleOutputState {
     }
 
     /// @brief ostream operator for styled()
-    template <detail::styled_storage StyledStorageType>
-    friend auto operator<<(StyledOstream& out, StyledStorageType&& styled)
+
+    template <detail::ostream_outputable T, detail::outputable_style StyleType>
+    friend auto
+    operator<<(StyledOstream& out,
+               const StyledRef<detail::StorageRef<T>, StyleType>& styled)
         -> StyledOstream& {
         out.check_context();
         out.output_style(styled.style());
