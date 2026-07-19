@@ -52,13 +52,13 @@ struct formatter<deco::style_reset_t> {
 /// @brief std::formatter for StyledStorage
 template <deco::detail::ostream_outputable T,
           deco::detail::outputable_style StyleType>
-struct formatter<deco::StyledRef<deco::detail::StorageRef<T>, StyleType>> {
+struct formatter<deco::Styled<deco::detail::StorageRef<T>, StyleType>> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
     auto
-    format(const deco::StyledRef<deco::detail::StorageRef<T>, StyleType> styled,
+    format(const deco::Styled<deco::detail::StorageRef<T>, StyleType> styled,
            std::format_context& ctx) const {
         auto out = ctx.out();
         out = styled.style().to_escape(out);

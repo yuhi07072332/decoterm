@@ -35,7 +35,7 @@ concept storage_ref = is_storage_ref<std::remove_cvref_t<T>>::value;
 } // namespace detail
 
 template <detail::storage_ref, detail::outputable_style>
-struct StyledRef;
+struct Styled;
 
 class StyleOutputState;
 
@@ -43,7 +43,7 @@ namespace detail {
 
 /* ----- global style output context ----- */
 
-inline StyleOutputState* g_style_output_context = nullptr;
+inline const StyleOutputState* g_style_output_context = nullptr;
 
 /* ----- type traits & concepts ----- */
 
@@ -60,7 +60,7 @@ template <typename T> struct is_storage_ref<StorageRef<T>> : std::true_type {};
 template <typename T> struct is_styled_ref : std::false_type {};
 
 template <storage_ref T, typename U>
-struct is_styled_ref<StyledRef<T, U>> : std::true_type {};
+struct is_styled_ref<Styled<T, U>> : std::true_type {};
 
 template <typename T>
 concept styled_ref = is_styled_ref<std::remove_cvref_t<T>>::value;
@@ -178,8 +178,8 @@ class StyleStack {
 
 /// @brief A wrapper for styling a value.
 template <detail::storage_ref StorageType, detail::outputable_style StyleType>
-struct StyledRef : public StorageType {
-    constexpr explicit StyledRef(StorageType storage, StyleType style)
+struct Styled : public StorageType {
+    constexpr explicit Styled(StorageType storage, StyleType style)
         : StorageType(std::move(storage)),
           style_(style) {}
 
@@ -192,13 +192,12 @@ struct StyledRef : public StorageType {
 /// @brief Create a StyledValue.
 template <typename T, detail::outputable_style StyleType>
 inline constexpr auto styled(T&& value, StyleType style) {
-    return StyledRef(detail::make_storage(std::forward<T>(value)), style);
+    return Styled(detail::make_storage(std::forward<T>(value)), style);
 }
 
 template <detail::ostream_outputable T, detail::outputable_style StyleType>
-inline auto
-operator<<(std::ostream& os,
-           const StyledRef<detail::StorageRef<T>, StyleType>& styled)
+inline auto operator<<(std::ostream& os,
+                       const Styled<detail::StorageRef<T>, StyleType>& styled)
     -> std::ostream& {
     os << styled.style() << styled.get() << reset;
     return os;
@@ -279,6 +278,14 @@ class StyleOutputState {
         stack_.push(absolute(current_style().style | style));
     }
 
+    auto update_context() const -> bool {
+        if (detail::g_style_output_context != this) {
+            detail::g_style_output_context = this;
+            return true;
+        }
+        return false;
+    }
+
     AbsoluteStyle base_style_ = absolute(default_style);
 
     bool style_enabled_ = true;
@@ -299,16 +306,16 @@ inline constexpr style_pop_t pop;
 /// @warning The passed std::ostream object must outlive this object.
 class StyledOstream : public StyleOutputState {
   public:
-    StyledOstream(std::ostream& os) : ostream_(os) {}
+    StyledOstream(std::ostream& os) : ostream_(&os) {}
     StyledOstream(const StyleOutputState& state, std::ostream& os)
         : StyleOutputState(state),
-          ostream_(os) {}
+          ostream_(&os) {}
 
     template <detail::ostream_outputable T>
         requires(!detail::styled_ref<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         using value_type = std::remove_cvref_t<T>;
-        out.check_context();
+        out.ensure_context();
 
         if constexpr (detail::outputable_style<value_type>) {
             if constexpr (std::is_same_v<value_type, Style>
@@ -319,50 +326,79 @@ class StyledOstream : public StyleOutputState {
             out.reset_style();
             out.output_style(out.current_style());
         } else {
-            out.ostream_ << std::forward<T>(value);
+            *out.ostream_ << std::forward<T>(value);
         }
         return out;
     }
 
-    /// @brief ostream operator for pop
+    /// @brief output operator for pop
     friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
-        out.check_context();
+        out.ensure_context();
         out.pop_style();
-        if (out.style_enabled_) out.ostream_ << out.current_style();
+        if (out.style_enabled_) *out.ostream_ << out.current_style();
         return out;
     }
 
-    /// @brief ostream operator for styled()
-
+    /// @brief output operator for styled()
     template <detail::ostream_outputable T, detail::outputable_style StyleType>
     friend auto
     operator<<(StyledOstream& out,
-               const StyledRef<detail::StorageRef<T>, StyleType>& styled)
+               const Styled<detail::StorageRef<T>, StyleType>& styled)
         -> StyledOstream& {
-        out.check_context();
+        out.ensure_context();
         out.output_style(styled.style());
-        out.ostream_ << styled.get();
-        out.ostream_ << out.current_style();
+        *out.ostream_ << styled.get();
+        *out.ostream_ << out.current_style();
         return out;
     }
 
-    auto ostream() const -> std::ostream& { return ostream_; }
+    /// @brief output operator for IO manipulators.
+    friend auto operator<<(StyledOstream& out,
+                           std::ios_base& (*fn)(std::ios_base&))
+        -> StyledOstream& {
+        out.ensure_context();
+        fn(*out.ostream_);
+        return out;
+    }
+
+    /// @brief output operator for IO manipulators.
+    friend auto operator<<(StyledOstream& out,
+                           std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
+        -> StyledOstream& {
+        out.ensure_context();
+        fn(*out.ostream_);
+        return out;
+    }
+
+    /// @brief output operator for IO manipulators.
+    ///
+    /// The overloaded
+    /// `operator<<(std::ostream& os, std::ostream&(*fn)(std::ostream&))`
+    /// returns fn(os), so we should assume that it may return a different
+    /// std::ostream&.
+    friend auto operator<<(StyledOstream& out,
+                           std::ostream& (*fn)(std::ostream&))
+        -> StyledOstream& {
+        out.ensure_context();
+        out.ostream_ = &fn(*out.ostream_);
+        return out;
+    }
+
+    void switch_ostream(std::ostream& os) { ostream_ = &os; }
+
+    auto ostream() const -> std::ostream& { return *ostream_; }
 
   private:
-    void check_context() {
-        if (detail::g_style_output_context
-            != static_cast<StyleOutputState*>(this)) {
-            output_style(current_style());
-            detail::g_style_output_context = this;
-        }
-    }
-
     template <detail::outputable_style StyleType>
-    void output_style(StyleType style) {
-        if (style_enabled_) ostream_ << style;
+    void output_style(StyleType style) const {
+        if (style_enabled_) *ostream_ << style;
     }
 
-    std::ostream& ostream_;
+    void ensure_context() const {
+        if (update_context()) output_style(current_style());
+    }
+
+    std::ostream* ostream_;
 };
 
 inline auto styled_out(std::ostream& os) -> StyledOstream {

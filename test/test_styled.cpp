@@ -2,6 +2,7 @@
 #include <decoterm/styled.hpp>
 #include <doctest.h>
 
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -21,6 +22,11 @@ struct Value {
 auto operator<<(std::ostream& os, Value value) -> std::ostream& {
     os << value.value;
     return os;
+}
+
+auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
+    ios.width(4);
+    return ios;
 }
 
 } // namespace
@@ -177,6 +183,42 @@ TEST_CASE("styled: StyledOstream: write plain values") {
 
     CHECK(os.str()
           == absolute(default_style).to_escape() + std::string("value=42 1.5"));
+}
+
+TEST_CASE("styled: StyledOstream: call IO manipulator") {
+    using namespace deco;
+
+    std::ostringstream os;
+    std::ostringstream expected;
+    StyledOstream styled_os(os);
+
+    styled_os << std::boolalpha << true << ' ' << std::noboolalpha << false
+              << ' ' << std::showbase << std::hex << 42 << ' '
+              << std::noshowbase << std::dec << 42 << ' ' << std::uppercase
+              << std::scientific << std::setprecision(3) << 1.5 << ' '
+              << std::nouppercase << std::fixed << std::setprecision(2) << 1.5
+              << ' ' << std::defaultfloat << std::showpos << 7 << ' '
+              << std::noshowpos << std::showpoint << 2.0 << ' '
+              << std::noshowpoint << std::setfill('.') << std::left
+              << std::setw(5) << 12 << ' ' << std::right << std::setw(5) << 12
+              << ' ' << std::internal << std::showpos << std::setw(5) << 12
+              << std::noshowpos << ' ' << set_width_4 << 9 << std::endl
+              << std::flush << std::ends;
+
+    expected << std::boolalpha << true << ' ' << std::noboolalpha << false
+             << ' ' << std::showbase << std::hex << 42 << ' '
+             << std::noshowbase << std::dec << 42 << ' ' << std::uppercase
+             << std::scientific << std::setprecision(3) << 1.5 << ' '
+             << std::nouppercase << std::fixed << std::setprecision(2) << 1.5
+             << ' ' << std::defaultfloat << std::showpos << 7 << ' '
+             << std::noshowpos << std::showpoint << 2.0 << ' '
+             << std::noshowpoint << std::setfill('.') << std::left
+             << std::setw(5) << 12 << ' ' << std::right << std::setw(5) << 12
+             << ' ' << std::internal << std::showpos << std::setw(5) << 12
+             << std::noshowpos << ' ' << set_width_4 << 9 << std::endl
+             << std::flush << std::ends;
+
+    CHECK(os.str() == absolute(default_style).to_escape() + expected.str());
 }
 
 TEST_CASE("styled: StyledOstream: write styles") {
