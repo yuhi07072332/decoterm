@@ -37,12 +37,12 @@ TEST_CASE("styled: styled(): own rvalues") {
     auto styled_value = styled(45, bold);
     const auto const_styled_value = styled(100, bold);
 
-    static_assert(std::is_same_v<decltype(styled_value.get()), const int&>);
+    static_assert(std::is_same_v<decltype(styled_value.value()), const int&>);
     static_assert(
-        std::is_same_v<decltype(const_styled_value.get()), const int&>);
+        std::is_same_v<decltype(const_styled_value.value()), const int&>);
 
-    CHECK(styled_value.get() == 45);
-    CHECK(const_styled_value.get() == 100);
+    CHECK(styled_value.value() == 45);
+    CHECK(const_styled_value.value() == 100);
     CHECK(styled_value.style() == bold);
 }
 
@@ -57,16 +57,8 @@ TEST_CASE("styled: styled(): reference lvalues") {
     const auto const_styled_value = styled(value, bold);
     const auto const_styled_const_value = styled(const_value, bold);
 
-    static_assert(std::is_same_v<decltype(styled_value.get()), const int&>);
-    static_assert(
-        std::is_same_v<decltype(styled_const_value.get()), const int&>);
-    static_assert(
-        std::is_same_v<decltype(const_styled_value.get()), const int&>);
-    static_assert(std::is_same_v<decltype(const_styled_const_value.get()),
-                                 const int&>);
-
-    CHECK(styled_const_value.get() == 45);
-    CHECK(const_styled_const_value.get() == 45);
+    CHECK(styled_const_value.value() == 45);
+    CHECK(const_styled_const_value.value() == 45);
 }
 
 TEST_CASE("styled: styled(): output owning and referenced values") {

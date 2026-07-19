@@ -11,6 +11,7 @@
 #include "style.hpp"
 
 #include <concepts>
+#include <functional>
 #include <optional>
 #include <ostream>
 #include <type_traits>
@@ -19,23 +20,7 @@
 
 namespace deco {
 
-namespace detail {
-
-/* ----- forward declarations ----- */
-
-/// @brief A wrapper owns a rvalue or seferences a lvalue.
-template <typename T> struct StorageRef;
-
-template <typename T> struct is_storage_ref;
-
-// Whether remove_cvref_t<T> is a Storage.
-template <typename T>
-concept storage_ref = is_storage_ref<std::remove_cvref_t<T>>::value;
-
-} // namespace detail
-
-template <detail::storage_ref, detail::outputable_style>
-struct Styled;
+template <typename T, detail::outputable_style StyleT> struct Styled;
 
 class StyleOutputState;
 
@@ -43,77 +28,52 @@ namespace detail {
 
 /* ----- global style output context ----- */
 
+/// @brief global style output context for `StyleOutputState`.
+///
+/// Used to determine whether `StyleOutputState` needs to output the current
+/// style before outputting a value.
 inline const StyleOutputState* g_style_output_context = nullptr;
 
 /* ----- type traits & concepts ----- */
 
-// Whether T has operator<<(std::ostream&, T)
+// Whether `T` has `operator<<(std::ostream&, const T&)`
 template <typename T>
 concept ostream_outputable = requires(std::ostream& os, const T& value) {
     { os << value } -> std::same_as<std::ostream&>;
 };
 
-template <typename T> struct is_storage_ref : std::false_type {};
-
-template <typename T> struct is_storage_ref<StorageRef<T>> : std::true_type {};
-
-template <typename T> struct is_styled_ref : std::false_type {};
-
-template <storage_ref T, typename U>
-struct is_styled_ref<Styled<T, U>> : std::true_type {};
-
+// Extract inner type from `std::reference_wrapper`.
+// This can also check if `T` is a `std::reference_wrapper`.
 template <typename T>
-concept styled_ref = is_styled_ref<std::remove_cvref_t<T>>::value;
-
-/* ----- Storage ----- */
-
-/// @brief Specialization of Storage for rvalue.
-template <typename T>
-struct StorageRef {
-    using value_type = T;
-
-    static_assert(!std::is_reference_v<T>);
-
-    constexpr explicit StorageRef(T value) : value_(std::move(value)) {}
-    constexpr auto get() const -> const T& { return value_; }
-
-  private:
-    T value_;
+struct remove_reference_wrapper : std::false_type {
+    using type = T;
 };
 
-/// @brief Specialization of Storage for const lvalue reference.
 template <typename T>
-struct StorageRef<const T&> {
-    using value_type = T;
-
-    constexpr explicit StorageRef(const T& value) : value_(value) {}
-    constexpr auto get() const -> const T& { return value_; }
-
-  private:
-    const T& value_;
+struct remove_reference_wrapper<std::reference_wrapper<T>> : std::true_type {
+    using type = T;
 };
 
-/// @brief Make Storage from lvalue.
 template <typename T>
-    requires(!std::is_rvalue_reference_v<T>)
-inline constexpr auto make_storage(const T& value) -> StorageRef<const T&> {
-    return StorageRef<const T&>(value);
-}
+using remove_reference_wrapper_t = remove_reference_wrapper<T>::type;
 
-/// @brief Make Storage from rvalue.
 template <typename T>
-    requires(!std::is_lvalue_reference_v<T>)
-inline constexpr auto make_storage(T&& value) -> StorageRef<const T> {
-    return StorageRef<const T>(std::move(value));
-}
+inline constexpr bool is_reference_wrapper_v =
+    remove_reference_wrapper<T>::value;
 
-/// Cannot make Storage from const rvalue reference.
+// Whether `T` is a `Styled`.
+template <typename T> struct is_styled : std::false_type {};
+
+template <typename T, typename U>
+struct is_styled<Styled<T, U>> : std::true_type {};
+
+// Whether `remove_cvref_t<T>` is a `Styled`.
 template <typename T>
-inline constexpr auto make_storage(const T&&) = delete;
+concept styled = is_styled<std::remove_cvref_t<T>>::value;
 
 /* ----- StyleStack ----- */
 
-/// @brief represents a nullable, single or multiple(vector) AbsoluteStyle
+/// @brief represents a nullable, single or multiple `AbsoluteStyle`
 /// stack.
 class StyleStack {
   public:
@@ -176,30 +136,46 @@ class StyleStack {
 // ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A wrapper for styling a value.
-template <detail::storage_ref StorageType, detail::outputable_style StyleType>
-struct Styled : public StorageType {
-    constexpr explicit Styled(StorageType storage, StyleType style)
-        : StorageType(std::move(storage)),
+/// @brief A wrapper for styling a value. Owns **const** rvalue or references
+/// **const** lvalue.
+template <typename T, detail::outputable_style StyleT>
+struct Styled {
+    using value_type =
+        std::remove_const_t<detail::remove_reference_wrapper_t<T>>;
+
+    constexpr Styled(T value, StyleT style)
+        : value_(std::move(value)),
           style_(style) {}
 
-    constexpr auto style() const -> StyleType { return style_; }
+    constexpr auto value() const -> const value_type& { return value_; }
+    constexpr auto style() const -> StyleT { return style_; }
 
   private:
-    StyleType style_;
+    T value_;
+    StyleT style_;
 };
 
-/// @brief Create a StyledValue.
+/// @brief create a `Styled` from rvalue
 template <typename T, detail::outputable_style StyleType>
-inline constexpr auto styled(T&& value, StyleType style) {
-    return Styled(detail::make_storage(std::forward<T>(value)), style);
+    requires(!std::is_lvalue_reference_v<T>)
+inline constexpr auto styled(T&& value, StyleType style)
+    -> Styled<const std::remove_const_t<T>, StyleType> {
+    return Styled<const std::remove_const_t<T>, StyleType>(std::move(value),
+                                                           style);
 }
 
+/// @brief create a `Styled` from const lvalue
+template <typename T, detail::outputable_style StyleType>
+inline constexpr auto styled(const T& value, StyleType style)
+    -> Styled<std::reference_wrapper<const T>, StyleType> {
+    return Styled(std::cref(value), style);
+}
+
+/// @brief output operator for Styled
 template <detail::ostream_outputable T, detail::outputable_style StyleType>
-inline auto operator<<(std::ostream& os,
-                       const Styled<detail::StorageRef<T>, StyleType>& styled)
+inline auto operator<<(std::ostream& os, const Styled<T, StyleType>& styled)
     -> std::ostream& {
-    os << styled.style() << styled.get() << reset;
+    os << styled.style() << styled.value() << reset;
     return os;
 }
 
@@ -208,6 +184,12 @@ inline auto operator<<(std::ostream& os,
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief A class representing Style output state.
+///
+/// It is used to manage the current style output state(e.g. style enabled, base
+/// style, etc.) It also checks `detail::g_style_output_context` to determine
+/// whether it needs to output the current style before outputting a value.
+///
+/// @see `g_style_output_context`, `StyledOstream`
 class StyleOutputState {
   public:
     StyleOutputState() = default;
@@ -219,21 +201,25 @@ class StyleOutputState {
 
     // ----- options -----
 
+    /// @brief Enable or disable style output.
     auto enable_style(bool enable) -> StyleOutputState& {
         style_enabled_ = enable;
         return *this;
     }
 
+    /// @brief Enable or disable color fallback.
     auto enable_color_fallback(bool enable) -> StyleOutputState& {
         color_fallback_enabled_ = enable;
         return *this;
     }
 
+    /// @brief Set the base style for this output state.
     auto base_style(Style base) -> StyleOutputState& {
         base_style_ = absolute(base);
         return *this;
     }
 
+    /// @brief Enable or disable style nesting.
     auto enable_nesting(bool enable) -> StyleOutputState& {
         if (enable) stack_.to_multiple();
         else stack_.to_single();
@@ -278,6 +264,8 @@ class StyleOutputState {
         stack_.push(absolute(current_style().style | style));
     }
 
+    ///@brief Update the global style output context to this object.
+    ///@returns `true` if the context was updated.
     auto update_context() const -> bool {
         if (detail::g_style_output_context != this) {
             detail::g_style_output_context = this;
@@ -311,8 +299,10 @@ class StyledOstream : public StyleOutputState {
         : StyleOutputState(state),
           ostream_(&os) {}
 
+    /// @brief Output operator for any type that is outputable to
+    /// `std::ostream`, except for 'Styled'.
     template <detail::ostream_outputable T>
-        requires(!detail::styled_ref<T>)
+        requires(!detail::styled<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         using value_type = std::remove_cvref_t<T>;
         out.ensure_context();
@@ -331,7 +321,7 @@ class StyledOstream : public StyleOutputState {
         return out;
     }
 
-    /// @brief output operator for pop
+    /// @brief output operator for `pop`
     friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
         out.ensure_context();
         out.pop_style();
@@ -339,15 +329,14 @@ class StyledOstream : public StyleOutputState {
         return out;
     }
 
-    /// @brief output operator for styled()
+    /// @brief output operator for `Styled`
     template <detail::ostream_outputable T, detail::outputable_style StyleType>
-    friend auto
-    operator<<(StyledOstream& out,
-               const Styled<detail::StorageRef<T>, StyleType>& styled)
+    friend auto operator<<(StyledOstream& out,
+                           const Styled<T, StyleType>& styled)
         -> StyledOstream& {
         out.ensure_context();
         out.output_style(styled.style());
-        *out.ostream_ << styled.get();
+        *out.ostream_ << styled.value();
         *out.ostream_ << out.current_style();
         return out;
     }
@@ -374,8 +363,8 @@ class StyledOstream : public StyleOutputState {
     ///
     /// The overloaded
     /// `operator<<(std::ostream& os, std::ostream&(*fn)(std::ostream&))`
-    /// returns fn(os), so we should assume that it may return a different
-    /// std::ostream&.
+    /// returns `fn(os)` instead of `os`, so we should assume that it may
+    /// return a different std::ostream&.
     friend auto operator<<(StyledOstream& out,
                            std::ostream& (*fn)(std::ostream&))
         -> StyledOstream& {
@@ -389,11 +378,14 @@ class StyledOstream : public StyleOutputState {
     auto ostream() const -> std::ostream& { return *ostream_; }
 
   private:
+    /// @brief Output style if style output is enabled.
     template <detail::outputable_style StyleType>
     void output_style(StyleType style) const {
         if (style_enabled_) *ostream_ << style;
     }
 
+    /// @brief Ensure that the current style is outputted if the context has
+    /// changed.
     void ensure_context() const {
         if (update_context()) output_style(current_style());
     }
