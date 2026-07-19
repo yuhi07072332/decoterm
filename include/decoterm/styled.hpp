@@ -156,24 +156,24 @@ struct Styled {
 };
 
 /// @brief create a `Styled` from rvalue
-template <typename T, detail::outputable_style StyleType>
+template <typename T, detail::outputable_style StyleT>
     requires(!std::is_lvalue_reference_v<T>)
-inline constexpr auto styled(T&& value, StyleType style)
-    -> Styled<const std::remove_const_t<T>, StyleType> {
-    return Styled<const std::remove_const_t<T>, StyleType>(std::move(value),
+inline constexpr auto styled(T&& value, StyleT style)
+    -> Styled<const std::remove_const_t<T>, StyleT> {
+    return Styled<const std::remove_const_t<T>, StyleT>(std::move(value),
                                                            style);
 }
 
 /// @brief create a `Styled` from const lvalue
-template <typename T, detail::outputable_style StyleType>
-inline constexpr auto styled(const T& value, StyleType style)
-    -> Styled<std::reference_wrapper<const T>, StyleType> {
+template <typename T, detail::outputable_style StyleT>
+inline constexpr auto styled(const T& value, StyleT style)
+    -> Styled<std::reference_wrapper<const T>, StyleT> {
     return Styled(std::cref(value), style);
 }
 
 /// @brief output operator for Styled
-template <detail::ostream_outputable T, detail::outputable_style StyleType>
-inline auto operator<<(std::ostream& os, const Styled<T, StyleType>& styled)
+template <detail::ostream_outputable T, detail::outputable_style StyleT>
+inline auto operator<<(std::ostream& os, const Styled<T, StyleT>& styled)
     -> std::ostream& {
     os << styled.style() << styled.value() << reset;
     return os;
@@ -330,9 +330,9 @@ class StyledOstream : public StyleOutputState {
     }
 
     /// @brief output operator for `Styled`
-    template <detail::ostream_outputable T, detail::outputable_style StyleType>
+    template <detail::ostream_outputable T, detail::outputable_style StyleT>
     friend auto operator<<(StyledOstream& out,
-                           const Styled<T, StyleType>& styled)
+                           const Styled<T, StyleT>& styled)
         -> StyledOstream& {
         out.ensure_context();
         out.output_style(styled.style());
@@ -379,8 +379,8 @@ class StyledOstream : public StyleOutputState {
 
   private:
     /// @brief Output style if style output is enabled.
-    template <detail::outputable_style StyleType>
-    void output_style(StyleType style) const {
+    template <detail::outputable_style StyleT>
+    void output_style(StyleT style) const {
         if (style_enabled_) *ostream_ << style;
     }
 
