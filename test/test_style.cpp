@@ -1,5 +1,5 @@
 #include <decoterm/style.hpp>
-#include <decoterm/formatter.hpp>
+#include <decoterm/format.hpp>
 #include <doctest.h>
 
 #include <format>

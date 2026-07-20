@@ -21,8 +21,5 @@ A header-only C++20 library for terminal styling.
 
 ## Todo
 
-- Detect color support & provide system color fallback for true color  **(wip)**
-
-in other headers:
-
-- formatter support for `std::format`
+- [ ] color fallback for true color
+- [ ] link

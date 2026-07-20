@@ -1,5 +1,5 @@
 #include <decoterm/decoterm.hpp>
-#include <decoterm/formatter.hpp>
+#include <decoterm/format.hpp>
 #include <decoterm/terminal.hpp>
 
 #include <iostream>
@@ -182,5 +182,7 @@ auto main() -> int {
     dout << "disabled: ";
     out.enable_style(false);
     out << fg(blue) << "lorem" << (bold | underline) << "ipsum" << pop << "dolor" << pop << "sit\n";
+
+
 
 }

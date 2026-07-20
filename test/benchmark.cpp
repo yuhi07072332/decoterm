@@ -1,5 +1,5 @@
 #include <decoterm/decoterm.hpp>
-#include <decoterm/formatter.hpp>
+#include <decoterm/format.hpp>
 #include <chrono>
 #include <iostream>
 #include <print>

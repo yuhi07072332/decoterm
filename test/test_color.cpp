@@ -2,7 +2,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 
 #include <decoterm/style.hpp>
-#include <decoterm/formatter.hpp>
 
 #include <doctest.h>
 

@@ -12,7 +12,10 @@
 #include "styled.hpp"
 
 #include <format>
+
+#if __cplusplus < 202302L
 #include <type_traits>
+#endif
 
 namespace deco::detail {
 
@@ -37,6 +40,10 @@ concept formattable =
     };
 #endif
 } // namespace deco::detail
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       formatters                        ║
+// ╚═════════════════════════════════════════════════════════╝
 
 namespace std {
 

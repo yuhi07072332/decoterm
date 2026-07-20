@@ -15,17 +15,10 @@
 
 #if defined(_WIN32)
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif // !WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif // !NOMINMAX
 #include <windows.h>
 
 #else // POSIX
 
-#include <termios.h>
 #include <unistd.h>
 
 #endif
@@ -45,6 +38,11 @@ inline auto is_stderr_tty() -> bool;
 
 namespace detail {
 
+inline constexpr auto contains(std::string_view sv, std::string_view find)
+    -> bool {
+    return sv.find(find) != sv.npos;
+}
+
 #if defined(_WIN32)
 [[nodiscard]]
 inline auto enable_virtual_terminal_mode() -> bool {
@@ -59,51 +57,21 @@ inline auto enable_virtual_terminal_mode() -> bool {
 #if !defined(_WIN32)
 
 // see https://github.com/termstandard/colors?tab=readme-ov-file,
-// https://www.xfree86.org/current/ctlseqs.html
 [[nodiscard]]
 inline auto get_color_support() -> ColorSupport {
     const char* colorterm_p = std::getenv("COLORTERM");
 
     std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
-    if (env_colorterm == "truecolor" || env_colorterm == "24bit")
+    if (contains(env_colorterm, "truecolor")
+        || contains(env_colorterm, "24bit"))
         return ColorSupport::TrueColor;
 
     return ColorSupport::Color16;
-
-    ////fallback to DECRQSS if $COLORTERM is not set.
-    //
-    // termios original_termios;
-    // tcgetattr(STDIN_FILENO, &original_termios);
-    //
-    // termios raw = original_termios;
-    // cfmakeraw(&raw);
-    // raw.c_cc[VTIME] = 1;
-    // raw.c_cc[VMIN] = 0;
-    // tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-    //
-    // write(STDOUT_FILENO, "\x1b[48;2;1;2;3m\x1bP$qm\x1b\\",20);
-    //
-    // std::array<char, 24> buf;
-    // for (std::size_t i = 0; i < buf.size() - 1; ++i) {
-    //    if (read(STDIN_FILENO, &buf[i], 1) != 1
-    //        || (i >= 2 && buf[i - 1] == '\\' && buf[i - 2] == '\x1b')) {
-    //            buf[i + 1] = '\0';
-    //        break;
-    //    }
-    //}
-    //
-    // tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
-    //
-    // std::string_view receive(buf.begin());
-    // if (receive.starts_with("\x1bP1$r")
-    //    && receive.find("48:2:1:2:3m") != receive.npos)
-    //    return ColorSupport::TrueColor;
-    //
-    // return ColorSupport::Color16;
 };
 
 #endif // !_WIN32
 
+// HACK: 
 inline auto is_ostream_tty(const std::ostream& os) -> bool {
     if (&os == &std::cout) {
         return terminal::is_stdout_tty();
@@ -144,16 +112,16 @@ inline auto is_stderr_tty() -> bool {
 };
 
 [[nodiscard]]
-inline auto cashed_color_support() -> ColorSupport {
-    static ColorSupport color_support = detail::get_color_support();
-    return color_support;
+inline auto color_support() -> ColorSupport {
+    static ColorSupport s_color_support = detail::get_color_support();
+    return s_color_support;
 }
 
 [[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream {
     StyledOstream sout = StyledOstream(os);
     sout.enable_style(detail::is_ostream_tty(os))
-        .enable_color_fallback(cashed_color_support() == ColorSupport::Color16);
+        .enable_color_fallback(color_support() == ColorSupport::Color16);
     return sout;
 }
 
