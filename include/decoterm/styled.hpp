@@ -159,9 +159,8 @@ struct Styled {
 template <typename T, detail::outputable_style StyleT>
     requires(!std::is_lvalue_reference_v<T>)
 inline constexpr auto styled(T&& value, StyleT style)
-    -> Styled<const std::remove_const_t<T>, StyleT> {
-    return Styled<const std::remove_const_t<T>, StyleT>(std::move(value),
-                                                           style);
+    -> Styled<std::remove_const_t<T>, StyleT> {
+    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), style);
 }
 
 /// @brief create a `Styled` from const lvalue
@@ -275,7 +274,6 @@ class StyleOutputState {
     }
 
     AbsoluteStyle base_style_ = absolute(default_style);
-
     bool style_enabled_ = true;
     bool color_fallback_enabled_ = false;
 
@@ -301,6 +299,8 @@ class StyledOstream : public StyleOutputState {
 
     /// @brief Output operator for any type that is outputable to
     /// `std::ostream`, except for 'Styled'.
+    /// @throws `std::logic_error` if `operator<<(std::ostream, T&&)` returns
+    /// different ostream object.
     template <detail::ostream_outputable T>
         requires(!detail::styled<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
@@ -316,7 +316,10 @@ class StyledOstream : public StyleOutputState {
             out.reset_style();
             out.output_style(out.current_style());
         } else {
-            *out.ostream_ << std::forward<T>(value);
+            if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
+                os_ptr != out.ostream_)
+                throw std::logic_error("StyledOstream: std::ostream output operator returns "
+                                       "different ostream object");
         }
         return out;
     }
@@ -325,19 +328,18 @@ class StyledOstream : public StyleOutputState {
     friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
         out.ensure_context();
         out.pop_style();
-        if (out.style_enabled_) *out.ostream_ << out.current_style();
+        if (out.style_enabled_) out.ostream() << out.current_style();
         return out;
     }
 
     /// @brief output operator for `Styled`
     template <detail::ostream_outputable T, detail::outputable_style StyleT>
-    friend auto operator<<(StyledOstream& out,
-                           const Styled<T, StyleT>& styled)
+    friend auto operator<<(StyledOstream& out, const Styled<T, StyleT>& styled)
         -> StyledOstream& {
         out.ensure_context();
         out.output_style(styled.style());
-        *out.ostream_ << styled.value();
-        *out.ostream_ << out.current_style();
+        out.ostream() << styled.value();
+        out.ostream() << out.current_style();
         return out;
     }
 
@@ -346,7 +348,7 @@ class StyledOstream : public StyleOutputState {
                            std::ios_base& (*fn)(std::ios_base&))
         -> StyledOstream& {
         out.ensure_context();
-        fn(*out.ostream_);
+        out.ostream() << fn;
         return out;
     }
 
@@ -355,7 +357,7 @@ class StyledOstream : public StyleOutputState {
                            std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
         -> StyledOstream& {
         out.ensure_context();
-        fn(*out.ostream_);
+        out.ostream() << fn;
         return out;
     }
 
@@ -369,7 +371,7 @@ class StyledOstream : public StyleOutputState {
                            std::ostream& (*fn)(std::ostream&))
         -> StyledOstream& {
         out.ensure_context();
-        out.ostream_ = &fn(*out.ostream_);
+        out.ostream_ = &(out.ostream() << fn);
         return out;
     }
 

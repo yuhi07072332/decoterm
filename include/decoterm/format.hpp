@@ -17,13 +17,10 @@
 namespace deco::detail {
 
 #if __cplusplus >= 202302L
-
 template <typename Arg, typename CharT = char>
 concept formattable = std::formattable<Arg, CharT>;
-
 #else
-
-// Fallback for C++20. This only checks if `std::formatter<Arg>` exists
+// fallback for C++20. This only checks if `std::formatter<Arg>` exists
 // and has `parse()` and `format()`.
 template <typename Arg, typename CharT = char>
 concept formattable =
@@ -38,9 +35,7 @@ concept formattable =
             formatter.format(std::forward<Arg>(arg), fmt_ctx)
         } -> std::same_as<typename decltype(fmt_ctx)::iterator>;
     };
-
 #endif
-
 } // namespace deco::detail
 
 namespace std {
@@ -78,9 +73,8 @@ struct formatter<deco::Styled<T, StyleT>> {
 
     auto format(const deco::Styled<T, StyleT> styled,
                 std::format_context& ctx) const {
-        auto out = ctx.out();
-        out = styled.style().to_escape(out);
-        out = std::format_to(out, "{}", deco::reset);
+        ctx.advance_to(styled.style().to_escape(ctx.out()));
+        return formatter<deco::style_reset_t>{}.format(deco::reset, ctx);
     }
 };
 

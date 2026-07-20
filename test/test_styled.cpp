@@ -2,6 +2,7 @@
 #include <decoterm/styled.hpp>
 #include <doctest.h>
 
+#include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -19,9 +20,15 @@ struct Value {
     int value = 128;
 };
 
-auto operator<<(std::ostream& os, Value value) -> std::ostream& {
+auto operator<<(std::ostream& os, Value value) -> std::ostream& {   //NOLINT
     os << value.value;
     return os;
+}
+
+struct ReturnDirrerentOstream {};
+
+auto operator<<(std::ostream& os, ReturnDirrerentOstream) -> std::ostream& {   //NOLINT
+    return std::cerr;
 }
 
 auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
@@ -34,19 +41,20 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
 TEST_CASE("styled: styled(): own rvalues") {
     using namespace deco;
 
-    auto styled_value = styled(45, bold);
-    const auto const_styled_value = styled(100, bold);
+    auto sint = styled(45, bold);
+    auto sValue = styled(Value{60}, italic | strikethrough);
 
-    static_assert(std::is_same_v<decltype(styled_value.value()), const int&>);
+    static_assert(std::is_same_v<decltype(sint.value()), const int&>);
     static_assert(
-        std::is_same_v<decltype(const_styled_value.value()), const int&>);
+        std::is_same_v<decltype(sint.value()), const int&>);
 
-    CHECK(styled_value.value() == 45);
-    CHECK(const_styled_value.value() == 100);
-    CHECK(styled_value.style() == bold);
+    CHECK(sint.value() == 45);
+    CHECK(sint.style() == bold);
+    CHECK(sValue.value().value == 60);
+    CHECK(sValue.style() == (italic | strikethrough));
 }
 
-TEST_CASE("styled: styled(): reference lvalues") {
+TEST_CASE("styled: styled(): reference const lvalues") {
     using namespace deco;
 
     int value = 30;
@@ -54,11 +62,9 @@ TEST_CASE("styled: styled(): reference lvalues") {
 
     auto styled_value = styled(value, bold);
     auto styled_const_value = styled(const_value, bold);
-    const auto const_styled_value = styled(value, bold);
-    const auto const_styled_const_value = styled(const_value, bold);
 
+    CHECK(styled_value.value() == 30);
     CHECK(styled_const_value.value() == 45);
-    CHECK(const_styled_const_value.value() == 45);
 }
 
 TEST_CASE("styled: styled(): output owning and referenced values") {
@@ -66,11 +72,11 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
 
     std::ostringstream os;
     Value value{64};
-    const auto const_owned = styled(Value {64}, bold);
-    const auto const_reference = styled(value, bold);
+    auto owned = styled(Value {64}, bold);
+    auto reference = styled(value, bold);
 
-    os << styled(Value {32}, bold) << ' ' << const_owned << ' '
-       << const_reference;
+    os << styled(Value {32}, bold) << ' ' << owned << ' '
+       << reference;
 
     CHECK(os.str()
           == bold.to_escape() + std::string("32")
@@ -80,6 +86,7 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
                  + bold.to_escape() + std::string("64")
                  + absolute(default_style).to_escape());
 }
+
 
 TEST_CASE("styled: StyleOutputState: options") {
     using namespace deco;
@@ -211,6 +218,13 @@ TEST_CASE("styled: StyledOstream: call IO manipulator") {
              << std::flush << std::ends;
 
     CHECK(os.str() == absolute(default_style).to_escape() + expected.str());
+}
+
+TEST_CASE("styled: StyledOstream: throws if output operator returns different ostream object") {
+    using namespace deco;
+
+    StyledOstream styled_os(std::cout);
+    CHECK_THROWS_AS(styled_os << ReturnDirrerentOstream{}, std::logic_error);
 }
 
 TEST_CASE("styled: StyledOstream: write styles") {

@@ -428,11 +428,10 @@ struct Style {
     [[nodiscard]]
     auto debug_string() const -> std::string {
         std::string debug = "[flags=";
-        for (int bit = 7; bit >= 0; --bit) {
-            if (flags >> bit) debug.push_back('1');
-            else debug.push_back('0');
-        }
+        std::array<char, 8> buf;
+        std::to_chars(buf.begin(), buf.end(), flags, 2);
         return debug
+             .append(buf.data(), 8)
              .append(", fg=")
              .append(fg.debug_string())
              .append(", bg=")
