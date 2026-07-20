@@ -271,7 +271,7 @@ enum Color16 : uint8_t {
 
 }   // namespace colors
 
-// ----- color constants -----
+/* ----- color constants ----- */
 
 inline constexpr Color default_color   = Color::default_color();
 inline constexpr Color null_color      = Color::null_color();
@@ -473,7 +473,7 @@ struct Style {
 };
 
 /// @brief A Style wrapper for representing an absolute style
-///        (not relative to the current style).
+/// (not relative to the current style).
 struct AbsoluteStyle {
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
         Style::MAX_ESCAPE_CODE_SIZE + 1;
@@ -502,7 +502,7 @@ struct AbsoluteStyle {
     }
 };
 
-// ----- helper functions -----
+/* ----- helper functions ----- */
 
 /// @brief create an AbsoluteStyle from a Style
 inline constexpr auto absolute(Style style) -> AbsoluteStyle {
@@ -522,7 +522,7 @@ inline constexpr auto bg(Color bg) -> Style {
     return Style(Style::None, null_color, bg);
 }
 
-// ----- ostream operators -----
+/* ----- ostream operators ----- */
 
 /// @brief output operator for Style types e.g. Style, AbsoluteStyle
 template <detail::outputable_style StyleT>
@@ -537,7 +537,7 @@ inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
     return os;
 }
 
-// ----- style constants -----
+/* ----- style constants ----- */
 
 // clang-format off
 
