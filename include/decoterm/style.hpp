@@ -78,8 +78,6 @@ inline constexpr auto write_converted_to(OutputIt out, uint8_t value) {
     return out;
 }
 
-/* ----- Color ----- */
-
 template <std::output_iterator<const char&> OutputIt>
 inline constexpr auto
 color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
@@ -426,7 +424,10 @@ struct Style {
     auto debug_string() const -> std::string {
         std::string debug = "[flags=";
         std::array<char, 8> buf;
-        std::to_chars(buf.begin(), buf.end(), flags_, 2);
+        for (std::size_t i = 0; i < buf.size(); ++i) {
+            uint8_t bit = 1 << (buf.size() - i - 1);
+            buf[i] = (flags_ & bit) ? '1' : '0';
+        }
         return debug.append(buf.data(), 8)
             .append(", fg=")
             .append(fg().debug_string())

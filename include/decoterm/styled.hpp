@@ -318,8 +318,9 @@ class StyledOstream : public StyleOutputState {
         } else {
             if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
                 os_ptr != out.ostream_)
-                throw std::logic_error("StyledOstream: std::ostream output operator returns "
-                                       "different ostream object");
+                throw std::logic_error(
+                    "StyledOstream: std::ostream output operator returns "
+                    "different ostream object");
         }
         return out;
     }

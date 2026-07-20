@@ -22,4 +22,4 @@ A header-only C++20 library for terminal styling.
 ## Todo
 
 - [ ] color fallback for true color
-- [ ] link
+- [ ] link (maybe)
