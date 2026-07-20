@@ -42,14 +42,9 @@ auto true_bg(uint8_t r, uint8_t g, uint8_t b) -> std::string {
 TEST_CASE("Color: Special color escape code") {
     using namespace deco;
 
-
-    CHECK(null_color.empty());
-    CHECK_FALSE(static_cast<bool>(null_color));
     CHECK(null_color.to_escape(false) == esc(""));
     CHECK(null_color.to_escape(true) == esc(""));
 
-    CHECK_FALSE(default_color.empty());
-    CHECK(static_cast<bool>(default_color));
     CHECK(default_color.to_escape(false) == esc("39"));
     CHECK(default_color.to_escape(true) == esc("49"));
 }
@@ -134,12 +129,3 @@ TEST_CASE("Color: hsv helper") {
     CHECK_THROWS_AS(static_cast<void>(hsv(360, 255, 255)), std::invalid_argument);
 }
 
-TEST_CASE("Color: Color::to_escape(out)") {
-    using namespace deco;
-
-    std::string output = "prefix";
-    auto it = rgb(10, 20, 30).to_escape(std::back_inserter(output), false);
-
-    CHECK(output == "prefix" + true_fg(10, 20, 30));
-    static_cast<void>(it);
-}

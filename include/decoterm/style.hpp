@@ -24,6 +24,9 @@ namespace deco {
 
 struct Style;
 
+enum class ColorType : uint8_t { Null = 0, Default, AnsiColor, TrueColor };
+using ColorData = std::array<uint8_t, 3>;
+
 namespace detail {
 
 template <typename T>
@@ -64,6 +67,58 @@ inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
     return out;
 }
 
+template <std::output_iterator<const char&> OutputIt>
+inline constexpr auto write_converted_to(OutputIt out, uint8_t value) {
+    std::array<char, 3> buf;
+    auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
+    assert(ec == std::errc {});
+    auto len = ptr - buf.data();
+    for (int i = 0; i < len; ++i)
+        *out++ = buf[i];
+    return out;
+}
+
+/* ----- Color ----- */
+
+template <std::output_iterator<const char&> OutputIt>
+inline constexpr auto
+color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
+    -> OutputIt {
+    switch (type) {
+    case ColorType::Null:
+        return out;
+    case ColorType::Default: {
+        if (is_bg) out = write_to(out, "49");
+        else out = write_to(out, "39");
+        return out;
+    }
+    case ColorType::AnsiColor: {
+        uint8_t index = data[0];
+        if (index < 16) {
+            out = write_to(out,
+                           is_bg ? SGR_PARAM_BG[index] : SGR_PARAM_FG[index]);
+        } else {
+            out = write_to(out, is_bg ? "48;5;" : "38;5;");
+            out = write_converted_to(out, index);
+        }
+        return out;
+    }
+    case ColorType::TrueColor: {
+        auto [r, g, b] = data;
+        out = write_to(out, is_bg ? "48;2;" : "38;2;");
+        out = write_converted_to(out, r);
+        *out++ = ';';
+        out = write_converted_to(out, g);
+        *out++ = ';';
+        out = write_converted_to(out, b);
+        return out;
+    }
+    default:
+        return out;
+    }
+    return out;
+}
+
 } // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -72,144 +127,76 @@ inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
 
 /// @brief A class representing a terminal color.
 struct Color {
-    enum class Type : uint8_t { Null = 0, Default, AnsiColor, TrueColor };
-
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE = 19;
 
     // ----- constructors -----
 
     static constexpr auto default_color() -> Color {
-        return Color(Type::Default, {0, 0, 0});
+        return Color(ColorType::Default, {0, 0, 0});
     }
 
     static constexpr auto null_color() -> Color {
-        return Color(Type::Null, {0, 0, 0});
+        return Color(ColorType::Null, {0, 0, 0});
     }
 
     /// @brief Create a color from index [0, 255]
     constexpr explicit Color(uint8_t index)
-        : type_(Type::AnsiColor),
+        : type_(ColorType::AnsiColor),
           data_({index, 0, 0}) {}
 
     constexpr explicit Color(uint8_t r, uint8_t g, uint8_t b)
-        : type_(Type::TrueColor),
+        : type_(ColorType::TrueColor),
           data_({r, g, b}) {}
-
-    // ----- operators -----
-
-    /// @brief equivalent to !empty()
-    constexpr explicit operator bool() const { return !empty(); }
 
     constexpr auto operator==(const Color&) const -> bool = default;
     constexpr auto operator!=(const Color&) const -> bool = default;
 
-    // ----- observe -----
+    constexpr auto type() const -> ColorType { return type_; }
 
-    /// @brief check if the color is Color::None
-    constexpr auto empty() const -> bool { return type_ == Type::Null; }
-
-    constexpr auto type() const -> Type { return type_; }
-
-    // ----- output -----
-
-    /// @brief write SGR parameters to output iterator
-    /// @details format: "P1;P2;...;Pn"
-    template <std::output_iterator<const char&> OutputIt>
-    constexpr auto to_sgr_params(OutputIt out, bool is_bg) const -> OutputIt {
-        using namespace detail;
-        auto write_converted = [&out](int value) {
-            std::array<char, 3> buf;
-            auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
-            assert(ec == std::errc {});
-            auto len = ptr - buf.data();
-            for (int i = 0; i < len; ++i)
-                *out++ = buf[i];
-        };
-
-        switch (type_) {
-        case Type::Null:
-            return out;
-        case Type::Default:
-            if (is_bg) out = write_to(out, "49");
-            else out = write_to(out, "39");
-            return out;
-        case Type::AnsiColor: {
-            if (data_[0] < 16) {
-                out = write_to(out,
-                               is_bg ? SGR_PARAM_BG[data_[0]]
-                                     : SGR_PARAM_FG[data_[0]]);
-            } else {
-                out = write_to(out, is_bg ? "48;5;" : "38;5;");
-                write_converted(data_[0]);
-            }
-            return out;
-        }
-        case Type::TrueColor: {
-            const auto [r, g, b] = data_;
-            out = write_to(out, is_bg ? "48;2;" : "38;2;");
-            write_converted(r);
-            *out++ = ';';
-            write_converted(g);
-            *out++ = ';';
-            write_converted(b);
-            return out;
-        }
-
-        default:
-            return out;
-        }
-    }
-
-    /// @brief write ANSI escape code to output iterator
-    template <std::output_iterator<const char&> OutputIt>
-    constexpr auto to_escape(OutputIt out, bool is_bg) const -> OutputIt {
-        out = detail::write_to(out, "\x1b[");
-        out = to_sgr_params(out, is_bg);
-        *out++ = 'm';
-        return out;
-    }
-
-    /// @brief write ANSI escape code to string
     [[nodiscard]]
     auto to_escape(bool is_bg) const -> std::string {
-        std::string esc;
-        to_escape(std::back_inserter(esc), is_bg);
+        std::string esc = "\x1b[";
+        detail::color_to_sgr_params(
+            std::back_inserter(esc), is_bg, type_, data_);
+        esc.push_back('m');
         return esc;
     }
 
     [[nodiscard]]
     auto debug_string() const -> std::string {
-        switch(type_) {
-            case Type::Null: return "[null color]";
-            case Type::Default: return "[Default]";
-            case Type::AnsiColor: {
-                std::string debug("[type=AnsiColor");
-                return debug
-                    .append(", index=")
-                    .append(std::to_string(data_[0]))
-                    .append("]");
-            }
-            case Type::TrueColor: {
-                std::string debug("[type=TrueColor");
-                return debug
-                    .append(", rgb=")
-                    .append(std::to_string(data_[0]))
-                    .append(", ")
-                    .append(std::to_string(data_[1]))
-                    .append(", ")
-                    .append(std::to_string(data_[2]))
-                    .append("]");
-            }
+        switch (type_) {
+        case ColorType::Null:
+            return "[null color]";
+        case ColorType::Default:
+            return "[Default]";
+        case ColorType::AnsiColor: {
+            std::string debug("[type=AnsiColor");
+            return debug.append(", index=")
+                .append(std::to_string(data_[0]))
+                .append("]");
+        }
+        case ColorType::TrueColor: {
+            std::string debug("[type=TrueColor");
+            return debug.append(", rgb=")
+                .append(std::to_string(data_[0]))
+                .append(", ")
+                .append(std::to_string(data_[1]))
+                .append(", ")
+                .append(std::to_string(data_[2]))
+                .append("]");
+        }
         }
     }
 
   private:
-    constexpr Color(Type type, std::array<uint8_t, 3> data)
+    friend struct Style;
+
+    constexpr Color(ColorType type, ColorData data)
         : type_(type),
           data_(data) {}
 
-    Type type_;
-    std::array<uint8_t, 3> data_;
+    ColorType type_;
+    ColorData data_;
 };
 
 /// @brief Create a color by RGB
@@ -317,10 +304,9 @@ inline constexpr Color bright_white    = Color(colors::BrightWhite);
 struct style_reset_t {};
 inline constexpr style_reset_t reset;
 
-/// @brief A class representing a terminal style (color + text attributes).
+/// @brief A class representing a terminal style.
 struct Style {
     // clang-format off
-
     enum Flags : uint8_t {
         None            = 0,
         Bold            = 1 << 0,
@@ -332,33 +318,38 @@ struct Style {
         Strikethrough   = 1 << 6,
         UnderlineDouble = 1 << 7,
     };
+
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
         Color::MAX_ESCAPE_CODE_SIZE * 2 + 13 + 3;
 
-    uint8_t flags   = None;
-    Color fg        = null_color;
-    Color bg        = null_color;
-
     // clang-format on
 
-    /// @brief create a default style
+    /// @brief create a default style (flags = 0, fg = null_color, bg =
+    /// null_color)
     constexpr Style() = default;
 
     constexpr Style(uint8_t flags, Color fg = null_color, Color bg = null_color)
-        : flags(flags),
-          fg(fg),
-          bg(bg) {}
+        : fg_data_(fg.data_),
+          bg_data_(bg.data_),
+          color_types_((static_cast<uint8_t>(fg.type_) << 4)
+                       | static_cast<uint8_t>(bg.type_)),
+          flags_(flags) {}
 
     // ----- operators -----
 
     /// @brief combine two styles, with rhs taking precedence
     constexpr auto operator|(Style rhs) const -> Style {
-        // clang-format off
-        return Style(
-            flags | rhs.flags, 
-            rhs.fg ? rhs.fg : fg, 
-            rhs.bg ? rhs.bg : bg);
-        // clang-format on
+        Style combined = *this;
+        combined.flags_ |= rhs.flags_;
+        if (!rhs.fg_null()) {
+            combined.fg_data_ = rhs.fg_data_;
+            combined.set_fg_type(rhs.fg_type());
+        }
+        if (!rhs.bg_null()) {
+            combined.bg_data_ = rhs.bg_data_;
+            combined.set_bg_type(rhs.bg_type());
+        }
+        return combined;
     }
 
     constexpr void operator|=(Style rhs) { *this = *this | rhs; }
@@ -369,8 +360,14 @@ struct Style {
     /// @brief equivalent to !empty()
     constexpr explicit operator bool() const { return !empty(); }
 
+    // ----- observe -----
+
+    constexpr auto flags() const -> uint8_t { return flags_; }
+    constexpr auto fg() const -> Color { return Color(fg_type(), fg_data_); }
+    constexpr auto bg() const -> Color { return Color(bg_type(), bg_data_); }
+
     constexpr auto empty() const -> bool {
-        return flags == None && fg.empty() && bg.empty();
+        return flags_ == None && fg_null() && bg_null();
     }
 
     // ----- output -----
@@ -383,18 +380,18 @@ struct Style {
         if (empty()) return out;
         bool needs_separate = false;
 
-        if (fg) {
-            out = fg.to_sgr_params(out, false);
+        if (!fg_null()) {
+            out = detail::color_to_sgr_params(out, false, fg_type(), fg_data_);
             needs_separate = true;
         }
-        if (bg) {
+        if (!bg_null()) {
             if (needs_separate) *out++ = ';';
-            out = bg.to_sgr_params(out, true);
+            out = detail::color_to_sgr_params(out, true, bg_type(), bg_data_);
             needs_separate = true;
         }
 
-        if (!flags) return out;
-        uint8_t current_flag = flags;
+        if (!flags_) return out;
+        uint8_t current_flag = flags_;
         int count = 0;
         do {
             if (current_flag & 1) {
@@ -429,15 +426,49 @@ struct Style {
     auto debug_string() const -> std::string {
         std::string debug = "[flags=";
         std::array<char, 8> buf;
-        std::to_chars(buf.begin(), buf.end(), flags, 2);
-        return debug
-             .append(buf.data(), 8)
-             .append(", fg=")
-             .append(fg.debug_string())
-             .append(", bg=")
-             .append(bg.debug_string())
-             .append("]");
+        std::to_chars(buf.begin(), buf.end(), flags_, 2);
+        return debug.append(buf.data(), 8)
+            .append(", fg=")
+            .append(fg().debug_string())
+            .append(", bg=")
+            .append(bg().debug_string())
+            .append("]");
     }
+
+  private:
+    constexpr auto fg_type() const -> ColorType {
+        return static_cast<ColorType>((color_types_ >> 4) & 0x0F);
+    }
+
+    constexpr auto bg_type() const -> ColorType {
+        return static_cast<ColorType>(color_types_ & 0x0F);
+    }
+
+    constexpr void set_fg_type(ColorType type) {
+        color_types_ =
+            (static_cast<uint8_t>(type) << 4) | (color_types_ & 0x0F);
+    }
+
+    constexpr void set_bg_type(ColorType type) {
+        color_types_ =
+            (static_cast<uint8_t>(type) & 0x0F) | (color_types_ & 0xF0);
+    }
+
+    constexpr auto fg_null() const -> bool {
+        return fg_type() == ColorType::Null;
+    }
+    constexpr auto bg_null() const -> bool {
+        return bg_type() == ColorType::Null;
+    }
+
+    ColorData fg_data_ = {0, 0, 0};
+    ColorData bg_data_ = {0, 0, 0};
+
+    // bit-packed color types for fg and bg.
+    // fg uses upper 4 bits and bg uses lower 4 bits.
+    uint8_t color_types_ = 0;
+
+    uint8_t flags_ = None;
 };
 
 /// @brief A Style wrapper for representing an absolute style

@@ -41,14 +41,14 @@ TEST_CASE("Style: Style composition") {
 
     const Style composed = fg(red) | bg(blue) | bold | fg(green) | italic;
 
-    CHECK(composed.flags == (Style::Bold | Style::Italic));
-    CHECK(composed.fg == green);
-    CHECK(composed.bg == blue);
+    CHECK(composed.flags() == (Style::Bold | Style::Italic));
+    CHECK(composed.fg() == green);
+    CHECK(composed.bg() == blue);
     CHECK(sgr_params(composed) == "32;44;1;3");
 
     const Style rhs_without_colors = fg(red) | bg(blue) | bold;
-    CHECK((rhs_without_colors | italic).fg == red);
-    CHECK((rhs_without_colors | italic).bg == blue);
+    CHECK((rhs_without_colors | italic).fg() == red);
+    CHECK((rhs_without_colors | italic).bg() == blue);
     CHECK(sgr_params(rhs_without_colors | italic) == "31;44;1;3");
 }
 
