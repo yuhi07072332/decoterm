@@ -32,7 +32,7 @@ namespace detail {
 ///
 /// Used to determine whether `StyleOutputState` needs to output the current
 /// style before outputting a value.
-inline const StyleOutputState* g_style_output_context = nullptr;
+inline const StyleOutputState* g_style_output_context = nullptr; // NOLINT
 
 /* ----- type traits & concepts ----- */
 
@@ -84,7 +84,7 @@ class StyleStack {
     auto top() const -> std::optional<AbsoluteStyle> {
         if (is_multiple_) {
             if (multiple_.empty()) return std::nullopt;
-            else return multiple_.back();
+            return multiple_.back();
         }
         return single_;
     }
@@ -95,9 +95,8 @@ class StyleStack {
     }
 
     void push(AbsoluteStyle style) {
-        if (is_multiple_) {
-            multiple_.push_back(style);
-        } else single_ = style;
+        if (is_multiple_) multiple_.push_back(style);
+        else single_ = style;
     }
 
     void pop() {
@@ -158,9 +157,10 @@ struct Styled {
 /// @brief create a `Styled` from rvalue
 template <typename T, detail::outputable_style StyleT>
     requires(!std::is_lvalue_reference_v<T>)
-inline constexpr auto styled(T&& value, StyleT style)
+inline constexpr auto styled(T&& value, StyleT style) // NOLINT
     -> Styled<std::remove_const_t<T>, StyleT> {
-    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), style);
+    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), //NOLINT
+                                                  style);
 }
 
 /// @brief create a `Styled` from const lvalue
@@ -189,7 +189,7 @@ inline auto operator<<(std::ostream& os, const Styled<T, StyleT>& styled)
 /// whether it needs to output the current style before outputting a value.
 ///
 /// @see `g_style_output_context`, `StyledOstream`
-class StyleOutputState {
+class StyleOutputState { // NOLINT
   public:
     StyleOutputState() = default;
 
@@ -273,11 +273,11 @@ class StyleOutputState {
         return false;
     }
 
+  private:
     AbsoluteStyle base_style_ = absolute(default_style);
     bool style_enabled_ = true;
     bool color_fallback_enabled_ = false;
 
-  private:
     detail::StyleStack stack_;
 };
 
@@ -329,7 +329,7 @@ class StyledOstream : public StyleOutputState {
     friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
         out.ensure_context();
         out.pop_style();
-        if (out.style_enabled_) out.ostream() << out.current_style();
+        if (out.style_enabled()) out.ostream() << out.current_style();
         return out;
     }
 
@@ -384,7 +384,7 @@ class StyledOstream : public StyleOutputState {
     /// @brief Output style if style output is enabled.
     template <detail::outputable_style StyleT>
     void output_style(StyleT style) const {
-        if (style_enabled_) *ostream_ << style;
+        if (style_enabled()) *ostream_ << style;
     }
 
     /// @brief Ensure that the current style is outputted if the context has
@@ -396,9 +396,7 @@ class StyledOstream : public StyleOutputState {
     std::ostream* ostream_;
 };
 
-inline auto styled_out(std::ostream& os) -> StyledOstream {
-    return StyledOstream(os);
-}
+inline auto styled_out(std::ostream& os) -> StyledOstream { return {os}; }
 
 } // namespace deco
 

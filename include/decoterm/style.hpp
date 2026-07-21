@@ -69,7 +69,7 @@ inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
 
 template <std::output_iterator<const char&> OutputIt>
 inline constexpr auto write_converted_to(OutputIt out, uint8_t value) {
-    std::array<char, 3> buf;
+    std::array<char, 3> buf{};
     auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
     assert(ec == std::errc {});
     auto len = ptr - buf.data();
@@ -219,8 +219,9 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
 [[nodiscard]]
-inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
+inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {  //NOLINT
     // clang-format off
+    // NOLINTBEGIN
     if (h < 0 || h >= 360) throw std::invalid_argument(
         "deco::hsv(): h is not in range [0, 360)");
 
@@ -230,8 +231,8 @@ inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
 
     float f = hp - std::floor(hp);
     uint8_t p = std::round(vp * (1 - sp) * 255);
-    uint8_t q = std::round(vp * (1 - f * sp) * 255);
-    uint8_t t = std::round(vp * (1 - (1 - f) * sp) * 255);
+    uint8_t q = std::round(vp * (1 - (f * sp)) * 255);
+    uint8_t t = std::round(vp * (1 - ((1 - f) * sp)) * 255);
 
     switch (h / 60) {
         case 0 : return Color(v, t, p);
@@ -242,6 +243,7 @@ inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {
         case 5 : return Color(v, p, q);
         default: assert(false);
     }
+    // NOLINTEND
     // clang-format on
 }
 
@@ -250,7 +252,7 @@ namespace colors {
 // clang-format off
 
 /// system colors
-enum Color16 : uint8_t {
+enum Color16 : uint8_t {    // NOLINT
     Black               = 0,
     Red                 = 1,
     Green               = 2,
@@ -305,7 +307,7 @@ inline constexpr style_reset_t reset;
 /// @brief A class representing a terminal style.
 struct Style {
     // clang-format off
-    enum Flags : uint8_t {
+    enum Flags : uint8_t {      //NOLINT
         None            = 0,
         Bold            = 1 << 0,
         Dim             = 1 << 1,
@@ -318,7 +320,7 @@ struct Style {
     };
 
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
-        Color::MAX_ESCAPE_CODE_SIZE * 2 + 13 + 3;
+        (Color::MAX_ESCAPE_CODE_SIZE * 2) + 13 + 3;
 
     // clang-format on
 
@@ -361,8 +363,8 @@ struct Style {
     // ----- observe -----
 
     constexpr auto flags() const -> uint8_t { return flags_; }
-    constexpr auto fg() const -> Color { return Color(fg_type(), fg_data_); }
-    constexpr auto bg() const -> Color { return Color(bg_type(), bg_data_); }
+    constexpr auto fg() const -> Color { return {fg_type(), fg_data_}; }
+    constexpr auto bg() const -> Color { return {bg_type(), bg_data_}; }
 
     constexpr auto empty() const -> bool {
         return flags_ == None && fg_null() && bg_null();
@@ -423,7 +425,7 @@ struct Style {
     [[nodiscard]]
     auto debug_string() const -> std::string {
         std::string debug = "[flags=";
-        std::array<char, 8> buf;
+        std::array<char, 8> buf{};
         for (std::size_t i = 0; i < buf.size(); ++i) {
             uint8_t bit = 1 << (buf.size() - i - 1);
             buf[i] = (flags_ & bit) ? '1' : '0';
@@ -511,15 +513,15 @@ inline constexpr auto absolute(Style style) -> AbsoluteStyle {
 
 /// @brief create a Style with foreground and background colors
 inline constexpr auto color(Color fg, Color bg) -> Style {
-    return Style(Style::None, fg, bg);
+    return {Style::None, fg, bg};
 }
 
 /// @brief create a Style with foreground color
-inline constexpr auto fg(Color fg) -> Style { return Style(Style::None, fg); }
+inline constexpr auto fg(Color fg) -> Style { return {Style::None, fg}; }
 
 /// @brief create a Style with background color
 inline constexpr auto bg(Color bg) -> Style {
-    return Style(Style::None, null_color, bg);
+    return {Style::None, null_color, bg};
 }
 
 /* ----- ostream operators ----- */

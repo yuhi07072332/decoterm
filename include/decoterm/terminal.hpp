@@ -40,7 +40,7 @@ namespace detail {
 
 inline constexpr auto contains(std::string_view sv, std::string_view find)
     -> bool {
-    return sv.find(find) != sv.npos;
+    return sv.find(find) != std::string_view::npos;    // NOLINT
 }
 
 #if defined(_WIN32)
@@ -73,11 +73,10 @@ inline auto get_color_support() -> ColorSupport {
 
 // HACK: 
 inline auto is_ostream_tty(const std::ostream& os) -> bool {
-    if (&os == &std::cout) {
+    if (&os == &std::cout)
         return terminal::is_stdout_tty();
-    } else if (&os == &std::cerr) {
+    if (&os == &std::cerr)
         return terminal::is_stderr_tty();
-    }
     return false;
 }
 
