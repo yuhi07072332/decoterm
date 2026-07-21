@@ -159,7 +159,7 @@ template <typename T, detail::outputable_style StyleT>
     requires(!std::is_lvalue_reference_v<T>)
 inline constexpr auto styled(T&& value, StyleT style) // NOLINT
     -> Styled<std::remove_const_t<T>, StyleT> {
-    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), //NOLINT
+    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), // NOLINT
                                                   style);
 }
 
@@ -381,14 +381,14 @@ class StyledOstream : public StyleOutputState {
     auto ostream() const -> std::ostream& { return *ostream_; }
 
   private:
-    /// @brief Output style if style output is enabled.
+    // Output style if style output is enabled.
     template <detail::outputable_style StyleT>
     void output_style(StyleT style) const {
         if (style_enabled()) *ostream_ << style;
     }
 
-    /// @brief Ensure that the current style is outputted if the context has
-    /// changed.
+    // Ensure that the current style is outputted if the context has
+    // changed.
     void ensure_context() const {
         if (update_context()) output_style(current_style());
     }
@@ -396,6 +396,7 @@ class StyledOstream : public StyleOutputState {
     std::ostream* ostream_;
 };
 
+[[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream { return {os}; }
 
 } // namespace deco
