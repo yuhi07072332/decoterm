@@ -11,7 +11,6 @@
 #include "style.hpp"
 
 #include <concepts>
-#include <functional>
 #include <optional>
 #include <ostream>
 #include <type_traits>
@@ -43,25 +42,6 @@ template <typename T>
 concept ostream_outputable = requires(std::ostream& os, const T& value) {
     { os << value } -> std::same_as<std::ostream&>;
 };
-
-// Extract inner type from `std::reference_wrapper`.
-// This can also check if `T` is a `std::reference_wrapper`.
-template <typename T>
-struct remove_reference_wrapper : std::false_type {
-    using type = T;
-};
-
-template <typename T>
-struct remove_reference_wrapper<std::reference_wrapper<T>> : std::true_type {
-    using type = T;
-};
-
-template <typename T>
-using remove_reference_wrapper_t = remove_reference_wrapper<T>::type;
-
-template <typename T>
-inline constexpr bool is_reference_wrapper_v =
-    remove_reference_wrapper<T>::value;
 
 // Whether `T` is a `Styled`.
 template <typename T> struct is_styled : std::false_type {};
