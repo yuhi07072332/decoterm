@@ -54,11 +54,12 @@ inline auto enable_virtual_terminal_mode() -> bool {
 }
 #endif // _WIN32
 
-#if !defined(_WIN32)
-
 // see https://github.com/termstandard/colors?tab=readme-ov-file,
 [[nodiscard]]
 inline auto get_color_support() -> ColorSupport {
+#if defined(_WIN32)
+    return ColorSupport::TrueColor;
+#else   // POSIX
     const char* colorterm_p = std::getenv("COLORTERM");
 
     std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
@@ -67,9 +68,9 @@ inline auto get_color_support() -> ColorSupport {
         return ColorSupport::TrueColor;
 
     return ColorSupport::Color16;
+#endif
 };
 
-#endif // !_WIN32
 
 // HACK: 
 inline auto is_ostream_tty(const std::ostream& os) -> bool {

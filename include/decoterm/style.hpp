@@ -19,6 +19,13 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <version>
+
+#if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
+#define DECO_CONSTEXPR_CMATH constexpr
+#else
+#define DECO_CONSTEXPR_CMATH
+#endif
 
 namespace deco {
 
@@ -219,7 +226,7 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
 [[nodiscard]]
-inline constexpr auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {  //NOLINT
+inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {  //NOLINT
     // clang-format off
     // NOLINTBEGIN
     if (h < 0 || h >= 360) throw std::invalid_argument(
