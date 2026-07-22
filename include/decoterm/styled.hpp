@@ -22,6 +22,7 @@ namespace deco {
 
 template <typename T, detail::outputable_style StyleT> struct Styled;
 
+template <typename>
 class StyleOutputState;
 
 namespace detail {
@@ -32,7 +33,8 @@ namespace detail {
 ///
 /// Used to determine whether `StyleOutputState` needs to output the current
 /// style before outputting a value.
-inline const StyleOutputState* g_style_output_context = nullptr; // NOLINT
+struct style_output_context_t {};
+inline const style_output_context_t* g_style_output_context = nullptr; // NOLINT
 
 /* ----- type traits & concepts ----- */
 
@@ -135,22 +137,35 @@ class StyleStack {
 // ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A wrapper for styling a value. Owns **const** rvalue or references
+/// @brief A wrapper for styling a value. Owns rvalue or references
 /// **const** lvalue.
 template <typename T, detail::outputable_style StyleT>
 struct Styled {
-    using value_type =
-        std::remove_const_t<detail::remove_reference_wrapper_t<T>>;
-
     constexpr Styled(T value, StyleT style)
         : value_(std::move(value)),
           style_(style) {}
 
-    constexpr auto value() const -> const value_type& { return value_; }
+    constexpr auto value() const -> const std::remove_const_t<T>& {
+        return value_;
+    }
     constexpr auto style() const -> StyleT { return style_; }
 
   private:
     T value_;
+    StyleT style_;
+};
+
+template <typename T, detail::outputable_style StyleT>
+struct Styled<T&, StyleT> {
+    constexpr Styled(const T& value, StyleT style)
+        : value_(&value),
+          style_(style) {}
+
+    constexpr auto value() const -> const T& { return *value_; }
+    constexpr auto style() const -> StyleT { return style_; }
+
+  private:
+    const T* value_;
     StyleT style_;
 };
 
@@ -166,8 +181,8 @@ inline constexpr auto styled(T&& value, StyleT style) // NOLINT
 /// @brief create a `Styled` from const lvalue
 template <typename T, detail::outputable_style StyleT>
 inline constexpr auto styled(const T& value, StyleT style)
-    -> Styled<std::reference_wrapper<const T>, StyleT> {
-    return Styled(std::cref(value), style);
+    -> Styled<const T&, StyleT> {
+    return Styled<const T&, StyleT>(value, style);
 }
 
 /// @brief output operator for Styled
@@ -182,47 +197,47 @@ inline auto operator<<(std::ostream& os, const Styled<T, StyleT>& styled)
 // ║                    StyleOutputState                     ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A class representing Style output state.
+/// @brief A CRTP class representing Style output state.
 ///
 /// It is used to manage the current style output state(e.g. style enabled, base
-/// style, etc.) It also checks `detail::g_style_output_context` to determine
-/// whether it needs to output the current style before outputting a value.
+/// style, etc.) If context tracking is enabled, it will also check
+/// `detail::g_style_output_context` to determine whether it needs to output the
+/// current style before outputting a value.
 ///
 /// @see `g_style_output_context`, `StyledOstream`
+template <typename Derived>
 class StyleOutputState { // NOLINT
   public:
-    StyleOutputState() = default;
-
     ~StyleOutputState() {
-        if (detail::g_style_output_context == this)
+        if (detail::g_style_output_context == &context_)
             detail::g_style_output_context = nullptr;
     }
 
     // ----- options -----
 
     /// @brief Enable or disable style output.
-    auto enable_style(bool enable) -> StyleOutputState& {
+    auto enable_style(bool enable) -> Derived& {
         style_enabled_ = enable;
-        return *this;
+        return static_cast<Derived&>(*this);
     }
 
-    /// @brief Enable or disable color fallback.
-    auto enable_color_fallback(bool enable) -> StyleOutputState& {
-        color_fallback_enabled_ = enable;
-        return *this;
+    /// @brief Enable or disable context tracking.
+    auto enable_context(bool enable) -> Derived& {
+        context_enabled_ = enable;
+        return static_cast<Derived&>(*this);
     }
 
     /// @brief Set the base style for this output state.
-    auto base_style(Style base) -> StyleOutputState& {
+    auto base_style(Style base) -> Derived& {
         base_style_ = absolute(base);
-        return *this;
+        return static_cast<Derived&>(*this);
     }
 
     /// @brief Enable or disable style nesting.
-    auto enable_nesting(bool enable) -> StyleOutputState& {
+    auto enable_nesting(bool enable) -> Derived& {
         if (enable) stack_.to_multiple();
         else stack_.to_single();
-        return *this;
+        return static_cast<Derived&>(*this);
     }
 
     // ----- observe -----
@@ -243,8 +258,8 @@ class StyleOutputState { // NOLINT
     }
 
     [[nodiscard]]
-    auto color_fallback_enabled() const -> bool {
-        return color_fallback_enabled_;
+    auto context_enabled() const -> bool {
+        return context_enabled_;
     }
 
     [[nodiscard]]
@@ -263,22 +278,40 @@ class StyleOutputState { // NOLINT
         stack_.push(absolute(current_style().style | style));
     }
 
-    ///@brief Update the global style output context to this object.
-    ///@returns `true` if the context was updated.
-    auto update_context() const -> bool {
-        if (detail::g_style_output_context != this) {
-            detail::g_style_output_context = this;
-            return true;
+    void ensure_context() {
+        if (!context_enabled_) {
+            if (is_first_output_) {
+                output_style(base_style_);
+                is_first_output_ = false;
+            }
+            return;
         }
-        return false;
+        if (detail::g_style_output_context != &context_) {
+            detail::g_style_output_context = &context_;
+            is_first_output_ = false;
+            output_style(current_style());
+        }
+    }
+
+    template <detail::outputable_style StyleT>
+    void output_style(StyleT style) {
+        if (style_enabled_)
+            static_cast<Derived*>(this)->output_style_impl(style);
     }
 
   private:
-    AbsoluteStyle base_style_ = absolute(default_style);
-    bool style_enabled_ = true;
-    bool color_fallback_enabled_ = false;
+    friend Derived;
 
+    StyleOutputState() = default;
+
+    AbsoluteStyle base_style_ = absolute(default_style);
     detail::StyleStack stack_;
+
+    bool style_enabled_ = true;
+    bool context_enabled_ = false;
+
+    bool is_first_output_ = true;
+    detail::style_output_context_t context_ {};
 };
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -289,8 +322,8 @@ struct style_pop_t {};
 inline constexpr style_pop_t pop;
 
 /// @brief A stateful lightweight writer over an existing std::ostream.
-/// @warning The passed std::ostream object must outlive this object.
-class StyledOstream : public StyleOutputState {
+/// @note The passed std::ostream object must outlive this object.
+class StyledOstream : public StyleOutputState<StyledOstream> {
   public:
     StyledOstream(std::ostream& os) : ostream_(&os) {}
     StyledOstream(const StyleOutputState& state, std::ostream& os)
@@ -298,30 +331,40 @@ class StyledOstream : public StyleOutputState {
           ostream_(&os) {}
 
     /// @brief Output operator for any type that is outputable to
-    /// `std::ostream`, except for 'Styled'.
+    /// `std::ostream`.
+    ///
     /// @throws `std::logic_error` if `operator<<(std::ostream, T&&)` returns
     /// different ostream object.
     template <detail::ostream_outputable T>
-        requires(!detail::styled<T>)
+        requires(!detail::outputable_style<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
-        using value_type = std::remove_cvref_t<T>;
         out.ensure_context();
 
-        if constexpr (detail::outputable_style<value_type>) {
-            if constexpr (std::is_same_v<value_type, Style>
-                          || std::is_same_v<value_type, AbsoluteStyle>)
-                out.push_style(value);
-            out.output_style(value);
-        } else if constexpr (std::is_same_v<value_type, style_reset_t>) {
-            out.reset_style();
-            out.output_style(out.current_style());
-        } else {
-            if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
-                os_ptr != out.ostream_)
-                throw std::logic_error(
-                    "StyledOstream: std::ostream output operator returns "
-                    "different ostream object");
-        }
+        if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
+            os_ptr != out.ostream_)
+            throw std::logic_error(
+                "StyledOstream: std::ostream output operator returns "
+                "different ostream object");
+        return out;
+    }
+
+    /// @brief output operator for Style types
+    template <detail::outputable_style StyleT>
+    friend auto operator<<(StyledOstream& out, StyleT style) -> StyledOstream& {
+        out.ensure_context();
+
+        if constexpr (std::is_same_v<StyleT, Style>
+                      || std::is_same_v<StyleT, AbsoluteStyle>)
+            out.push_style(style);
+        out.output_style(style);
+        return out;
+    }
+
+    /// @brief output operator for `reset`
+    friend auto operator<<(StyledOstream& out, style_reset_t)
+        -> StyledOstream& {
+        out.reset_style();
+        out.output_style(out.current_style());
         return out;
     }
 
@@ -364,8 +407,7 @@ class StyledOstream : public StyleOutputState {
 
     /// @brief output operator for IO manipulators.
     ///
-    /// The overloaded
-    /// `operator<<(std::ostream& os, std::ostream&(*fn)(std::ostream&))`
+    /// `std::operator<<(std::ostream& os, std::ostream&(*fn)(std::ostream&))`
     /// returns `fn(os)` instead of `os`, so we should assume that it may
     /// return a different std::ostream&.
     friend auto operator<<(StyledOstream& out,
@@ -381,23 +423,21 @@ class StyledOstream : public StyleOutputState {
     auto ostream() const -> std::ostream& { return *ostream_; }
 
   private:
-    // Output style if style output is enabled.
-    template <detail::outputable_style StyleT>
-    void output_style(StyleT style) const {
-        if (style_enabled()) *ostream_ << style;
-    }
+    friend class StyleOutputState<StyledOstream>;
 
-    // Ensure that the current style is outputted if the context has
-    // changed.
-    void ensure_context() const {
-        if (update_context()) output_style(current_style());
+    template <detail::outputable_style StyleT>
+    void output_style_impl(StyleT style) const {
+        *ostream_ << style;
     }
 
     std::ostream* ostream_;
 };
 
+/// @brief Same as `StyledOstream(os)`.
 [[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream { return {os}; }
+inline auto styled_out(std::ostream& os) -> StyledOstream {
+    return {os};
+}
 
 } // namespace deco
 

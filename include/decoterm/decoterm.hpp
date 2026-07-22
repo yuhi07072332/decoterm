@@ -25,13 +25,7 @@
 // SOFTWARE.
 
 // TODO:
-// - <format> support
-// - iomanipulator support for StyledOstream
 // - new line with default style
-// - Detect terminal color support info & provide fallback system color for true
-// color
-// - markup string
-// - Windows API fallback for Windows8 or lower versions
 
 #ifndef DECO_DECOTERM_HPP
 #define DECO_DECOTERM_HPP

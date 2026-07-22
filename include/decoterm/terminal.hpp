@@ -40,7 +40,7 @@ namespace detail {
 
 inline constexpr auto contains(std::string_view sv, std::string_view find)
     -> bool {
-    return sv.find(find) != std::string_view::npos;    // NOLINT
+    return sv.find(find) != std::string_view::npos; // NOLINT
 }
 
 #if defined(_WIN32)
@@ -59,7 +59,7 @@ inline auto enable_virtual_terminal_mode() -> bool {
 inline auto get_color_support() -> ColorSupport {
 #if defined(_WIN32)
     return ColorSupport::TrueColor;
-#else   // POSIX
+#else // POSIX
     const char* colorterm_p = std::getenv("COLORTERM");
 
     std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
@@ -71,14 +71,14 @@ inline auto get_color_support() -> ColorSupport {
 #endif
 };
 
+// HACK: same hack used in termcolor library to check if the ostream is stdout
+// or stderr
+inline auto is_ostream_stdout(const std::ostream& os) -> bool {
+    return &os == &std::cout;
+}
 
-// HACK: 
-inline auto is_ostream_tty(const std::ostream& os) -> bool {
-    if (&os == &std::cout)
-        return terminal::is_stdout_tty();
-    if (&os == &std::cerr)
-        return terminal::is_stderr_tty();
-    return false;
+inline auto is_ostream_stderr(const std::ostream& os) -> bool {
+    return &os == &std::cerr || &os == &std::clog;
 }
 
 #if defined(_WIN32)
@@ -89,6 +89,7 @@ inline bool g_virtual_terminal_mode_enabled = enable_virtual_terminal_mode();
 
 namespace terminal {
 
+/// @brief Check if the current stdout is a terminal.
 [[nodiscard]]
 inline auto is_stdout_tty() -> bool {
 #if defined(_WIN32)
@@ -100,6 +101,7 @@ inline auto is_stdout_tty() -> bool {
 #endif
 };
 
+/// @brief Check if the current stderr is a terminal.
 [[nodiscard]]
 inline auto is_stderr_tty() -> bool {
 #if defined(_WIN32)
@@ -111,17 +113,22 @@ inline auto is_stderr_tty() -> bool {
 #endif
 };
 
+/// @brief Get the color support of the current terminal.
 [[nodiscard]]
 inline auto color_support() -> ColorSupport {
     static ColorSupport s_color_support = detail::get_color_support();
     return s_color_support;
 }
 
+/// @brief Same as `deco::styled_out()` but with automatic configuration
+//  - enable style output if the ostream is stdout or stderr
+//  - enable context tracking if the ostream is stdout or stderr
 [[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream {
-    StyledOstream sout = StyledOstream(os);
-    sout.enable_style(detail::is_ostream_tty(os))
-        .enable_color_fallback(color_support() == ColorSupport::Color16);
+    StyledOstream sout = deco::styled_out(os)
+                             .enable_style(detail::is_ostream_stdout(os))
+                             .enable_context(detail::is_ostream_stdout(os)
+                                             || detail::is_ostream_stderr(os));
     return sout;
 }
 

@@ -75,8 +75,8 @@ inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
 }
 
 template <std::output_iterator<const char&> OutputIt>
-inline constexpr auto write_converted_to(OutputIt out, uint8_t value) {
-    std::array<char, 3> buf{};
+inline constexpr auto convert_to(OutputIt out, uint8_t value) {
+    std::array<char, 3> buf {};
     auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
     assert(ec == std::errc {});
     auto len = ptr - buf.data();
@@ -104,18 +104,18 @@ color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
                            is_bg ? SGR_PARAM_BG[index] : SGR_PARAM_FG[index]);
         } else {
             out = write_to(out, is_bg ? "48;5;" : "38;5;");
-            out = write_converted_to(out, index);
+            out = convert_to(out, index);
         }
         return out;
     }
     case ColorType::TrueColor: {
         auto [r, g, b] = data;
         out = write_to(out, is_bg ? "48;2;" : "38;2;");
-        out = write_converted_to(out, r);
+        out = convert_to(out, r);
         *out++ = ';';
-        out = write_converted_to(out, g);
+        out = convert_to(out, g);
         *out++ = ';';
-        out = write_converted_to(out, b);
+        out = convert_to(out, b);
         return out;
     }
     default:
@@ -226,9 +226,9 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
 [[nodiscard]]
-inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color {  //NOLINT
-    // clang-format off
-    // NOLINTBEGIN
+inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v)  // NOLINT
+    -> Color {
+    // clang-format off NOLINTBEGIN
     if (h < 0 || h >= 360) throw std::invalid_argument(
         "deco::hsv(): h is not in range [0, 360)");
 
@@ -250,8 +250,7 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) -> Color 
         case 5 : return Color(v, p, q);
         default: assert(false);
     }
-    // NOLINTEND
-    // clang-format on
+    // clang-format on NOLINTEND
 }
 
 namespace colors {
@@ -432,7 +431,7 @@ struct Style {
     [[nodiscard]]
     auto debug_string() const -> std::string {
         std::string debug = "[flags=";
-        std::array<char, 8> buf{};
+        std::array<char, 8> buf {};
         for (std::size_t i = 0; i < buf.size(); ++i) {
             uint8_t bit = 1 << (buf.size() - i - 1);
             buf[i] = (flags_ & bit) ? '1' : '0';
