@@ -5,8 +5,8 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECOTERM_COLOR256_HPP
-#define DECOTERM_COLOR256_HPP
+#ifndef DECO_COLOR256_HPP
+#define DECO_COLOR256_HPP
 
 #include <cstdint>
 
@@ -263,4 +263,4 @@ enum Color256 : uint8_t {
 
 } // namespace deco::colors
 
-#endif // !DECOTERM_COLOR256_HPP
+#endif // !DECO_COLOR256_HPP

@@ -5,8 +5,8 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECOTERM_TERMINAL_HPP
-#define DECOTERM_TERMINAL_HPP
+#ifndef DECO_TERMINAL_HPP
+#define DECO_TERMINAL_HPP
 
 #include "styled.hpp"
 
@@ -129,4 +129,4 @@ inline auto styled_out(std::ostream& os) -> StyledOstream {
 
 } // namespace deco
 
-#endif // !DECOTERM_TERMINAL_HPP
+#endif // !DECO_TERMINAL_HPP

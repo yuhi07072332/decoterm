@@ -5,8 +5,8 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECOTERM_STYLE_HPP
-#define DECOTERM_STYLE_HPP
+#ifndef DECO_STYLE_HPP
+#define DECO_STYLE_HPP
 
 #include <array>
 #include <cassert>
@@ -564,4 +564,6 @@ inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
 } // namespace deco
 
-#endif // !DECOTERM_STYLE_HPP
+#undef DECO_CONSTEXPR_CMATH
+
+#endif // !DECO_STYLE_HPP

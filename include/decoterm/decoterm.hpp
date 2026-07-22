@@ -33,8 +33,8 @@
 // - markup string
 // - Windows API fallback for Windows8 or lower versions
 
-#ifndef DECOTERM_DECOTERM_HPP
-#define DECOTERM_DECOTERM_HPP
+#ifndef DECO_DECOTERM_HPP
+#define DECO_DECOTERM_HPP
 
 #include "style.hpp"
 #include "styled.hpp"
@@ -42,4 +42,4 @@
 #include "terminal.hpp"
 #include "color256.hpp"
 
-#endif // !DECOTERM_DECOTERM_HPP
+#endif // !DECO_DECOTERM_HPP

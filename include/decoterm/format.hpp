@@ -5,8 +5,8 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECOTERM_FORMATTER_HPP
-#define DECOTERM_FORMATTER_HPP
+#ifndef DECO_FORMATTER_HPP
+#define DECO_FORMATTER_HPP
 
 #include "style.hpp"
 #include "styled.hpp"
@@ -87,4 +87,4 @@ struct formatter<deco::Styled<T, StyleT>> {
 
 }; // namespace std
 
-#endif // !DECOTERM_FORMATTER_HPP
+#endif // !DECO_FORMATTER_HPP
