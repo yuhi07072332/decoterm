@@ -31,7 +31,7 @@
 #define DECO_DECOTERM_HPP
 
 #include "style.hpp"
-#include "styled.hpp"
+#include "styled_out.hpp"
 #include "format.hpp"
 #include "terminal.hpp"
 #include "color256.hpp"

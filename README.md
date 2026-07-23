@@ -2,18 +2,20 @@
 
 A header-only C++20 library for terminal styling.
 
-## Feature
-
-- Cross-platform support (Windows, Linux, MacOS, etc.)
-- Terminal system 16 colors, 256 colors and true color (from rgb or hsv) support
-- Simple API and syntax (in my opinion)
-- Auto disable style output if standard output is not terminal
-- Detect color support and provide fallback for true color (wip)
-- `std::formatter` support
-
 ## Quickstart
 
-[](./example/quickstart.cpp)
+
+## Features
+
+- Header-only C++20 library
+- Cross-platform support (Windows, Linux, MacOS, etc.)
+- 
+- Simple API syntax (in my opinion)
+- Stateful `StyledOstream` with optional style output, base style, context
+  tracking, and nested style support
+- Terminal helpers for stdout/stderr TTY checks, color support detection, and
+  Windows virtual terminal mode setup
+- `<format>` support for styles and styled values
 
 ## Installization
 

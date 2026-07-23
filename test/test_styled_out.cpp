@@ -1,5 +1,5 @@
 #include <decoterm/style.hpp>
-#include <decoterm/styled.hpp>
+#include <decoterm/styled_out.hpp>
 #include <doctest.h>
 
 #include <iostream>
@@ -10,10 +10,19 @@
 
 namespace {
 
-struct TestStyleOutputState : deco::StyleOutputState<deco::StyledOstream> {
-    using deco::StyleOutputState<deco::StyledOstream>::pop_style;
-    using deco::StyleOutputState<deco::StyledOstream>::push_style;
-    using deco::StyleOutputState<deco::StyledOstream>::reset_style;
+struct TestStyleOutputState : public deco::StyleOutputState<TestStyleOutputState> {
+    using deco::StyleOutputState<TestStyleOutputState>::pop_style;
+    using deco::StyleOutputState<TestStyleOutputState>::push_style;
+    using deco::StyleOutputState<TestStyleOutputState>::reset_style;
+
+    TestStyleOutputState() = default;
+
+    template <typename Derived>
+    TestStyleOutputState(StyleOutputState<Derived> state)
+        : StyleOutputState(std::move(state)) {}
+
+    template <deco::detail::outputable_style StyleT>
+    void output_style_impl(StyleT style) const {}
 };
 
 struct Value {
@@ -25,9 +34,9 @@ auto operator<<(std::ostream& os, Value value) -> std::ostream& {   //NOLINT
     return os;
 }
 
-struct ReturnDirrerentOstream {};
+struct return_dirrerent_ostream_t {};
 
-auto operator<<(std::ostream& os, ReturnDirrerentOstream) -> std::ostream& {   //NOLINT
+auto operator<<(std::ostream& os, return_dirrerent_ostream_t) -> std::ostream& {   //NOLINT
     return std::cerr;
 }
 
@@ -88,13 +97,32 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
 }
 
 
+TEST_CASE("styled: StyleOutputState: copy from other type") {
+    using namespace deco;
+    
+    auto styled_os = styled_out(std::cout)
+                         .enable_style(false)
+                         .enable_context(false)
+                         .base_style(fg(blue))
+                         .enable_nesting(true);
+    styled_os << bold;
+
+    TestStyleOutputState teststate(styled_os); // NOLINT
+
+    CHECK_FALSE(teststate.style_enabled());
+    CHECK_FALSE(teststate.context_enabled());
+    CHECK(teststate.nesting_enabled());
+    CHECK(teststate.base_style() == fg(blue));
+    CHECK(teststate.current_style().style == (fg(blue) | bold));
+}
+
 TEST_CASE("styled: StyleOutputState: options") {
     using namespace deco;
 
     StyledOstream state(std::cout);
 
     CHECK(state.style_enabled());
-    CHECK_FALSE(state.context_enabled());
+    CHECK(state.context_enabled());
     CHECK_FALSE(state.nesting_enabled());
     CHECK(state.base_style() == default_style);
     CHECK(state.current_style().style == default_style);
@@ -116,57 +144,57 @@ TEST_CASE("styled: StyleOutputState: options") {
 }
 
 TEST_CASE("styled: StyleOutputState: single style state") {
-    // using namespace deco;
-    //
-    // TestStyleOutputState state;
-    // state.base_style(fg(blue));
-    //
-    // state.push_style(bold);
-    // CHECK(state.current_style().style == (fg(blue) | bold));
-    //
-    // state.push_style(fg(red));
-    // CHECK(state.current_style().style == (fg(red) | bold));
-    //
-    // state.pop_style();
-    // CHECK(state.current_style().style == fg(blue));
-    //
-    // state.push_style(absolute(fg(green)));
-    // CHECK(state.current_style().style == fg(green));
-    //
-    // state.reset_style();
-    // CHECK(state.current_style().style == fg(blue));
+    using namespace deco;
+
+    TestStyleOutputState state;
+    state.base_style(fg(blue));
+
+    state.push_style(bold);
+    CHECK(state.current_style().style == (fg(blue) | bold));
+
+    state.push_style(fg(red));
+    CHECK(state.current_style().style == (fg(red) | bold));
+
+    state.pop_style();
+    CHECK(state.current_style().style == fg(blue));
+
+    state.push_style(absolute(fg(green)));
+    CHECK(state.current_style().style == fg(green));
+
+    state.reset_style();
+    CHECK(state.current_style().style == fg(blue));
 }
 
 TEST_CASE("styled: StyleOutputState: nested style state") {
-    // using namespace deco;
-    //
-    // TestStyleOutputState state;
-    // state.base_style(fg(blue)).enable_nesting(true);
-    //
-    // state.push_style(bold);
-    // CHECK(state.current_style().style == (fg(blue) | bold));
-    //
-    // state.push_style(italic);
-    // CHECK(state.current_style().style == (fg(blue) | bold | italic));
-    //
-    // state.push_style(fg(red));
-    // CHECK(state.current_style().style == (fg(red) | bold | italic));
-    //
-    // state.pop_style();
-    // CHECK(state.current_style().style == (fg(blue) | bold | italic));
-    //
-    // state.pop_style();
-    // CHECK(state.current_style().style == (fg(blue) | bold));
-    //
-    // state.pop_style();
-    // CHECK(state.current_style().style == fg(blue));
-    //
-    // state.pop_style();
-    // CHECK(state.current_style().style == fg(blue));
-    //
-    // state.push_style(bold);
-    // state.reset_style();
-    // CHECK(state.current_style().style == fg(blue));
+    using namespace deco;
+
+    TestStyleOutputState state;
+    state.base_style(fg(blue)).enable_nesting(true);
+
+    state.push_style(bold);
+    CHECK(state.current_style().style == (fg(blue) | bold));
+
+    state.push_style(italic);
+    CHECK(state.current_style().style == (fg(blue) | bold | italic));
+
+    state.push_style(fg(red));
+    CHECK(state.current_style().style == (fg(red) | bold | italic));
+
+    state.pop_style();
+    CHECK(state.current_style().style == (fg(blue) | bold | italic));
+
+    state.pop_style();
+    CHECK(state.current_style().style == (fg(blue) | bold));
+
+    state.pop_style();
+    CHECK(state.current_style().style == fg(blue));
+
+    state.pop_style();
+    CHECK(state.current_style().style == fg(blue));
+
+    state.push_style(bold);
+    state.reset_style();
+    CHECK(state.current_style().style == fg(blue));
 }
 
 
@@ -224,7 +252,7 @@ TEST_CASE("styled: StyledOstream: throws if output operator returns different os
     using namespace deco;
 
     StyledOstream styled_os(std::cout);
-    CHECK_THROWS_AS(styled_os << ReturnDirrerentOstream{}, std::logic_error);
+    CHECK_THROWS_AS(styled_os << return_dirrerent_ostream_t{}, std::logic_error);
 }
 
 TEST_CASE("styled: StyledOstream: write styles") {
@@ -286,13 +314,39 @@ TEST_CASE("styled: StyledOstream: reset returns to base style") {
                  + std::string("base"));
 }
 
-// TEST_CASE("styled: StyledOstream: output same style twice ") {
-//     using namespace deco;
-//
-//     std::ostringstream os;
-//     StyledOstream styled_os(os);
-//
-//     styled_os << bold << bold;
-//     CHECK(os.str() == bold.to_escape());
-//
-// }
+TEST_CASE("styled: StyledOstream: context tracking") {
+    using namespace deco;
+
+    std::ostringstream os1;
+    std::ostringstream os2;
+    auto out1 = styled_out(os1).base_style(fg(blue));
+    auto out2 = styled_out(os2).base_style(fg(red));
+
+    out1 << "a" << "b";
+    out2 << "c";
+    out1 << "d" << styled("e", bold) << "f";
+
+    CHECK(os1.str()
+          == absolute(fg(blue)).to_escape() + std::string("ab")
+                 + absolute(fg(blue)).to_escape() + std::string("d")
+                 + bold.to_escape() + std::string("e")
+                 + absolute(fg(blue)).to_escape() + std::string("f"));
+    CHECK(os2.str() == absolute(fg(red)).to_escape() + std::string("c"));
+
+}
+
+TEST_CASE("styled: StyledOstream: only output base style first time if context tracking is off") {
+    using namespace deco;
+
+    std::ostringstream os;
+    auto out = styled_out(os).base_style(fg(blue)).enable_context(false);
+
+    out << "a" << "b" << bold << "c" << pop << "d" << reset << "e";
+
+    CHECK(os.str()
+          == absolute(fg(blue)).to_escape() + std::string("ab")
+                 + bold.to_escape() + std::string("c")
+                 + absolute(fg(blue)).to_escape() + std::string("d")
+                 + absolute(fg(blue)).to_escape() + std::string("e"));
+
+}

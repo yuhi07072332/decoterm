@@ -5,12 +5,11 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECO_STYLED_HPP
-#define DECO_STYLED_HPP
+#ifndef DECO_STYLED_OUT_HPP
+#define DECO_STYLED_OUT_HPP
 
 #include "style.hpp"
 
-#include <concepts>
 #include <optional>
 #include <ostream>
 #include <type_traits>
@@ -19,29 +18,19 @@
 
 namespace deco {
 
-template <typename T, detail::outputable_style StyleT> struct Styled;
-
-template <typename>
-class StyleOutputState;
-
 namespace detail {
 
 /* ----- global style output context ----- */
+
+struct style_output_context_t {};
 
 /// @brief global style output context for `StyleOutputState`.
 ///
 /// Used to determine whether `StyleOutputState` needs to output the current
 /// style before outputting a value.
-struct style_output_context_t {};
 inline const style_output_context_t* g_style_output_context = nullptr; // NOLINT
 
-/* ----- type traits & concepts ----- */
-
-// Whether `T` has `operator<<(std::ostream&, const T&)`
-template <typename T>
-concept ostream_outputable = requires(std::ostream& os, const T& value) {
-    { os << value } -> std::same_as<std::ostream&>;
-};
+/* ----- type traits ----- */
 
 // Whether `T` is a `Styled`.
 template <typename T> struct is_styled : std::false_type {};
@@ -114,66 +103,6 @@ class StyleStack {
 } // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                         Styled                          ║
-// ╚═════════════════════════════════════════════════════════╝
-
-/// @brief A wrapper for styling a value. Owns rvalue or references
-/// **const** lvalue.
-template <typename T, detail::outputable_style StyleT>
-struct Styled {
-    constexpr Styled(T value, StyleT style)
-        : value_(std::move(value)),
-          style_(style) {}
-
-    constexpr auto value() const -> const std::remove_const_t<T>& {
-        return value_;
-    }
-    constexpr auto style() const -> StyleT { return style_; }
-
-  private:
-    T value_;
-    StyleT style_;
-};
-
-template <typename T, detail::outputable_style StyleT>
-struct Styled<T&, StyleT> {
-    constexpr Styled(const T& value, StyleT style)
-        : value_(&value),
-          style_(style) {}
-
-    constexpr auto value() const -> const T& { return *value_; }
-    constexpr auto style() const -> StyleT { return style_; }
-
-  private:
-    const T* value_;
-    StyleT style_;
-};
-
-/// @brief create a `Styled` from rvalue
-template <typename T, detail::outputable_style StyleT>
-    requires(!std::is_lvalue_reference_v<T>)
-inline constexpr auto styled(T&& value, StyleT style) // NOLINT
-    -> Styled<std::remove_const_t<T>, StyleT> {
-    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), // NOLINT
-                                                  style);
-}
-
-/// @brief create a `Styled` from const lvalue
-template <typename T, detail::outputable_style StyleT>
-inline constexpr auto styled(const T& value, StyleT style)
-    -> Styled<const T&, StyleT> {
-    return Styled<const T&, StyleT>(value, style);
-}
-
-/// @brief output operator for Styled
-template <detail::ostream_outputable T, detail::outputable_style StyleT>
-inline auto operator<<(std::ostream& os, const Styled<T, StyleT>& styled)
-    -> std::ostream& {
-    os << styled.style() << styled.value() << reset;
-    return os;
-}
-
-// ╔═════════════════════════════════════════════════════════╗
 // ║                    StyleOutputState                     ║
 // ╚═════════════════════════════════════════════════════════╝
 
@@ -188,6 +117,22 @@ inline auto operator<<(std::ostream& os, const Styled<T, StyleT>& styled)
 template <typename Derived>
 class StyleOutputState { // NOLINT
   public:
+    template <typename T>
+    StyleOutputState(const StyleOutputState<T>& other)
+        : base_style_(other.base_style_),
+          stack_(other.stack_),
+          style_enabled_(other.style_enabled_),
+          context_enabled_(other.context_enabled_),
+          is_first_output_(other.is_first_output_) {}
+
+    template <typename T>
+    StyleOutputState(StyleOutputState<T>&& other) 
+        : base_style_(other.base_style_),
+          stack_(std::move(other.stack_)),
+          style_enabled_(other.style_enabled_),
+          context_enabled_(other.context_enabled_),
+          is_first_output_(other.is_first_output_) {}
+
     ~StyleOutputState() {
         if (detail::g_style_output_context == &context_)
             detail::g_style_output_context = nullptr;
@@ -196,13 +141,13 @@ class StyleOutputState { // NOLINT
     // ----- options -----
 
     /// @brief Enable or disable style output.
-    auto enable_style(bool enable) -> Derived& {
+    auto enable_style(bool enable = true) -> Derived& {
         style_enabled_ = enable;
         return static_cast<Derived&>(*this);
     }
 
     /// @brief Enable or disable context tracking.
-    auto enable_context(bool enable) -> Derived& {
+    auto enable_context(bool enable = true) -> Derived& {
         context_enabled_ = enable;
         return static_cast<Derived&>(*this);
     }
@@ -214,7 +159,7 @@ class StyleOutputState { // NOLINT
     }
 
     /// @brief Enable or disable style nesting.
-    auto enable_nesting(bool enable) -> Derived& {
+    auto enable_nesting(bool enable = true) -> Derived& {
         if (enable) stack_.to_multiple();
         else stack_.to_single();
         return static_cast<Derived&>(*this);
@@ -274,21 +219,42 @@ class StyleOutputState { // NOLINT
     }
 
     template <detail::outputable_style StyleT>
-    void output_style(StyleT style) {
+    void output_style(StyleT style) const {
         if (style_enabled_)
-            static_cast<Derived*>(this)->output_style_impl(style);
+            static_cast<const Derived*>(this)->output_style_impl(style);
     }
 
   private:
+    template <typename>
+    friend class StyleOutputState;
+
     friend Derived;
 
     StyleOutputState() = default;
+
+    template <typename T>
+    void copy_from(const StyleOutputState<T>& other) {
+        base_style_ = other.base_style_;
+        stack_ = other.stack_;
+        style_enabled_ = other.style_enabled_;
+        context_enabled_ = other.context_enabled_;
+        is_first_output_ = other.is_first_output_;
+    }
+
+    template <typename T>
+    auto move_from(StyleOutputState<T>&& other) -> StyleOutputState { // NOLINT
+        base_style_ = other.base_style_;
+        stack_ = std::move(other.stack_);
+        style_enabled_ = other.style_enabled_;
+        context_enabled_ = other.context_enabled_;
+        is_first_output_ = other.is_first_output_;
+    }
 
     AbsoluteStyle base_style_ = absolute(default_style);
     detail::StyleStack stack_;
 
     bool style_enabled_ = true;
-    bool context_enabled_ = false;
+    bool context_enabled_ = true;
 
     bool is_first_output_ = true;
     detail::style_output_context_t context_ {};
@@ -306,8 +272,10 @@ inline constexpr style_pop_t pop;
 class StyledOstream : public StyleOutputState<StyledOstream> {
   public:
     StyledOstream(std::ostream& os) : ostream_(&os) {}
-    StyledOstream(const StyleOutputState& state, std::ostream& os)
-        : StyleOutputState(state),
+
+    template <typename Derived>
+    StyledOstream(StyleOutputState<Derived> state, std::ostream& os)
+        : StyleOutputState(std::move(state)),
           ostream_(&os) {}
 
     /// @brief Output operator for any type that is outputable to
@@ -316,7 +284,7 @@ class StyledOstream : public StyleOutputState<StyledOstream> {
     /// @throws `std::logic_error` if `operator<<(std::ostream, T&&)` returns
     /// different ostream object.
     template <detail::ostream_outputable T>
-        requires(!detail::outputable_style<T>)
+        requires(!detail::outputable_style<T> && !detail::styled<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         out.ensure_context();
 
@@ -413,7 +381,7 @@ class StyledOstream : public StyleOutputState<StyledOstream> {
     std::ostream* ostream_;
 };
 
-/// @brief Same as `StyledOstream(os)`.
+/// @brief equivalent to `StyledOstream(os)`
 [[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream {
     return {os};
@@ -421,4 +389,4 @@ inline auto styled_out(std::ostream& os) -> StyledOstream {
 
 } // namespace deco
 
-#endif // !DECO_STYLED_HPP
+#endif // !DECO_STYLED_OUT_HPP

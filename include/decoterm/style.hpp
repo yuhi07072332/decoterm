@@ -41,6 +41,12 @@ concept outputable_style = requires(T style, char* out) {
     { style.to_escape(out) } -> std::same_as<char*>;
 };
 
+// Whether `T` has `operator<<(std::ostream&, const T&)`
+template <typename T>
+concept ostream_outputable = requires(std::ostream& os, const T& value) {
+    { os << value } -> std::same_as<std::ostream&>;
+};
+
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
     "30", "31", "32",
@@ -68,14 +74,14 @@ inline constexpr std::array<std::string_view, 8> SGR_PARAM_STYLE {
 // clang-format on
 
 template <std::output_iterator<const char&> OutputIt>
-inline constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
+constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
     for (auto c : sv)
         *out++ = c;
     return out;
 }
 
 template <std::output_iterator<const char&> OutputIt>
-inline constexpr auto convert_to(OutputIt out, uint8_t value) {
+constexpr auto convert_to(OutputIt out, uint8_t value) {
     std::array<char, 3> buf {};
     auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
     assert(ec == std::errc {});
@@ -86,7 +92,7 @@ inline constexpr auto convert_to(OutputIt out, uint8_t value) {
 }
 
 template <std::output_iterator<const char&> OutputIt>
-inline constexpr auto
+constexpr auto
 color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
     -> OutputIt {
     switch (type) {
@@ -205,13 +211,13 @@ struct Color {
 };
 
 /// @brief Create a color by RGB
-inline constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
+constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
     return Color(r, g, b);
 }
 
 /// @brief Create a color by 0xRRGGBB
 /// @pre rgb <= 0xFFFFFF
-inline constexpr auto rgb(uint32_t hex) -> Color {
+constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
     if (hex > 0xffffff) 
         throw std::invalid_argument("deco::rgb(): rgb > 0xffffff");
@@ -226,20 +232,21 @@ inline constexpr auto rgb(uint32_t hex) -> Color {
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
 [[nodiscard]]
-inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v)  // NOLINT
+inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     -> Color {
-    // clang-format off NOLINTBEGIN
+    // clang-format off
+
     if (h < 0 || h >= 360) throw std::invalid_argument(
         "deco::hsv(): h is not in range [0, 360)");
 
-    float hp = h / 60.f;
-    float sp = s / 255.0f;
-    float vp = v / 255.0f;
+    float hp = h / 60.f;                               // NOLINT
+    float sp = s / 255.0f;                             // NOLINT
+    float vp = v / 255.0f;                             // NOLINT
 
     float f = hp - std::floor(hp);
-    uint8_t p = std::round(vp * (1 - sp) * 255);
-    uint8_t q = std::round(vp * (1 - (f * sp)) * 255);
-    uint8_t t = std::round(vp * (1 - ((1 - f) * sp)) * 255);
+    uint8_t p = std::round(vp * (1 - sp) * 255);             // NOLINT
+    uint8_t q = std::round(vp * (1 - (f * sp)) * 255);       // NOLINT
+    uint8_t t = std::round(vp * (1 - ((1 - f) * sp)) * 255); // NOLINT
 
     switch (h / 60) {
         case 0 : return Color(v, t, p);
@@ -250,7 +257,8 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v)  // NOLIN
         case 5 : return Color(v, p, q);
         default: assert(false);
     }
-    // clang-format on NOLINTEND
+
+    // clang-format on 
 }
 
 namespace colors {
@@ -510,27 +518,23 @@ struct AbsoluteStyle {
     }
 };
 
-/* ----- helper functions ----- */
-
 /// @brief create an AbsoluteStyle from a Style
-inline constexpr auto absolute(Style style) -> AbsoluteStyle {
+constexpr auto absolute(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
 /// @brief create a Style with foreground and background colors
-inline constexpr auto color(Color fg, Color bg) -> Style {
+constexpr auto color(Color fg, Color bg) -> Style {
     return {Style::None, fg, bg};
 }
 
 /// @brief create a Style with foreground color
-inline constexpr auto fg(Color fg) -> Style { return {Style::None, fg}; }
+constexpr auto fg(Color fg) -> Style { return {Style::None, fg}; }
 
 /// @brief create a Style with background color
-inline constexpr auto bg(Color bg) -> Style {
+constexpr auto bg(Color bg) -> Style {
     return {Style::None, null_color, bg};
 }
-
-/* ----- ostream operators ----- */
 
 /// @brief output operator for Style types e.g. Style, AbsoluteStyle
 template <detail::outputable_style StyleT>
@@ -560,6 +564,66 @@ inline constexpr Style strikethrough     = Style(Style::Strikethrough);
 inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
 // clang-format on
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                         Styled                          ║
+// ╚═════════════════════════════════════════════════════════╝
+
+/// @brief A wrapper for styling a value. Owns rvalue or references
+/// **const** lvalue.
+template <typename T, detail::outputable_style StyleT>
+struct Styled {
+    constexpr Styled(T value, StyleT style)
+        : value_(std::move(value)),
+          style_(style) {}
+
+    constexpr auto value() const -> const std::remove_const_t<T>& {
+        return value_;
+    }
+    constexpr auto style() const -> StyleT { return style_; }
+
+  private:
+    T value_;
+    StyleT style_;
+};
+
+template <typename T, detail::outputable_style StyleT>
+struct Styled<T&, StyleT> {
+    constexpr Styled(const T& value, StyleT style)
+        : value_(&value),
+          style_(style) {}
+
+    constexpr auto value() const -> const T& { return *value_; }
+    constexpr auto style() const -> StyleT { return style_; }
+
+  private:
+    const T* value_;
+    StyleT style_;
+};
+
+/// @brief create a `Styled` from rvalue reference
+template <typename T, detail::outputable_style StyleT>
+    requires(!std::is_lvalue_reference_v<T>)
+constexpr auto styled(T&& value, StyleT style) // NOLINT
+    -> Styled<std::remove_const_t<T>, StyleT> {
+    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), // NOLINT
+                                                  style);
+}
+
+/// @brief create a `Styled` from const lvalue reference
+template <typename T, detail::outputable_style StyleT>
+constexpr auto styled(const T& value, StyleT style)
+    -> Styled<const T&, StyleT> {
+    return Styled<const T&, StyleT>(value, style);
+}
+
+/// @brief output operator for Styled
+template <detail::ostream_outputable T, detail::outputable_style StyleT>
+inline auto operator<<(std::ostream& os, const Styled<T, StyleT>& styled)
+    -> std::ostream& {
+    os << styled.style() << styled.value() << reset;
+    return os;
+}
 
 } // namespace deco
 

@@ -13,7 +13,7 @@ include("${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake")
 add_executable(decoterm_test
     test_color.cpp
     test_style.cpp
-    test_styled.cpp
+    test_styled_out.cpp
 )
 
 target_link_libraries(decoterm_test

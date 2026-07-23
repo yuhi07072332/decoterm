@@ -8,7 +8,7 @@
 #ifndef DECO_TERMINAL_HPP
 #define DECO_TERMINAL_HPP
 
-#include "styled.hpp"
+#include "styled_out.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -125,10 +125,10 @@ inline auto color_support() -> ColorSupport {
 //  - enable context tracking if the ostream is stdout or stderr
 [[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream {
-    StyledOstream sout = deco::styled_out(os)
-                             .enable_style(detail::is_ostream_stdout(os))
-                             .enable_context(detail::is_ostream_stdout(os)
-                                             || detail::is_ostream_stderr(os));
+    auto sout = deco::styled_out(os)
+                    .enable_style(detail::is_ostream_stdout(os))
+                    .enable_context(detail::is_ostream_stdout(os)
+                                    || detail::is_ostream_stderr(os));
     return sout;
 }
 

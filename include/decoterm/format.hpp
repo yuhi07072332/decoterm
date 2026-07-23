@@ -9,7 +9,6 @@
 #define DECO_FORMATTER_HPP
 
 #include "style.hpp"
-#include "styled.hpp"
 
 #include <format>
 

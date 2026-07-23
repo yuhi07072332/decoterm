@@ -3,6 +3,7 @@ Checks: "
         -*,
         bugprone-*,
         -bugprone-std-namespace-modification,
+        -bugprone-exception-escape,
 
         clang-analyzer-*,
 
@@ -32,6 +33,8 @@ Checks: "
 
         portability-*,
 "
+CheckOptions:
+   cppcoreguidelines-rvalue-reference-param-not-moved.AllowPartialMove: true
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
 FormatStyle: none
