@@ -10,6 +10,8 @@
 #include <string>
 #include <string_view>
 
+// NOLINTBEGIN
+
 namespace {
 
 auto esc(std::string_view params) -> std::string {
@@ -129,3 +131,4 @@ TEST_CASE("Color: hsv helper") {
     CHECK_THROWS_AS(static_cast<void>(hsv(360, 255, 255)), std::invalid_argument);
 }
 
+// NOLINTEND

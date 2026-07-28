@@ -73,10 +73,10 @@ auto main() -> int {
     std::println("6 x 6 x 6 color cube [16, 231]:\n");
     for (int i = 0; i < 2; ++i) {
         for (int row = 0; row < 6; ++row) {
-            for (int surface = i * 3; surface < i * 3 + 3; ++surface) {
+            for (int surface = i * 3; surface < (i * 3) + 3; ++surface) {
                 for (int col = 0; col < 6; ++col) {
-                    int abs_col = 16 + surface * 6 + col;
-                    print_color_cell(row * 36 + abs_col, abs_col < 34);
+                    int abs_col = 16 + (surface * 6) + col;
+                    print_color_cell((row * 36) + abs_col, abs_col < 34);
                 }
                 std::print("  ");
             }

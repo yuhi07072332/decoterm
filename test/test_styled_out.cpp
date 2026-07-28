@@ -2,15 +2,18 @@
 #include <decoterm/styled_out.hpp>
 #include <doctest.h>
 
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <type_traits>
 
+// NOLINTBEGIN
+
 namespace {
 
-struct TestStyleOutputState : public deco::StyleOutputState<TestStyleOutputState> {
+struct TestStyleOutputState
+    : public deco::StyleOutputState<TestStyleOutputState> {
     using deco::StyleOutputState<TestStyleOutputState>::pop_style;
     using deco::StyleOutputState<TestStyleOutputState>::push_style;
     using deco::StyleOutputState<TestStyleOutputState>::reset_style;
@@ -29,14 +32,15 @@ struct Value {
     int value = 128;
 };
 
-auto operator<<(std::ostream& os, Value value) -> std::ostream& {   //NOLINT
+auto operator<<(std::ostream& os, Value value) -> std::ostream& { // NOLINT
     os << value.value;
     return os;
 }
 
 struct return_dirrerent_ostream_t {};
 
-auto operator<<(std::ostream& os, return_dirrerent_ostream_t) -> std::ostream& {   //NOLINT
+auto operator<<(std::ostream& os, return_dirrerent_ostream_t)
+    -> std::ostream& { // NOLINT
     return std::cerr;
 }
 
@@ -51,11 +55,10 @@ TEST_CASE("styled: styled(): own rvalues") {
     using namespace deco;
 
     auto sint = styled(45, bold);
-    auto sValue = styled(Value{60}, italic | strikethrough);
+    auto sValue = styled(Value {60}, italic | strikethrough);
 
     static_assert(std::is_same_v<decltype(sint.value()), const int&>);
-    static_assert(
-        std::is_same_v<decltype(sint.value()), const int&>);
+    static_assert(std::is_same_v<decltype(sint.value()), const int&>);
 
     CHECK(sint.value() == 45);
     CHECK(sint.style() == bold);
@@ -80,12 +83,11 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
     using namespace deco;
 
     std::ostringstream os;
-    Value value{64};
+    Value value {64};
     auto owned = styled(Value {64}, bold);
     auto reference = styled(value, bold);
 
-    os << styled(Value {32}, bold) << ' ' << owned << ' '
-       << reference;
+    os << styled(Value {32}, bold) << ' ' << owned << ' ' << reference;
 
     CHECK(os.str()
           == bold.to_escape() + std::string("32")
@@ -96,10 +98,9 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
                  + absolute(default_style).to_escape());
 }
 
-
 TEST_CASE("styled: StyleOutputState: copy from other type") {
     using namespace deco;
-    
+
     auto styled_os = styled_out(std::cout)
                          .enable_style(false)
                          .enable_context(false)
@@ -122,7 +123,7 @@ TEST_CASE("styled: StyleOutputState: options") {
     StyledOstream state(std::cout);
 
     CHECK(state.style_enabled());
-    CHECK(state.context_enabled());
+    CHECK_FALSE(state.context_enabled());
     CHECK_FALSE(state.nesting_enabled());
     CHECK(state.base_style() == default_style);
     CHECK(state.current_style().style == default_style);
@@ -197,7 +198,6 @@ TEST_CASE("styled: StyleOutputState: nested style state") {
     CHECK(state.current_style().style == fg(blue));
 }
 
-
 TEST_CASE("styled: StyledOstream: write plain values") {
     using namespace deco;
 
@@ -209,7 +209,8 @@ TEST_CASE("styled: StyledOstream: write plain values") {
 
     styled_os << "value=" << 42 << ' ' << d;
 
-    CHECK(os.str() == absolute(default_style).to_escape() + std::string("value=42 1.5"));
+    CHECK(os.str()
+          == absolute(default_style).to_escape() + std::string("value=42 1.5"));
 }
 
 TEST_CASE("styled: StyledOstream: call IO manipulator") {
@@ -233,26 +234,28 @@ TEST_CASE("styled: StyledOstream: call IO manipulator") {
               << std::flush << std::ends;
 
     expected << std::boolalpha << true << ' ' << std::noboolalpha << false
-             << ' ' << std::showbase << std::hex << 42 << ' '
-             << std::noshowbase << std::dec << 42 << ' ' << std::uppercase
-             << std::scientific << std::setprecision(3) << 1.5 << ' '
-             << std::nouppercase << std::fixed << std::setprecision(2) << 1.5
-             << ' ' << std::defaultfloat << std::showpos << 7 << ' '
-             << std::noshowpos << std::showpoint << 2.0 << ' '
-             << std::noshowpoint << std::setfill('.') << std::left
-             << std::setw(5) << 12 << ' ' << std::right << std::setw(5) << 12
-             << ' ' << std::internal << std::showpos << std::setw(5) << 12
-             << std::noshowpos << ' ' << set_width_4 << 9 << std::endl
+             << ' ' << std::showbase << std::hex << 42 << ' ' << std::noshowbase
+             << std::dec << 42 << ' ' << std::uppercase << std::scientific
+             << std::setprecision(3) << 1.5 << ' ' << std::nouppercase
+             << std::fixed << std::setprecision(2) << 1.5 << ' '
+             << std::defaultfloat << std::showpos << 7 << ' ' << std::noshowpos
+             << std::showpoint << 2.0 << ' ' << std::noshowpoint
+             << std::setfill('.') << std::left << std::setw(5) << 12 << ' '
+             << std::right << std::setw(5) << 12 << ' ' << std::internal
+             << std::showpos << std::setw(5) << 12 << std::noshowpos << ' '
+             << set_width_4 << 9 << std::endl
              << std::flush << std::ends;
 
     CHECK(os.str() == absolute(default_style).to_escape() + expected.str());
 }
 
-TEST_CASE("styled: StyledOstream: throws if output operator returns different ostream object") {
+TEST_CASE("styled: StyledOstream: throws if output operator returns different "
+          "ostream object") {
     using namespace deco;
 
     StyledOstream styled_os(std::cout);
-    CHECK_THROWS_AS(styled_os << return_dirrerent_ostream_t{}, std::logic_error);
+    CHECK_THROWS_AS(styled_os << return_dirrerent_ostream_t {},
+                    std::logic_error);
 }
 
 TEST_CASE("styled: StyledOstream: write styles") {
@@ -263,7 +266,8 @@ TEST_CASE("styled: StyledOstream: write styles") {
 
     styled_os << fg(red) << "error" << reset;
 
-    CHECK(os.str() == absolute(default_style).to_escape() + fg(red).to_escape()
+    CHECK(os.str()
+          == absolute(default_style).to_escape() + fg(red).to_escape()
                  + std::string("error") + absolute(default_style).to_escape());
 }
 
@@ -288,7 +292,7 @@ TEST_CASE("styled: StyledOstream: restores nested styles") {
     styled_os.base_style(fg(blue)).enable_nesting(true);
 
     styled_os << bold << "bold" << fg(red) << "red bold" << pop << "blue bold"
-              << pop << "blue" ;
+              << pop << "blue";
 
     CHECK(os.str()
           == absolute(fg(blue)).to_escape() + bold.to_escape()
@@ -319,8 +323,8 @@ TEST_CASE("styled: StyledOstream: context tracking") {
 
     std::ostringstream os1;
     std::ostringstream os2;
-    auto out1 = styled_out(os1).base_style(fg(blue));
-    auto out2 = styled_out(os2).base_style(fg(red));
+    auto out1 = styled_out(os1).base_style(fg(blue)).enable_context();
+    auto out2 = styled_out(os2).base_style(fg(red)).enable_context();
 
     out1 << "a" << "b";
     out2 << "c";
@@ -332,10 +336,10 @@ TEST_CASE("styled: StyledOstream: context tracking") {
                  + bold.to_escape() + std::string("e")
                  + absolute(fg(blue)).to_escape() + std::string("f"));
     CHECK(os2.str() == absolute(fg(red)).to_escape() + std::string("c"));
-
 }
 
-TEST_CASE("styled: StyledOstream: only output base style first time if context tracking is off") {
+TEST_CASE("styled: StyledOstream: only output base style first time if context "
+          "tracking is off") {
     using namespace deco;
 
     std::ostringstream os;
@@ -348,5 +352,6 @@ TEST_CASE("styled: StyledOstream: only output base style first time if context t
                  + bold.to_escape() + std::string("c")
                  + absolute(fg(blue)).to_escape() + std::string("d")
                  + absolute(fg(blue)).to_escape() + std::string("e"));
-
 }
+
+// NOLINTEND

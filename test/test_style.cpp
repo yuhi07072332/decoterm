@@ -7,6 +7,8 @@
 #include <string>
 #include <string_view>
 
+// NOLINTBEGIN
+
 namespace {
 
 auto esc(std::string_view params) -> std::string {
@@ -74,3 +76,5 @@ TEST_CASE("Style: AbsoluteStyle::to_escape") {
     CHECK(absolute(default_style).to_escape() == "\x1b[m");
     CHECK(absolute(bold).to_escape() == "\x1b[;1m");
 }
+
+// NOLINTEND

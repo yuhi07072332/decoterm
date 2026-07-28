@@ -32,9 +32,10 @@ namespace deco {
 struct Style;
 
 enum class ColorType : uint8_t { Null = 0, Default, AnsiColor, TrueColor };
-using ColorData = std::array<uint8_t, 3>;
 
 namespace detail {
+
+using ColorData = std::array<uint8_t, 3>;
 
 template <typename T>
 concept outputable_style = requires(T style, char* out) {
@@ -136,7 +137,7 @@ color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
 // ║                          Color                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A class representing a terminal color.
+/// @brief A struct representing a terminal color.
 struct Color {
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE = 19;
 
@@ -150,8 +151,8 @@ struct Color {
         return Color(ColorType::Null, {0, 0, 0});
     }
 
-    /// @brief Create a color from index [0, 255]
-    constexpr explicit Color(uint8_t index)
+    /// @brief Create a color implicitly from index [0, 255]
+    constexpr Color(uint8_t index)
         : type_(ColorType::AnsiColor),
           data_({index, 0, 0}) {}
 
@@ -202,12 +203,12 @@ struct Color {
   private:
     friend struct Style;
 
-    constexpr Color(ColorType type, ColorData data)
+    constexpr Color(ColorType type, detail::ColorData data)
         : type_(type),
           data_(data) {}
 
     ColorType type_;
-    ColorData data_;
+    detail::ColorData data_;
 };
 
 /// @brief Create a color by RGB
@@ -318,7 +319,7 @@ inline constexpr Color bright_white    = Color(colors::BrightWhite);
 struct style_reset_t {};
 inline constexpr style_reset_t reset;
 
-/// @brief A class representing a terminal style.
+/// @brief A struct representing a terminal style.
 struct Style {
     // clang-format off
     enum Flags : uint8_t {      //NOLINT
@@ -478,8 +479,8 @@ struct Style {
         return bg_type() == ColorType::Null;
     }
 
-    ColorData fg_data_ = {0, 0, 0};
-    ColorData bg_data_ = {0, 0, 0};
+    detail::ColorData fg_data_ = {0, 0, 0};
+    detail::ColorData bg_data_ = {0, 0, 0};
 
     // bit-packed color types for fg and bg.
     // fg uses upper 4 bits and bg uses lower 4 bits.

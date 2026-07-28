@@ -121,14 +121,13 @@ inline auto color_support() -> ColorSupport {
 }
 
 /// @brief Same as `deco::styled_out()` but with automatic configuration
-//  - enable style output if the ostream is stdout or stderr
-//  - enable context tracking if the ostream is stdout or stderr
 [[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream {
+    bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty()) 
+        || (detail::is_ostream_stderr(os) && is_stderr_tty());
     auto sout = deco::styled_out(os)
-                    .enable_style(detail::is_ostream_stdout(os))
-                    .enable_context(detail::is_ostream_stdout(os)
-                                    || detail::is_ostream_stderr(os));
+                    .enable_style(is_tty)
+                    .enable_context(is_tty);
     return sout;
 }
 

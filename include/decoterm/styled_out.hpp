@@ -60,10 +60,7 @@ class StyleStack {
         return single_;
     }
 
-    [[nodiscard]]
-    auto is_multiple() const -> bool {
-        return is_multiple_;
-    }
+    auto is_multiple() const -> bool { return is_multiple_; }
 
     void push(AbsoluteStyle style) {
         if (is_multiple_) multiple_.push_back(style);
@@ -220,8 +217,7 @@ class StyleOutputState { // NOLINT
 
     template <detail::outputable_style StyleT>
     void output_style(StyleT style) const {
-        if (style_enabled_)
-            static_cast<const Derived*>(this)->output_style_impl(style);
+        static_cast<const Derived*>(this)->output_style_impl(style);
     }
 
   private:
@@ -254,7 +250,7 @@ class StyleOutputState { // NOLINT
     detail::StyleStack stack_;
 
     bool style_enabled_ = true;
-    bool context_enabled_ = true;
+    bool context_enabled_ = false;
 
     bool is_first_output_ = true;
     detail::style_output_context_t context_ {};
@@ -375,7 +371,7 @@ class StyledOstream : public StyleOutputState<StyledOstream> {
 
     template <detail::outputable_style StyleT>
     void output_style_impl(StyleT style) const {
-        *ostream_ << style;
+        if (style_enabled()) *ostream_ << style;
     }
 
     std::ostream* ostream_;
