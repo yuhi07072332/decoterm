@@ -82,12 +82,11 @@ constexpr auto write_to(OutputIt out, std::string_view sv) -> OutputIt {
 }
 
 template <std::output_iterator<const char&> OutputIt>
-constexpr auto convert_to(OutputIt out, uint8_t value) {
+constexpr auto write_to(OutputIt out, uint8_t value) {
     std::array<char, 3> buf {};
-    auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
+    const auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + 3, value);
     assert(ec == std::errc {});
-    auto len = ptr - buf.data();
-    for (int i = 0; i < len; ++i)
+    for (int i = 0; i < ptr - buf.data(); ++i)
         *out++ = buf[i];
     return out;
 }
@@ -111,18 +110,18 @@ color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
                            is_bg ? SGR_PARAM_BG[index] : SGR_PARAM_FG[index]);
         } else {
             out = write_to(out, is_bg ? "48;5;" : "38;5;");
-            out = convert_to(out, index);
+            out = write_to(out, index);
         }
         return out;
     }
     case ColorType::TrueColor: {
         auto [r, g, b] = data;
         out = write_to(out, is_bg ? "48;2;" : "38;2;");
-        out = convert_to(out, r);
+        out = write_to(out, r);
         *out++ = ';';
-        out = convert_to(out, g);
+        out = write_to(out, g);
         *out++ = ';';
-        out = convert_to(out, b);
+        out = write_to(out, b);
         return out;
     }
     default:
@@ -591,14 +590,14 @@ struct Styled {
 template <typename T, detail::outputable_style StyleT>
 struct Styled<T&, StyleT> {
     constexpr Styled(const T& value, StyleT style)
-        : value_(&value),
+        : value_(value),
           style_(style) {}
 
     constexpr auto value() const -> const T& { return *value_; }
     constexpr auto style() const -> StyleT { return style_; }
 
   private:
-    const T* value_;
+    const T& value_;        // NOLINT
     StyleT style_;
 };
 
