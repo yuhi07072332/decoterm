@@ -9,15 +9,26 @@
 #define DECO_FORMATTER_HPP
 
 #include "style.hpp"
+#include "styled_out.hpp"
 
 #include <format>
+#include <iterator>
+#include <version>
 
 #if __cplusplus < 202302L
 #include <type_traits>
 #endif
 
-namespace deco::detail {
+#if defined(__cpp_lib_print) && __cpp_lib_print >= 202403L
+#define DECO_ENABLE_PRINT 1 // NOLINT
+#include <print>
+#else
+#define DECO_ENABLE_PRINT 0
+#endif
 
+namespace deco {
+
+namespace detail {
 #if __cplusplus >= 202302L
 template <typename Arg, typename CharT = char>
 concept formattable = std::formattable<Arg, CharT>;
@@ -38,10 +49,47 @@ concept formattable =
         } -> std::same_as<typename decltype(fmt_ctx)::iterator>;
     };
 #endif
-} // namespace deco::detail
+} // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                       formatters                        ║
+// ║                      StyledFormat                       ║
+// ╚═════════════════════════════════════════════════════════╝
+
+class StyledFormat : StyleOutputState<StyledFormat> {
+  public:
+    template <std::output_iterator<const char&> OutputIt>
+    auto vformat_to(OutputIt out, std::string_view fmt, std::format_args args) -> OutputIt {
+    }
+
+    template <typename... Args>
+    [[nodiscard]]
+    auto format(std::format_string<Args...> fmt, Args&&... args)
+        -> std::string {
+        return std::vformat(fmt.get(), std::make_format_args(args...));
+    }
+
+    template <typename... Args>
+    [[nodiscard]]
+    auto format(detail::outputable_style auto style,
+                std::format_string<Args...> fmt,
+                Args&&... args) -> std::string {
+        std::string buf;
+        auto out = std::back_inserter(buf);
+        out = std::vformat_to(out, fmt.get(), std::make_format_args(style));
+        out = std::vformat_to(out, fmt.get(), std::make_format_args(args...));
+        return buf;
+    }
+private:
+    friend class StyleOutputState<StyledFormat>;
+
+    void output_style_impl(detail::outputable_style auto style) const {
+    }
+};
+
+}; // namespace deco
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       Formatters                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
 namespace std {
@@ -80,7 +128,7 @@ struct formatter<deco::Styled<T, StyleT>> {
     auto format(const deco::Styled<T, StyleT> styled,
                 std::format_context& ctx) const {
         ctx.advance_to(styled.style().to_escape(ctx.out()));
-        return formatter<deco::style_reset_t>{}.format(deco::reset, ctx);
+        return formatter<deco::style_reset_t> {}.format(deco::reset, ctx);
     }
 };
 

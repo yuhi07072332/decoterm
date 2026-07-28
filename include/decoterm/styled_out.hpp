@@ -369,8 +369,7 @@ class StyledOstream : public StyleOutputState<StyledOstream> {
   private:
     friend class StyleOutputState<StyledOstream>;
 
-    template <detail::outputable_style StyleT>
-    void output_style_impl(StyleT style) const {
+    void output_style_impl(detail::outputable_style auto style) const {
         if (style_enabled()) *ostream_ << style;
     }
 
