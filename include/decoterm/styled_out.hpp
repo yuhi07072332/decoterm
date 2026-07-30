@@ -228,24 +228,6 @@ class StyleOutputState { // NOLINT
 
     StyleOutputState() = default;
 
-    template <typename T>
-    void copy_from(const StyleOutputState<T>& other) {
-        base_style_ = other.base_style_;
-        stack_ = other.stack_;
-        style_enabled_ = other.style_enabled_;
-        context_enabled_ = other.context_enabled_;
-        is_first_output_ = other.is_first_output_;
-    }
-
-    template <typename T>
-    auto move_from(StyleOutputState<T>&& other) -> StyleOutputState { // NOLINT
-        base_style_ = other.base_style_;
-        stack_ = std::move(other.stack_);
-        style_enabled_ = other.style_enabled_;
-        context_enabled_ = other.context_enabled_;
-        is_first_output_ = other.is_first_output_;
-    }
-
     AbsoluteStyle base_style_ = absolute(default_style);
     detail::StyleStack stack_;
 
@@ -369,8 +351,11 @@ class StyledOstream : public StyleOutputState<StyledOstream> {
   private:
     friend class StyleOutputState<StyledOstream>;
 
-    template <detail::outputable_style StyleT>
-    void output_style_impl(StyleT style) const {
+    void ensure_context() const {
+        
+    }
+
+    void output_style_impl(detail::outputable_style auto style) const {
         if (style_enabled()) *ostream_ << style;
     }
 
