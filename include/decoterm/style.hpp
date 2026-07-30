@@ -593,7 +593,7 @@ struct Styled<T&, StyleT> {
         : value_(value),
           style_(style) {}
 
-    constexpr auto value() const -> const T& { return *value_; }
+    constexpr auto value() const -> const T& { return value_; }
     constexpr auto style() const -> StyleT { return style_; }
 
   private:
