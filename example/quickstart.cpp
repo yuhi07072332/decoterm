@@ -27,8 +27,8 @@ auto main() -> int {
 
     // -- 2. Advanced stateful output
 
-    StyledOstream sout = styled_out(std::cout)
-        .base_style(bg(rgb(32, 32, 32)))
+    StyledOstream sout = styled_ostream(std::cout)
+        .set_base_style(bg(rgb(32, 32, 32)))
         .enable_style(terminal::is_stdout_tty()) // disable style output when stdout is not a tty
         .enable_nesting(true);
 
