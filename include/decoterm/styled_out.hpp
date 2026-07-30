@@ -253,7 +253,7 @@ class StyledOstream : public StyleState,
     /// @throws `std::logic_error` if `operator<<(std::ostream, T&&)` returns
     /// different ostream object.
     template <detail::ostream_outputable T>
-        requires(!detail::outputable_style<T> && !detail::styled<T>)
+        requires(!detail::style<T> && !detail::styled<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         out.ensure_context();
 
@@ -266,7 +266,7 @@ class StyledOstream : public StyleState,
     }
 
     /// @brief output operator for Style types
-    template <detail::outputable_style StyleT>
+    template <detail::style StyleT>
     friend auto operator<<(StyledOstream& out, StyleT style) -> StyledOstream& {
         out.ensure_context();
 
@@ -294,7 +294,7 @@ class StyledOstream : public StyleState,
     }
 
     /// @brief output operator for `Styled`
-    template <detail::ostream_outputable T, detail::outputable_style StyleT>
+    template <detail::ostream_outputable T, detail::style StyleT>
     friend auto operator<<(StyledOstream& out, const Styled<T, StyleT>& styled)
         -> StyledOstream& {
         out.ensure_context();
@@ -344,7 +344,7 @@ class StyledOstream : public StyleState,
         if (auto style = update_context()) output_style(*style);
     }
 
-    void output_style(detail::outputable_style auto style) const {
+    void output_style(detail::style auto style) const {
         if (style_enabled()) *ostream_ << style;
     }
 

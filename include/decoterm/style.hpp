@@ -38,8 +38,11 @@ namespace detail {
 using ColorData = std::array<uint8_t, 3>;
 
 template <typename T>
-concept outputable_style = requires(T style, char* out) {
+concept style = requires(T style, char* out) {
     { style.to_escape(out) } -> std::same_as<char*>;
+    { style.operator==(style) } -> std::same_as<bool>;
+    { style.operator!=(style) } -> std::same_as<bool>;
+    { style.empty() } -> std::same_as<bool>;
 };
 
 // Whether `T` has `operator<<(std::ostream&, const T&)`
@@ -501,6 +504,8 @@ struct AbsoluteStyle {
     constexpr auto operator==(const AbsoluteStyle&) const -> bool = default;
     constexpr auto operator!=(const AbsoluteStyle&) const -> bool = default;
 
+    constexpr auto empty() const -> bool { return style.empty(); }
+
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
@@ -537,7 +542,7 @@ constexpr auto bg(Color bg) -> Style {
 }
 
 /// @brief output operator for Style types e.g. Style, AbsoluteStyle
-template <detail::outputable_style StyleT>
+template <detail::style StyleT>
 inline auto operator<<(std::ostream& os, StyleT style) -> std::ostream& {
     style.to_escape(std::ostreambuf_iterator(os));
     return os;
@@ -571,7 +576,7 @@ inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 
 /// @brief A wrapper for styling a value. Owns rvalue or references
 /// **const** lvalue.
-template <typename T, detail::outputable_style StyleT>
+template <typename T, detail::style StyleT>
 struct Styled {
     constexpr Styled(T value, StyleT style)
         : value_(std::move(value)),
@@ -587,7 +592,7 @@ struct Styled {
     StyleT style_;
 };
 
-template <typename T, detail::outputable_style StyleT>
+template <typename T, detail::style StyleT>
 struct Styled<T&, StyleT> {
     constexpr Styled(const T& value, StyleT style)
         : value_(value),
@@ -602,7 +607,7 @@ struct Styled<T&, StyleT> {
 };
 
 /// @brief create a `Styled` from rvalue reference
-template <typename T, detail::outputable_style StyleT>
+template <typename T, detail::style StyleT>
     requires(!std::is_lvalue_reference_v<T>)
 constexpr auto styled(T&& value, StyleT style) // NOLINT
     -> Styled<std::remove_const_t<T>, StyleT> {
@@ -611,14 +616,14 @@ constexpr auto styled(T&& value, StyleT style) // NOLINT
 }
 
 /// @brief create a `Styled` from const lvalue reference
-template <typename T, detail::outputable_style StyleT>
+template <typename T, detail::style StyleT>
 constexpr auto styled(const T& value, StyleT style)
     -> Styled<const T&, StyleT> {
     return Styled<const T&, StyleT>(value, style);
 }
 
 /// @brief output operator for Styled
-template <detail::ostream_outputable T, detail::outputable_style StyleT>
+template <detail::ostream_outputable T, detail::style StyleT>
 inline auto operator<<(std::ostream& os, const Styled<T, StyleT>& styled)
     -> std::ostream& {
     os << styled.style() << styled.value() << reset;
