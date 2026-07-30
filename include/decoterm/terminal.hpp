@@ -78,7 +78,7 @@ inline auto is_ostream_stdout(const std::ostream& os) -> bool {
 }
 
 inline auto is_ostream_stderr(const std::ostream& os) -> bool {
-    return &os == &std::cerr || &os == &std::clog;
+    return (&os == &std::cerr) || (&os == &std::clog);
 }
 
 #if defined(_WIN32)
@@ -123,12 +123,9 @@ inline auto color_support() -> ColorSupport {
 /// @brief Same as `deco::styled_out()` but with automatic configuration
 [[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream {
-    bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty()) 
-        || (detail::is_ostream_stderr(os) && is_stderr_tty());
-    auto sout = deco::styled_ostream(os)
-                    .enable_style(is_tty)
-                    .enable_context(is_tty);
-    return sout;
+    bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
+                  || (detail::is_ostream_stderr(os) && is_stderr_tty());
+    return deco::styled_ostream(os).enable_style(is_tty).enable_context(is_tty);
 }
 
 }; // namespace terminal

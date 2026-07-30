@@ -55,7 +55,7 @@ concept formattable =
 // ║                      StyledFormat                       ║
 // ╚═════════════════════════════════════════════════════════╝
 
-class StyledFormat : StyleOutputState<StyledFormat> {
+class StyledFormat : StyleState, StyleStateOption<StyledFormat> {
   public:
     template <std::output_iterator<const char&> OutputIt>
     auto vformat_to(OutputIt out, std::string_view fmt, std::format_args args) -> OutputIt {
@@ -80,9 +80,8 @@ class StyledFormat : StyleOutputState<StyledFormat> {
         return buf;
     }
 private:
-    friend class StyleOutputState<StyledFormat>;
-
-    void output_style_impl(detail::outputable_style auto style) const {
+    void ensure_context() {
+        
     }
 };
 
