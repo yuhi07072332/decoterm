@@ -13,19 +13,14 @@
 namespace {
 
 struct TestStyleOutputState
-    : public deco::StyleOutputState<TestStyleOutputState> {
-    using deco::StyleOutputState<TestStyleOutputState>::pop_style;
-    using deco::StyleOutputState<TestStyleOutputState>::push_style;
-    using deco::StyleOutputState<TestStyleOutputState>::reset_style;
+    : public deco::StyleState 
+    , public deco::StyleStateOption<TestStyleOutputState>{
+    using deco::StyleState::pop_style;
+    using deco::StyleState::push_style;
+    using deco::StyleState::reset_style;
 
-    TestStyleOutputState() = default;
-
-    template <typename Derived>
-    TestStyleOutputState(StyleOutputState<Derived> state)
-        : StyleOutputState(std::move(state)) {}
-
-    template <deco::detail::outputable_style StyleT>
-    void output_style_impl(StyleT style) const {}
+    TestStyleOutputState()
+        : StyleStateOption(static_cast<deco::StyleState&>(*this)) {}
 };
 
 struct Value {
@@ -101,14 +96,14 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
 TEST_CASE("styled: StyleOutputState: copy from other type") {
     using namespace deco;
 
-    auto styled_os = styled_out(std::cout)
+    auto styled_os = styled_ostream(std::cout)
                          .enable_style(false)
                          .enable_context(false)
-                         .base_style(fg(blue))
+                         .set_base_style(fg(blue))
                          .enable_nesting(true);
     styled_os << bold;
 
-    TestStyleOutputState teststate(styled_os); // NOLINT
+    TestStyleOutputState teststate; // NOLINT
 
     CHECK_FALSE(teststate.style_enabled());
     CHECK_FALSE(teststate.context_enabled());
@@ -128,7 +123,7 @@ TEST_CASE("styled: StyleOutputState: options") {
     CHECK(state.base_style() == default_style);
     CHECK(state.current_style().style == default_style);
 
-    state.enable_style(false).enable_context(true).base_style(fg(blue));
+    state.enable_style(false).enable_context(true).set_base_style(fg(blue));
 
     CHECK_FALSE(state.style_enabled());
     CHECK(state.context_enabled());
@@ -148,7 +143,7 @@ TEST_CASE("styled: StyleOutputState: single style state") {
     using namespace deco;
 
     TestStyleOutputState state;
-    state.base_style(fg(blue));
+    state.set_base_style(fg(blue));
 
     state.push_style(bold);
     CHECK(state.current_style().style == (fg(blue) | bold));
@@ -170,7 +165,7 @@ TEST_CASE("styled: StyleOutputState: nested style state") {
     using namespace deco;
 
     TestStyleOutputState state;
-    state.base_style(fg(blue)).enable_nesting(true);
+    state.set_base_style(fg(blue)).enable_nesting(true);
 
     state.push_style(bold);
     CHECK(state.current_style().style == (fg(blue) | bold));
@@ -218,7 +213,8 @@ TEST_CASE("styled: StyledOstream: call IO manipulator") {
 
     std::ostringstream os;
     std::ostringstream expected;
-    StyledOstream styled_os = styled_out(os).enable_context(false);
+    StyledOstream styled_os = styled_ostream(os);
+    styled_os.enable_context(false);
 
     styled_os << std::boolalpha << true << ' ' << std::noboolalpha << false
               << ' ' << std::showbase << std::hex << 42 << ' '
@@ -288,8 +284,7 @@ TEST_CASE("styled: StyledOstream: restores nested styles") {
     using namespace deco;
 
     std::ostringstream os;
-    StyledOstream styled_os(os);
-    styled_os.base_style(fg(blue)).enable_nesting(true);
+    StyledOstream styled_os = styled_ostream(os).set_base_style(fg(blue)).enable_nesting(true);
 
     styled_os << bold << "bold" << fg(red) << "red bold" << pop << "blue bold"
               << pop << "blue";
@@ -307,8 +302,7 @@ TEST_CASE("styled: StyledOstream: reset returns to base style") {
     using namespace deco;
 
     std::ostringstream os;
-    StyledOstream styled_os(os);
-    styled_os.base_style(fg(blue)).enable_nesting(true);
+    StyledOstream styled_os = styled_ostream(os).set_base_style(fg(blue)).enable_nesting(true);
 
     styled_os << bold << "bold" << reset << "base";
 
@@ -323,8 +317,8 @@ TEST_CASE("styled: StyledOstream: context tracking") {
 
     std::ostringstream os1;
     std::ostringstream os2;
-    auto out1 = styled_out(os1).base_style(fg(blue)).enable_context();
-    auto out2 = styled_out(os2).base_style(fg(red)).enable_context();
+    auto out1 = styled_ostream(os1).set_base_style(fg(blue)).enable_context();
+    auto out2 = styled_ostream(os2).set_base_style(fg(red)).enable_context();
 
     out1 << "a" << "b";
     out2 << "c";
@@ -343,7 +337,7 @@ TEST_CASE("styled: StyledOstream: only output base style first time if context "
     using namespace deco;
 
     std::ostringstream os;
-    auto out = styled_out(os).base_style(fg(blue)).enable_context(false);
+    auto out = styled_ostream(os).set_base_style(fg(blue)).enable_context(false);
 
     out << "a" << "b" << bold << "c" << pop << "d" << reset << "e";
 

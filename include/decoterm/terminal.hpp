@@ -125,7 +125,7 @@ inline auto color_support() -> ColorSupport {
 inline auto styled_out(std::ostream& os) -> StyledOstream {
     bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty()) 
         || (detail::is_ostream_stderr(os) && is_stderr_tty());
-    auto sout = deco::styled_out(os)
+    auto sout = deco::styled_ostream(os)
                     .enable_style(is_tty)
                     .enable_context(is_tty);
     return sout;

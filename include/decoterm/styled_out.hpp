@@ -100,10 +100,10 @@ class StyleStack {
 } // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                    StyleOutputState                     ║
+// ║                       StyleState                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A CRTP class representing Style output state.
+/// @brief A class representing Style output state.
 ///
 /// It is used to manage the current style output state(e.g. style enabled, base
 /// style, etc.) If context tracking is enabled, it will also check
@@ -111,58 +111,18 @@ class StyleStack {
 /// current style before outputting a value.
 ///
 /// @see `g_style_output_context`, `StyledOstream`
-template <typename Derived>
-class StyleOutputState { // NOLINT
+class StyleState { // NOLINT
   public:
-    template <typename T>
-    StyleOutputState(const StyleOutputState<T>& other)
-        : base_style_(other.base_style_),
-          stack_(other.stack_),
-          style_enabled_(other.style_enabled_),
-          context_enabled_(other.context_enabled_),
-          is_first_output_(other.is_first_output_) {}
+    StyleState() = default;
+    StyleState(const StyleState&) = default;
+    StyleState(StyleState&&) = default;
+    auto operator=(const StyleState&) -> StyleState& = default;
+    auto operator=(StyleState&&) -> StyleState& = default;
 
-    template <typename T>
-    StyleOutputState(StyleOutputState<T>&& other) 
-        : base_style_(other.base_style_),
-          stack_(std::move(other.stack_)),
-          style_enabled_(other.style_enabled_),
-          context_enabled_(other.context_enabled_),
-          is_first_output_(other.is_first_output_) {}
-
-    ~StyleOutputState() {
-        if (detail::g_style_output_context == &context_)
+    ~StyleState() {
+        if (context_enabled_ && detail::g_style_output_context == &context_)
             detail::g_style_output_context = nullptr;
     }
-
-    // ----- options -----
-
-    /// @brief Enable or disable style output.
-    auto enable_style(bool enable = true) -> Derived& {
-        style_enabled_ = enable;
-        return static_cast<Derived&>(*this);
-    }
-
-    /// @brief Enable or disable context tracking.
-    auto enable_context(bool enable = true) -> Derived& {
-        context_enabled_ = enable;
-        return static_cast<Derived&>(*this);
-    }
-
-    /// @brief Set the base style for this output state.
-    auto base_style(Style base) -> Derived& {
-        base_style_ = absolute(base);
-        return static_cast<Derived&>(*this);
-    }
-
-    /// @brief Enable or disable style nesting.
-    auto enable_nesting(bool enable = true) -> Derived& {
-        if (enable) stack_.to_multiple();
-        else stack_.to_single();
-        return static_cast<Derived&>(*this);
-    }
-
-    // ----- observe -----
 
     [[nodiscard]]
     auto base_style() const -> Style {
@@ -200,51 +160,26 @@ class StyleOutputState { // NOLINT
         stack_.push(absolute(current_style().style | style));
     }
 
-    void ensure_context() {
+    /// @returns The Style to output when context is updated
+    auto update_context() -> std::optional<AbsoluteStyle> {
         if (!context_enabled_) {
             if (is_first_output_) {
-                output_style(base_style_);
                 is_first_output_ = false;
+                return base_style_;
             }
-            return;
+            return std::nullopt;
         }
         if (detail::g_style_output_context != &context_) {
             detail::g_style_output_context = &context_;
             is_first_output_ = false;
-            output_style(current_style());
+            return current_style();
         }
-    }
-
-    template <detail::outputable_style StyleT>
-    void output_style(StyleT style) const {
-        static_cast<const Derived*>(this)->output_style_impl(style);
+        return std::nullopt;
     }
 
   private:
     template <typename>
-    friend class StyleOutputState;
-
-    friend Derived;
-
-    StyleOutputState() = default;
-
-    template <typename T>
-    void copy_from(const StyleOutputState<T>& other) {
-        base_style_ = other.base_style_;
-        stack_ = other.stack_;
-        style_enabled_ = other.style_enabled_;
-        context_enabled_ = other.context_enabled_;
-        is_first_output_ = other.is_first_output_;
-    }
-
-    template <typename T>
-    auto move_from(StyleOutputState<T>&& other) -> StyleOutputState { // NOLINT
-        base_style_ = other.base_style_;
-        stack_ = std::move(other.stack_);
-        style_enabled_ = other.style_enabled_;
-        context_enabled_ = other.context_enabled_;
-        is_first_output_ = other.is_first_output_;
-    }
+    friend class StyleStateOption;
 
     AbsoluteStyle base_style_ = absolute(default_style);
     detail::StyleStack stack_;
@@ -253,7 +188,42 @@ class StyleOutputState { // NOLINT
     bool context_enabled_ = false;
 
     bool is_first_output_ = true;
-    detail::style_output_context_t context_ {};
+    detail::style_output_context_t context_;
+};
+
+template <typename Derived>
+class StyleStateOption {
+  public:
+    /// @brief Enable or disable style output.
+    auto enable_style(bool enable = true) -> Derived& {
+        state_.style_enabled_ = enable;
+        return static_cast<Derived&>(*this);
+    }
+
+    /// @brief Enable or disable context tracking.
+    auto enable_context(bool enable = true) -> Derived& {
+        state_.context_enabled_ = enable;
+        return static_cast<Derived&>(*this);
+    }
+
+    /// @brief Set the base style for this output state.
+    auto set_base_style(Style base) -> Derived& {
+        state_.base_style_ = absolute(base);
+        return static_cast<Derived&>(*this);
+    }
+
+    /// @brief Enable or disable style nesting.
+    auto enable_nesting(bool enable = true) -> Derived& {
+        if (enable) state_.stack_.to_multiple();
+        else state_.stack_.to_single();
+        return static_cast<Derived&>(*this);
+    }
+
+  private:
+    friend Derived;
+    StyleStateOption(StyleState& state) : state_(state) {}
+
+    StyleState& state_; // NOLINT
 };
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -265,13 +235,16 @@ inline constexpr style_pop_t pop;
 
 /// @brief A stateful lightweight writer over an existing std::ostream.
 /// @note The passed std::ostream object must outlive this object.
-class StyledOstream : public StyleOutputState<StyledOstream> {
+class StyledOstream : public StyleState,
+                      public StyleStateOption<StyledOstream> {
   public:
-    StyledOstream(std::ostream& os) : ostream_(&os) {}
+    StyledOstream(std::ostream& os)
+        : StyleStateOption(static_cast<StyleState&>(*this)),
+          ostream_(&os) {}
 
-    template <typename Derived>
-    StyledOstream(StyleOutputState<Derived> state, std::ostream& os)
-        : StyleOutputState(std::move(state)),
+    StyledOstream(StyleState state, std::ostream& os)
+        : StyleState(std::move(state)),
+          StyleStateOption(static_cast<StyleState&>(*this)),
           ostream_(&os) {}
 
     /// @brief Output operator for any type that is outputable to
@@ -367,9 +340,11 @@ class StyledOstream : public StyleOutputState<StyledOstream> {
     auto ostream() const -> std::ostream& { return *ostream_; }
 
   private:
-    friend class StyleOutputState<StyledOstream>;
+    void ensure_context() {
+        if (auto style = update_context()) output_style(*style);
+    }
 
-    void output_style_impl(detail::outputable_style auto style) const {
+    void output_style(detail::outputable_style auto style) const {
         if (style_enabled()) *ostream_ << style;
     }
 
@@ -378,7 +353,7 @@ class StyledOstream : public StyleOutputState<StyledOstream> {
 
 /// @brief equivalent to `StyledOstream(os)`
 [[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream {
+inline auto styled_ostream(std::ostream& os) -> StyledOstream {
     return {os};
 }
 

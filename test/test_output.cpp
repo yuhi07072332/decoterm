@@ -141,12 +141,12 @@ auto main() -> int {
 
     std::cout << styled("\nSECTION3: StyledOutputState", style_h1) << "\n\n";
 
-    auto dout = styled_out(std::cout);
+    auto dout = styled_ostream(std::cout);
 
     dout << styled("[Basic]\n\n", style_h2);
 
-    auto out = styled_out(std::cout);
-    out.base_style(color(bright_white, rgb(0x361c45)));
+    auto out = styled_ostream(std::cout);
+    out.set_base_style(color(bright_white, rgb(0x361c45)));
     out << "base style "
         << styled("{ styled: italic fg(yellowlight) }", italic | fg(bright_yellow))
         << " base style "
@@ -164,17 +164,17 @@ auto main() -> int {
 
     dout << styled("\n\n[Styled Output context]\n\n", style_h2);
 
-    auto out1 = styled_out(std::cout);
+    auto out1 = styled_ostream(std::cout);
     out1 << (italic | fg(bright_green));
 
-    auto out2 = styled_out(std::cout);
+    auto out2 = styled_ostream(std::cout);
 
     out1 << "{ out1 }";
     out2 << "{ out2 }";
     out1 << "{ out1 }";
 
     dout << styled("\n\n[Disable style output]\n\n", style_h2);
-    out.base_style(default_style);
+    out.set_base_style(default_style);
 
     dout << "enabled: ";
     out << fg(blue) << "lorem" << (fg(green) | bold | underline | invert) << "ipsum" << pop << "dolor" << pop << "sit\n";
