@@ -30,6 +30,7 @@
 namespace deco {
 
 struct Style;
+struct AbsoluteStyle;
 
 enum class ColorType : uint8_t { Null = 0, Default, AnsiColor, TrueColor };
 
@@ -37,13 +38,10 @@ namespace detail {
 
 using ColorData = std::array<uint8_t, 3>;
 
+// Whether 'remove_cvref_t<T>' is a Style or an AbsoluteStyle
 template <typename T>
-concept style = requires(T style, char* out) {
-    { style.to_escape(out) } -> std::same_as<char*>;
-    { style.operator==(style) } -> std::same_as<bool>;
-    { style.operator!=(style) } -> std::same_as<bool>;
-    { style.empty() } -> std::same_as<bool>;
-};
+concept style = (std::is_same_v<std::remove_cvref_t<T>, Style>
+    || std::is_same_v<std::remove_cvref_t<T>, AbsoluteStyle>);
 
 // Whether `T` has `operator<<(std::ostream&, const T&)`
 template <typename T>

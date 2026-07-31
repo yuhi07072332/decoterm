@@ -14,6 +14,7 @@ add_executable(decoterm_test
     test_color.cpp
     test_style.cpp
     test_styled_out.cpp
+    test_format.cpp
 )
 
 target_link_libraries(decoterm_test
@@ -22,7 +23,7 @@ target_link_libraries(decoterm_test
     doctest::doctest
 )
 
-target_compile_features(decoterm_test PRIVATE cxx_std_20)
+target_compile_features(decoterm_test PRIVATE cxx_std_23)
 
 add_test(NAME decoterm_test COMMAND decoterm_test)
 
