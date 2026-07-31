@@ -556,7 +556,7 @@ inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
 
 // clang-format off
 
-inline constexpr Style default_style     = Style();
+inline constexpr Style blank_style     = Style();
 inline constexpr Style bold              = Style(Style::Bold);
 inline constexpr Style dim               = Style(Style::Dim);
 inline constexpr Style italic            = Style(Style::Italic);

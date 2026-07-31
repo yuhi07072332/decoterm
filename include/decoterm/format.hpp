@@ -78,7 +78,7 @@ struct formatter<deco::style_reset_t> {
     }
 
     auto format(deco::style_reset_t, std::format_context& ctx) const {
-        return deco::absolute(deco::default_style).to_escape(ctx.out());
+        return deco::absolute(deco::blank_style).to_escape(ctx.out());
     }
 };
 
@@ -150,7 +150,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     auto format_to(OutputIt out,
                    std::format_string<Args...> fmt,
                    Args&&... args) -> OutputIt { // NOLINT
-        return format_to(out, default_style, fmt, std::forward<Args>(args)...);
+        return format_to(out, blank_style, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
@@ -201,7 +201,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     template <typename... Args>
     auto print(std::format_string<Args...> fmt, Args&&... args)
         -> StyledFormat& {
-        print(default_style, fmt, std::forward<Args>(args)...);
+        print(blank_style, fmt, std::forward<Args>(args)...);
         return *this;
     }
 

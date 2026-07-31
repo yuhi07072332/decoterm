@@ -73,7 +73,7 @@ TEST_CASE("Style: AbsoluteStyle::to_escape") {
     using namespace deco;
 
     // Shouldn't output ';' when inner Style is default.
-    CHECK(absolute(default_style).to_escape() == "\x1b[m");
+    CHECK(absolute(blank_style).to_escape() == "\x1b[m");
     CHECK(absolute(bold).to_escape() == "\x1b[;1m");
 }
 

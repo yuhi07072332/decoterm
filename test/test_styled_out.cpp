@@ -86,11 +86,11 @@ TEST_CASE("styled: styled(): output owning and referenced values") {
 
     CHECK(os.str()
           == bold.to_escape() + std::string("32")
-                 + absolute(default_style).to_escape() + std::string(" ")
+                 + absolute(blank_style).to_escape() + std::string(" ")
                  + bold.to_escape() + std::string("64")
-                 + absolute(default_style).to_escape() + std::string(" ")
+                 + absolute(blank_style).to_escape() + std::string(" ")
                  + bold.to_escape() + std::string("64")
-                 + absolute(default_style).to_escape());
+                 + absolute(blank_style).to_escape());
 }
 
 TEST_CASE("styled: StyleOutputState: copy from other type") {
@@ -120,8 +120,8 @@ TEST_CASE("styled: StyleOutputState: options") {
     CHECK(state.style_enabled());
     CHECK_FALSE(state.context_enabled());
     CHECK_FALSE(state.nesting_enabled());
-    CHECK(state.base_style() == default_style);
-    CHECK(state.current_style().style == default_style);
+    CHECK(state.base_style() == blank_style);
+    CHECK(state.current_style().style == blank_style);
 
     state.enable_style(false).enable_context(true).set_base_style(fg(blue));
 
@@ -205,7 +205,7 @@ TEST_CASE("styled: StyledOstream: write plain values") {
     styled_os << "value=" << 42 << ' ' << d;
 
     CHECK(os.str()
-          == absolute(default_style).to_escape() + std::string("value=42 1.5"));
+          == absolute(blank_style).to_escape() + std::string("value=42 1.5"));
 }
 
 TEST_CASE("styled: StyledOstream: call IO manipulator") {
@@ -242,7 +242,7 @@ TEST_CASE("styled: StyledOstream: call IO manipulator") {
              << set_width_4 << 9 << std::endl
              << std::flush << std::ends;
 
-    CHECK(os.str() == absolute(default_style).to_escape() + expected.str());
+    CHECK(os.str() == absolute(blank_style).to_escape() + expected.str());
 }
 
 TEST_CASE("styled: StyledOstream: throws if output operator returns different "
@@ -263,8 +263,8 @@ TEST_CASE("styled: StyledOstream: write styles") {
     styled_os << fg(red) << "error" << reset;
 
     CHECK(os.str()
-          == absolute(default_style).to_escape() + fg(red).to_escape()
-                 + std::string("error") + absolute(default_style).to_escape());
+          == absolute(blank_style).to_escape() + fg(red).to_escape()
+                 + std::string("error") + absolute(blank_style).to_escape());
 }
 
 TEST_CASE("styled: StyledOstream: disable style output") {
@@ -277,7 +277,7 @@ TEST_CASE("styled: StyledOstream: disable style output") {
     styled_os << fg(red) << "error" << reset;
 
     CHECK(os.str() == "error");
-    CHECK(styled_os.current_style().style == default_style);
+    CHECK(styled_os.current_style().style == blank_style);
 }
 
 TEST_CASE("styled: StyledOstream: restores nested styles") {
