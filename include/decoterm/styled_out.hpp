@@ -16,6 +16,8 @@
 #include <utility>
 #include <vector>
 
+#include <iostream>
+
 namespace deco {
 
 namespace detail {
@@ -153,15 +155,18 @@ class StyleState { // NOLINT
     /// @returns The Style to output when context is updated
     auto update_context() -> std::optional<AbsoluteStyle> {
         if (!context_enabled_) {
-            if (is_first_output_) {
-                is_first_output_ = false;
+            if (base_style_changed_) {
+                base_style_changed_ = false;
                 return base_style_;
             }
             return std::nullopt;
         }
         if (detail::g_style_output_context != &context_) {
             detail::g_style_output_context = &context_;
-            is_first_output_ = false;
+            if (base_style_changed_) {
+                base_style_changed_ = false;
+                return absolute(base_style_.style | current_style().style);
+            }
             return current_style();
         }
         return std::nullopt;
@@ -177,43 +182,51 @@ class StyleState { // NOLINT
     bool style_enabled_ = true;
     bool context_enabled_ = false;
 
-    bool is_first_output_ = true;
+    bool base_style_changed_ = true;
     detail::style_output_context_t context_;
 };
 
 template <typename Derived>
-class StyleStateOption {
+class StyleStateOption {    
   public:
     /// @brief Enable or disable style output.
     auto enable_style(bool enable = true) -> Derived& {
-        state_.style_enabled_ = enable;
-        return static_cast<Derived&>(*this);
+        state().style_enabled_ = enable;
+        return derived_this();
     }
 
     /// @brief Enable or disable context tracking.
     auto enable_context(bool enable = true) -> Derived& {
-        state_.context_enabled_ = enable;
-        return static_cast<Derived&>(*this);
+        state().context_enabled_ = enable;
+        return derived_this();
     }
 
     /// @brief Set the base style for this output state.
     auto set_base_style(Style base) -> Derived& {
-        state_.base_style_ = absolute(base);
-        return static_cast<Derived&>(*this);
+        state().base_style_ = absolute(base);
+        state().base_style_changed_ = true;
+        return derived_this();
     }
 
     /// @brief Enable or disable style nesting.
     auto enable_nesting(bool enable = true) -> Derived& {
-        if (enable) state_.stack_.to_multiple();
-        else state_.stack_.to_single();
-        return static_cast<Derived&>(*this);
+        if (enable) state().stack_.to_multiple();
+        else state().stack_.to_single();
+        return derived_this();
     }
 
   private:
     friend Derived;
-    StyleStateOption(StyleState& state) : state_(state) {}
 
-    StyleState& state_; // NOLINT
+    StyleStateOption() = default;
+
+    auto state() -> StyleState& {
+        return static_cast<StyleState&>(static_cast<Derived&>(*this));
+    }
+
+    auto derived_this() -> Derived& {
+        return static_cast<Derived&>(*this);
+    }
 };
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -228,13 +241,10 @@ inline constexpr style_pop_t pop;
 class StyledOstream : public StyleState,
                       public StyleStateOption<StyledOstream> {
   public:
-    StyledOstream(std::ostream& os)
-        : StyleStateOption(static_cast<StyleState&>(*this)),
-          ostream_(&os) {}
+    StyledOstream(std::ostream& os) : ostream_(&os) {}
 
     StyledOstream(StyleState state, std::ostream& os)
         : StyleState(std::move(state)),
-          StyleStateOption(static_cast<StyleState&>(*this)),
           ostream_(&os) {}
 
     /// @brief Output operator for any type that is outputable to
@@ -279,7 +289,7 @@ class StyledOstream : public StyleState,
     friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
         out.ensure_context();
         out.pop_style();
-        if (out.style_enabled()) out.ostream() << out.current_style();
+        out.output_style(out.current_style());
         return out;
     }
 
@@ -288,8 +298,8 @@ class StyledOstream : public StyleState,
     friend auto operator<<(StyledOstream& out, StyledRefT&& styled) // NOLINT
         -> StyledOstream& {
         detail::check_styled_ref<StyledRefT>();
-
         out.ensure_context();
+
         out.output_style(styled.style());
         out.ostream() << styled.value();
         out.ostream() << out.current_style();

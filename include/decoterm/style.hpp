@@ -218,7 +218,7 @@ struct Color {
     constexpr auto is_null() const -> bool { return type_ == ColorType::Null; }
     constexpr auto type() const -> ColorType { return type_; }
 
-    /// @brief Returns raw data(uint8_t[3]) inside this Color.
+    /// @brief Returns raw data(`uint8_t[3]`) inside this Color.
     /// @details Usage:
     /// ```cpp
     /// Color col = rgb(32, 64, 128);

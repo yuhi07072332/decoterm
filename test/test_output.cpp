@@ -1,3 +1,4 @@
+#include "decoterm/styled_out.hpp"
 #include <decoterm/decoterm.hpp>
 #include <decoterm/format.hpp>
 #include <decoterm/terminal.hpp>
@@ -141,12 +142,11 @@ auto main() -> int {
 
     std::cout << styled("\nSECTION3: StyledOutputState", style_h1) << "\n\n";
 
-    auto dout = styled_ostream(std::cout);
+    auto dout = styled_ostream(std::cout).enable_context();
 
     dout << styled("[Basic]\n\n", style_h2);
 
-    auto out = styled_ostream(std::cout);
-    out.set_base_style(color(bright_white, rgb(0x361c45)));
+    auto out = styled_ostream(std::cout).enable_context().set_base_style(color(white, rgb(0x21314d))).enable_nesting();
     out << "base style "
         << styled("{ styled: italic fg(yellowlight) }", italic | fg(bright_yellow))
         << " base style "
@@ -158,16 +158,16 @@ auto main() -> int {
 
     out.enable_nesting(true);
     out << "base style "
-        << italic << "{ italic "
-        << (underline | bg(default_color)) << "{ underline | bg(default_color) }"
+        << (italic | fg(bright_red)) << "{ italic | fg(bright_red) "
+        << (underline | color(bright_yellow, default_color)) << "{ underline | color(bright_yellow, default_color) }"
         << pop << " pop }" << pop << " base style";
 
     dout << styled("\n\n[Styled Output context]\n\n", style_h2);
 
-    auto out1 = styled_ostream(std::cout);
+    auto out1 = styled_ostream(std::cout).enable_context(true);
     out1 << (italic | fg(bright_green));
 
-    auto out2 = styled_ostream(std::cout);
+    auto out2 = styled_ostream(std::cout).enable_context(true);
 
     out1 << "{ out1 }";
     out2 << "{ out2 }";
@@ -182,7 +182,4 @@ auto main() -> int {
     dout << "disabled: ";
     out.enable_style(false);
     out << fg(blue) << "lorem" << (bold | underline) << "ipsum" << pop << "dolor" << pop << "sit\n";
-
-
-
 }

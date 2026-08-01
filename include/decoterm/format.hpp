@@ -126,10 +126,8 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     using stream_type = std::variant<std::FILE*, std::ostream*>;
 
   public:
-    StyledFormat() : StyleStateOption(static_cast<StyleState&>(*this)) {}
-    StyledFormat(StyleState state)
-        : StyleState(std::move(state)),
-          StyleStateOption(static_cast<StyleState&>(*this)) {}
+    StyledFormat() = default;
+    StyledFormat(StyleState state) : StyleState(std::move(state)) {}
 
     /* ----- Style operations ----- */
 

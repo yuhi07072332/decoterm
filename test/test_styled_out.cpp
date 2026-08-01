@@ -16,12 +16,10 @@ struct TestStyleOutputState
     using deco::StyleState::push_style;
     using deco::StyleState::reset_style;
 
-    TestStyleOutputState() //NOLINT
-        : StyleStateOption(static_cast<deco::StyleState&>(*this)) {}
+    TestStyleOutputState() = default; // NOLINT
 
     TestStyleOutputState(const StyleState& other)
-        : StyleState(other),
-          StyleStateOption(static_cast<deco::StyleState&>(*this)) {}
+        : StyleState(other) {}
 };
 
 
@@ -85,6 +83,27 @@ TEST_CASE("styled_out: StyleOutputState: options") {
     state.enable_nesting(false);
     CHECK_FALSE(state.nesting_enabled());
     CHECK(state.current_style().style == fg(blue));
+}
+
+TEST_CASE("styled_out: StyleOutputState: options after chained construction") {
+    using namespace deco;
+
+    auto state = styled_ostream(std::cout)
+                     .enable_style(false)
+                     .enable_context(true)
+                     .set_base_style(fg(blue))
+                     .enable_nesting(true);
+
+    state.enable_style(true)
+        .enable_context(false)
+        .set_base_style(fg(red))
+        .enable_nesting(false);
+
+    CHECK(state.style_enabled());
+    CHECK_FALSE(state.context_enabled());
+    CHECK_FALSE(state.nesting_enabled());
+    CHECK(state.base_style() == fg(red));
+    CHECK(state.current_style().style == fg(red));
 }
 
 TEST_CASE("styled_out: StyleOutputState: single style state") {
