@@ -160,6 +160,8 @@ class StyleState { // NOLINT
         stack_.push(absolute(current_style().style | style));
     }
 
+    /// @brief Updates the context if enabled. Otherwise it only checks
+    /// `is_first_output_`
     /// @returns The Style to output when context is updated
     auto update_context() -> std::optional<AbsoluteStyle> {
         if (!context_enabled_) {

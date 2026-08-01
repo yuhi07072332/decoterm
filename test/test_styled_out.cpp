@@ -13,14 +13,18 @@
 namespace {
 
 struct TestStyleOutputState
-    : public deco::StyleState 
-    , public deco::StyleStateOption<TestStyleOutputState>{
+    : public deco::StyleState,
+      public deco::StyleStateOption<TestStyleOutputState> {
     using deco::StyleState::pop_style;
     using deco::StyleState::push_style;
     using deco::StyleState::reset_style;
 
     TestStyleOutputState()
         : StyleStateOption(static_cast<deco::StyleState&>(*this)) {}
+
+    TestStyleOutputState(const StyleState& other)
+        : StyleState(other),
+          StyleStateOption(static_cast<deco::StyleState&>(*this)) {}
 };
 
 struct Value {
@@ -103,7 +107,7 @@ TEST_CASE("styled: StyleOutputState: copy from other type") {
                          .enable_nesting(true);
     styled_os << bold;
 
-    TestStyleOutputState teststate; // NOLINT
+    TestStyleOutputState teststate(styled_os); // NOLINT
 
     CHECK_FALSE(teststate.style_enabled());
     CHECK_FALSE(teststate.context_enabled());
@@ -284,7 +288,8 @@ TEST_CASE("styled: StyledOstream: restores nested styles") {
     using namespace deco;
 
     std::ostringstream os;
-    StyledOstream styled_os = styled_ostream(os).set_base_style(fg(blue)).enable_nesting(true);
+    StyledOstream styled_os =
+        styled_ostream(os).set_base_style(fg(blue)).enable_nesting(true);
 
     styled_os << bold << "bold" << fg(red) << "red bold" << pop << "blue bold"
               << pop << "blue";
@@ -302,7 +307,8 @@ TEST_CASE("styled: StyledOstream: reset returns to base style") {
     using namespace deco;
 
     std::ostringstream os;
-    StyledOstream styled_os = styled_ostream(os).set_base_style(fg(blue)).enable_nesting(true);
+    StyledOstream styled_os =
+        styled_ostream(os).set_base_style(fg(blue)).enable_nesting(true);
 
     styled_os << bold << "bold" << reset << "base";
 
@@ -337,7 +343,8 @@ TEST_CASE("styled: StyledOstream: only output base style first time if context "
     using namespace deco;
 
     std::ostringstream os;
-    auto out = styled_ostream(os).set_base_style(fg(blue)).enable_context(false);
+    auto out =
+        styled_ostream(os).set_base_style(fg(blue)).enable_context(false);
 
     out << "a" << "b" << bold << "c" << pop << "d" << reset << "e";
 
