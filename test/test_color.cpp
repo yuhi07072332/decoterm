@@ -41,6 +41,19 @@ auto true_bg(uint8_t r, uint8_t g, uint8_t b) -> std::string {
 
 } // namespace
 
+TEST_CASE("Color: raw data") {
+    using namespace deco;
+    Color true_col = rgb(32, 64, 128);
+
+    auto index = bright_blue.data()[0];
+    auto [r, g, b] = true_col.data();
+
+    CHECK(index == 12);
+    CHECK(r == 32);
+    CHECK(g == 64);
+    CHECK(b == 128);
+}
+
 TEST_CASE("Color: Special color escape code") {
     using namespace deco;
 

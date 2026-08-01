@@ -20,13 +20,13 @@ TEST_CASE("format: formatters") {
 
     CHECK(std::format("{}text{}", bold, reset)
           == bold.to_escape() + std::string("text")
-                 + absolute(blank_style).to_escape());
+                 + absolute(null_style).to_escape());
     CHECK(std::format("{}", styled(std::string("text"), fg(red)))
           == fg(red).to_escape() + std::string("text")
-                 + absolute(blank_style).to_escape());
+                 + absolute(null_style).to_escape());
     CHECK(std::format("{:04}", styled(42, bold))
           == bold.to_escape() + std::string("0042")
-                 + absolute(blank_style).to_escape());
+                 + absolute(null_style).to_escape());
 }
 
 TEST_CASE("format: StyledFormat: format_to()") {

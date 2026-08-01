@@ -86,7 +86,7 @@ struct formatter<deco::style_reset_t> {
     }
 
     auto format(deco::style_reset_t, std::format_context& ctx) const {
-        return deco::absolute(deco::blank_style).to_escape(ctx.out());
+        return deco::absolute(deco::null_style).to_escape(ctx.out());
     }
 };
 
@@ -158,9 +158,9 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
                    Args&&... args) -> OutputIt { //NOLINT
         detail::check_sfmt_args<Args...>();
         out = ensure_context(out);
-        if (!style.empty()) out = output_style(out, style);
+        if (!style.is_null()) out = output_style(out, style);
         out = std::vformat_to(out, fmt.get(), std::make_format_args(args...));
-        if (!style.empty()) out = output_style(out, current_style());
+        if (!style.is_null()) out = output_style(out, current_style());
         return out;
     }
 
@@ -168,7 +168,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     auto format_to(OutputIt out,
                    std::format_string<Args...> fmt,
                    Args&&... args) -> OutputIt { //NOLINT
-        return format_to(out, blank_style, fmt, std::forward<Args>(args)...);
+        return format_to(out, null_style, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
@@ -210,16 +210,16 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         -> StyledFormat& {
         detail::check_sfmt_args<Args...>();
         ensure_context();
-        if (!style.empty()) output_style(style);
+        if (!style.is_null()) output_style(style);
         print_stream(fmt, std::forward<Args>(args)...);
-        if (!style.empty()) output_style(current_style());
+        if (!style.is_null()) output_style(current_style());
         return *this;
     }
 
     template <typename... Args>
     auto print(std::format_string<Args...> fmt, Args&&... args)
         -> StyledFormat& {
-        print(blank_style, fmt, std::forward<Args>(args)...);
+        print(null_style, fmt, std::forward<Args>(args)...);
         return *this;
     }
 

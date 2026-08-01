@@ -183,7 +183,7 @@ class StyleState { //NOLINT
     template <typename>
     friend class StyleStateOption;
 
-    AbsoluteStyle base_style_ = absolute(blank_style);
+    AbsoluteStyle base_style_ = absolute(null_style);
     detail::StyleStack stack_;
 
     bool style_enabled_ = true;

@@ -137,7 +137,7 @@ color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
 // ║                          Color                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A struct representing a terminal color.
+/// @brief A struct representing a nullable terminal color.
 struct Color {
     static constexpr std::size_t MAX_ESCAPE_CODE_SIZE = 19;
 
@@ -163,7 +163,25 @@ struct Color {
     constexpr auto operator==(const Color&) const -> bool = default;
     constexpr auto operator!=(const Color&) const -> bool = default;
 
+    /// equivalent to !is_null()
+    constexpr explicit operator bool() const { return !is_null(); }
+
+    constexpr auto is_null() const -> bool { return type_ == ColorType::Null; }
     constexpr auto type() const -> ColorType { return type_; }
+
+    /// @brief Returns raw data(uint8_t[3]) inside this Color.
+    /// @details Usage:
+    /// ```cpp
+    /// Color col = rgb(32, 64, 128);
+    /// if (col.type() == ColorType::TrueColor) {
+    ///     auto [r, g, b] = col.data();
+    ///     /* ... */
+    /// } else if (col.type() == ColorType::AnsiColor) {
+    ///     uint8_t index = col.data()[0];
+    ///     /* ... */
+    /// }
+    /// ```
+    constexpr auto data() const -> detail::ColorData { return data_; }
 
     [[nodiscard]]
     auto to_escape(bool is_bg) const -> std::string {
@@ -262,32 +280,6 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) //NOLINT
     // clang-format on 
 }
 
-namespace colors {
-
-// clang-format off
-
-/// system colors
-enum Color16 : uint8_t {                                    //NOLINT
-    Black               = 0,
-    Red                 = 1,
-    Green               = 2,
-    Yellow              = 3,
-    Blue                = 4,
-    Magenta             = 5,
-    Cyan                = 6,
-    White               = 7,
-    BrightBlack         = 8,
-    BrightRed           = 9,
-    BrightGreen         = 10,
-    BrightYellow        = 11,
-    BrightBlue          = 12,
-    BrightMagenta       = 13,
-    BrightCyan          = 14,
-    BrightWhite         = 15,
-};
-
-}   // namespace colors
-
 /* ----- color constants ----- */
 
 inline constexpr Color default_color   = Color::default_color();
@@ -319,10 +311,11 @@ inline constexpr Color bright_white    = Color(15);
 struct style_reset_t {};
 inline constexpr style_reset_t reset;
 
-/// @brief A struct representing a terminal style.
+/// @brief A struct representing a nullable terminal style.
+/// @details When is_null(), to_escape() won't output any ANSI escape code.
 struct Style {
     // clang-format off
-    enum Flags : uint8_t {      //NOLINT
+    enum Flags : uint8_t {                              //NOLINT
         None            = 0,
         Bold            = 1 << 0,
         Dim             = 1 << 1,
@@ -339,7 +332,7 @@ struct Style {
 
     // clang-format on
 
-    /// @brief create a default style (flags = 0, fg = null_color, bg =
+    /// @brief create a null style (flags = 0, fg = null_color, bg =
     /// null_color)
     constexpr Style() = default;
 
@@ -373,7 +366,7 @@ struct Style {
     constexpr auto operator!=(const Style&) const -> bool = default;
 
     /// @brief equivalent to !empty()
-    constexpr explicit operator bool() const { return !empty(); }
+    constexpr explicit operator bool() const { return !is_null(); }
 
     // ----- observe -----
 
@@ -381,7 +374,7 @@ struct Style {
     constexpr auto fg() const -> Color { return {fg_type(), fg_data_}; }
     constexpr auto bg() const -> Color { return {bg_type(), bg_data_}; }
 
-    constexpr auto empty() const -> bool {
+    constexpr auto is_null() const -> bool {
         return flags_ == None && fg_null() && bg_null();
     }
 
@@ -392,7 +385,7 @@ struct Style {
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
         using namespace detail;
-        if (empty()) return out;
+        if (is_null()) return out;
         bool needs_separate = false;
 
         if (!fg_null()) {
@@ -423,6 +416,8 @@ struct Style {
     /// @brief write ANSI escape code to output iterator
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
+        if (is_null()) return out;
+
         out = detail::write_to(out, "\x1b[");
         out = to_sgr_params(out);
         *out++ = 'm';
@@ -502,8 +497,6 @@ struct AbsoluteStyle {
     constexpr auto operator==(const AbsoluteStyle&) const -> bool = default;
     constexpr auto operator!=(const AbsoluteStyle&) const -> bool = default;
 
-    constexpr auto empty() const -> bool { return style.empty(); }
-
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
@@ -556,7 +549,7 @@ inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
 
 // clang-format off
 
-inline constexpr Style blank_style     = Style();
+inline constexpr Style null_style        = Style();
 inline constexpr Style bold              = Style(Style::Bold);
 inline constexpr Style dim               = Style(Style::Dim);
 inline constexpr Style italic            = Style(Style::Italic);
