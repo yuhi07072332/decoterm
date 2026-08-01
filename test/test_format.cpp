@@ -124,25 +124,6 @@ TEST_CASE("format: StyledFormat: set stream(std::ostream)") {
 #endif
 }
 
-TEST_CASE("format: StyledFormat: set stream(std::ostream)") {
-#if DECO_ENABLE_PRINT
-    using namespace deco;
-
-    std::ostringstream os1;
-    std::ostringstream os2;
-    StyledFormat sfmt;
-    sfmt.enable_style(false);
-
-    sfmt.set_stream(os1).print("{}", "one");
-    sfmt.set_stream(os2).print("{}", "two");
-
-    CHECK(os1.str() == "one");
-    CHECK(os2.str() == "two");
-#else
-    CHECK(true);
-#endif
-}
-
 TEST_CASE("format: StyledFormat: style nesting") {
     using namespace deco;
 
