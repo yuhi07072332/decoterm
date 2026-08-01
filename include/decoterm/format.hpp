@@ -142,8 +142,10 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
                    Args&&... args) -> OutputIt { // NOLINT
         check_args_valid<Args...>();
         if (auto update = update_context()) out = output_style(out, *update);
-        out = output_style(out, style);
-        return std::vformat_to(out, fmt.get(), std::make_format_args(args...));
+        if (!style.empty()) out = output_style(out, style);
+        out = std::vformat_to(out, fmt.get(), std::make_format_args(args...));
+        if (!style.empty()) out = output_style(out, current_style());
+        return out;
     }
 
     template <std::output_iterator<const char&> OutputIt, typename... Args>
@@ -169,8 +171,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     auto format(std::format_string<Args...> fmt, Args&&... args) // NOLINT
         -> std::string {
         std::string buf;
-        format_to(
-            std::back_inserter(buf), fmt, std::forward<Args>(args)...);
+        format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
         return buf;
     }
 
@@ -195,6 +196,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         if (auto update = update_context()) output_style(*update);
         if (!style.empty()) output_style(style);
         print_stream(fmt, std::forward<Args>(args)...);
+        if (!style.empty()) output_style(current_style());
         return *this;
     }
 
@@ -246,9 +248,9 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         print_stream("{}", style);
     }
 
-#endif // DECO_ENABLE_PRINT
-
     stream_type stream_ = stream_type(std::in_place_type<std::FILE*>, stdout);
+
+#endif // DECO_ENABLE_PRINT
 };
 
 }; // namespace deco
