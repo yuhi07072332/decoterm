@@ -6,8 +6,6 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <type_traits>
-
 
 namespace {
 
@@ -26,14 +24,6 @@ struct TestStyleOutputState
           StyleStateOption(static_cast<deco::StyleState&>(*this)) {}
 };
 
-struct Value {
-    int value = 128;
-};
-
-auto operator<<(std::ostream& os, Value value) -> std::ostream& {   //NOLINT
-    os << value.value;
-    return os;
-}
 
 struct return_dirrerent_ostream_t {};
 
@@ -51,54 +41,7 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
 
 // NOLINTBEGIN
 
-TEST_CASE("styled: styled(): own rvalues") {
-    using namespace deco;
-
-    auto sint = styled(45, bold);
-    auto sValue = styled(Value {60}, italic | strikethrough);
-
-    static_assert(std::is_same_v<decltype(sint.value()), const int&>);
-    static_assert(std::is_same_v<decltype(sint.value()), const int&>);
-
-    CHECK(sint.value() == 45);
-    CHECK(sint.style() == bold);
-    CHECK(sValue.value().value == 60);
-    CHECK(sValue.style() == (italic | strikethrough));
-}
-
-TEST_CASE("styled: styled(): reference const lvalues") {
-    using namespace deco;
-
-    int value = 30;
-    const int const_value = 45;
-
-    auto styled_value = styled(value, bold);
-    auto styled_const_value = styled(const_value, bold);
-
-    CHECK(styled_value.value() == 30);
-    CHECK(styled_const_value.value() == 45);
-}
-
-TEST_CASE("styled: styled(): output owning and referenced values") {
-    using namespace deco;
-
-    std::ostringstream os;
-    Value value {64};
-    auto owned = styled(Value {64}, bold);
-    auto reference = styled(value, bold);
-
-    os << styled(Value {32}, bold) << ' ' << owned << ' ' << reference;
-
-    CHECK(os.str()
-          == bold.to_escape() + std::string("32")
-                 + absolute(null_style).to_escape() + std::string(" ")
-                 + bold.to_escape() + std::string("64")
-                 + absolute(null_style).to_escape() + std::string(" ")
-                 + bold.to_escape() + std::string("64")
-                 + absolute(null_style).to_escape());
-}
-
-TEST_CASE("styled: StyleOutputState: copy from other type") {
+TEST_CASE("styled_out: StyleOutputState: copy from other type") {
     using namespace deco;
 
     auto styled_os = styled_ostream(std::cout)
@@ -117,7 +60,7 @@ TEST_CASE("styled: StyleOutputState: copy from other type") {
     CHECK(teststate.current_style().style == (fg(blue) | bold));
 }
 
-TEST_CASE("styled: StyleOutputState: options") {
+TEST_CASE("styled_out: StyleOutputState: options") {
     using namespace deco;
 
     StyledOstream state(std::cout);
@@ -144,7 +87,7 @@ TEST_CASE("styled: StyleOutputState: options") {
     CHECK(state.current_style().style == fg(blue));
 }
 
-TEST_CASE("styled: StyleOutputState: single style state") {
+TEST_CASE("styled_out: StyleOutputState: single style state") {
     using namespace deco;
 
     TestStyleOutputState state;
@@ -166,7 +109,7 @@ TEST_CASE("styled: StyleOutputState: single style state") {
     CHECK(state.current_style().style == fg(blue));
 }
 
-TEST_CASE("styled: StyleOutputState: nested style state") {
+TEST_CASE("styled_out: StyleOutputState: nested style state") {
     using namespace deco;
 
     TestStyleOutputState state;
@@ -198,7 +141,7 @@ TEST_CASE("styled: StyleOutputState: nested style state") {
     CHECK(state.current_style().style == fg(blue));
 }
 
-TEST_CASE("styled: StyledOstream: write plain values") {
+TEST_CASE("styled_out: StyledOstream: write plain values") {
     using namespace deco;
 
     std::ostringstream os;
@@ -213,7 +156,7 @@ TEST_CASE("styled: StyledOstream: write plain values") {
           == absolute(null_style).to_escape() + std::string("value=42 1.5"));
 }
 
-TEST_CASE("styled: StyledOstream: call IO manipulator") {
+TEST_CASE("styled_out: StyledOstream: call IO manipulator") {
     using namespace deco;
 
     std::ostringstream os;
@@ -250,7 +193,7 @@ TEST_CASE("styled: StyledOstream: call IO manipulator") {
     CHECK(os.str() == absolute(null_style).to_escape() + expected.str());
 }
 
-TEST_CASE("styled: StyledOstream: throws if output operator returns different "
+TEST_CASE("styled_out: StyledOstream: throws if output operator returns different "
           "ostream object") {
     using namespace deco;
 
@@ -259,7 +202,7 @@ TEST_CASE("styled: StyledOstream: throws if output operator returns different "
                     std::logic_error);
 }
 
-TEST_CASE("styled: StyledOstream: write styles") {
+TEST_CASE("styled_out: StyledOstream: write styles") {
     using namespace deco;
 
     std::ostringstream os;
@@ -272,7 +215,7 @@ TEST_CASE("styled: StyledOstream: write styles") {
                  + std::string("error") + absolute(null_style).to_escape());
 }
 
-TEST_CASE("styled: StyledOstream: disable style output") {
+TEST_CASE("styled_out: StyledOstream: disable style output") {
     using namespace deco;
 
     std::ostringstream os;
@@ -285,7 +228,7 @@ TEST_CASE("styled: StyledOstream: disable style output") {
     CHECK(styled_os.current_style().style == null_style);
 }
 
-TEST_CASE("styled: StyledOstream: restores nested styles") {
+TEST_CASE("styled_out: StyledOstream: restores nested styles") {
     using namespace deco;
 
     std::ostringstream os;
@@ -304,7 +247,7 @@ TEST_CASE("styled: StyledOstream: restores nested styles") {
                  + std::string("blue"));
 }
 
-TEST_CASE("styled: StyledOstream: reset returns to base style") {
+TEST_CASE("styled_out: StyledOstream: reset returns to base style") {
     using namespace deco;
 
     std::ostringstream os;
@@ -319,7 +262,7 @@ TEST_CASE("styled: StyledOstream: reset returns to base style") {
                  + std::string("base"));
 }
 
-TEST_CASE("styled: StyledOstream: context tracking") {
+TEST_CASE("styled_out: StyledOstream: context tracking") {
     using namespace deco;
 
     std::ostringstream os1;
@@ -339,7 +282,7 @@ TEST_CASE("styled: StyledOstream: context tracking") {
     CHECK(os2.str() == absolute(fg(red)).to_escape() + std::string("c"));
 }
 
-TEST_CASE("styled: StyledOstream: only output base style first time if context "
+TEST_CASE("styled_out: StyledOstream: only output base style first time if context "
           "tracking is off") {
     using namespace deco;
 

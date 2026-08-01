@@ -34,20 +34,44 @@ struct AbsoluteStyle;
 
 enum class ColorType : uint8_t { Null = 0, Default, AnsiColor, TrueColor };
 
-namespace detail {
-
-using ColorData = std::array<uint8_t, 3>;
+namespace concepts {
 
 // Whether 'remove_cvref_t<T>' is a Style or an AbsoluteStyle
 template <typename T>
 concept style = (std::is_same_v<std::remove_cvref_t<T>, Style>
-    || std::is_same_v<std::remove_cvref_t<T>, AbsoluteStyle>);
+                 || std::is_same_v<std::remove_cvref_t<T>, AbsoluteStyle>);
 
 // Whether `T` has `operator<<(std::ostream&, const T&)`
 template <typename T>
 concept ostream_outputable = requires(std::ostream& os, const T& value) {
     { os << value } -> std::same_as<std::ostream&>;
 };
+
+} // namespace concepts
+
+namespace detail {
+
+template <typename, concepts::style>
+struct StyledRef;
+
+} // namespace detail
+
+namespace concepts {
+
+template <typename T>
+struct is_styled_ref : std::false_type {};
+
+template <typename T, style StyleT>
+struct is_styled_ref<detail::StyledRef<T, StyleT>> : std::true_type {};
+
+template <typename T>
+concept styled_ref = is_styled_ref<std::remove_cvref_t<T>>::value;
+
+} // namespace concepts
+
+namespace detail {
+
+using ColorData = std::array<uint8_t, 3>;
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
@@ -129,6 +153,31 @@ color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
         return out;
     }
     return out;
+}
+
+/* ----- StyledRef ----- */
+
+template <typename T, concepts::style StyleT>
+struct StyledRef {
+    using value_type = T;
+
+    constexpr StyledRef(const T& value, StyleT style)
+        : value_(value),
+          style_(style) {}
+
+    constexpr auto value() const -> const T& { return value_; }
+    constexpr auto style() const -> StyleT { return style_; }
+
+  private:
+    const T& value_; // NOLINT
+    StyleT style_;
+};
+
+template <concepts::styled_ref StyledRefT>
+consteval void check_styled_ref() {
+    static_assert(
+        !std::is_lvalue_reference_v<StyledRefT>,
+        "deco::detail::StyledRef: Cannot pass StyledRef as lvalue reference.");
 }
 
 } // namespace detail
@@ -251,7 +300,7 @@ constexpr auto rgb(uint32_t hex) -> Color {
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
 [[nodiscard]]
-inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) //NOLINT
+inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     -> Color {
     // clang-format off
 
@@ -528,12 +577,10 @@ constexpr auto color(Color fg, Color bg) -> Style {
 constexpr auto fg(Color fg) -> Style { return {Style::None, fg}; }
 
 /// @brief create a Style with background color
-constexpr auto bg(Color bg) -> Style {
-    return {Style::None, null_color, bg};
-}
+constexpr auto bg(Color bg) -> Style { return {Style::None, null_color, bg}; }
 
 /// @brief output operator for Style types e.g. Style, AbsoluteStyle
-template <detail::style StyleT>
+template <concepts::style StyleT>
 inline auto operator<<(std::ostream& os, StyleT style) -> std::ostream& {
     style.to_escape(std::ostreambuf_iterator(os));
     return os;
@@ -565,58 +612,19 @@ inline constexpr Style underline_double  = Style(Style::UnderlineDouble);
 // ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A wrapper for styling a value. Owns rvalue or references
-/// **const** lvalue.
-template <typename T, detail::style StyleT>
-struct Styled {
-    constexpr Styled(T value, StyleT style)
-        : value_(std::move(value)),
-          style_(style) {}
-
-    constexpr auto value() const -> const std::remove_const_t<T>& {
-        return value_;
-    }
-    constexpr auto style() const -> StyleT { return style_; }
-
-  private:
-    T value_;
-    StyleT style_;
-};
-
-template <typename T, detail::style StyleT>
-struct Styled<T&, StyleT> {
-    constexpr Styled(const T& value, StyleT style)
-        : value_(value),
-          style_(style) {}
-
-    constexpr auto value() const -> const T& { return value_; }
-    constexpr auto style() const -> StyleT { return style_; }
-
-  private:
-    const T& value_;                                                //NOLINT
-    StyleT style_;
-};
-
-/// @brief create a `Styled` from rvalue reference
-template <typename T, detail::style StyleT>
-    requires(!std::is_lvalue_reference_v<T>)
-constexpr auto styled(T&& value, StyleT style)                      //NOLINT
-    -> Styled<std::remove_const_t<T>, StyleT> {
-    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), //NOLINT
-                                                  style);
-}
-
-/// @brief create a `Styled` from const lvalue reference
-template <typename T, detail::style StyleT>
-constexpr auto styled(const T& value, StyleT style)
-    -> Styled<const T&, StyleT> {
-    return Styled<const T&, StyleT>(value, style);
+template <typename T, concepts::style StyleT>
+constexpr auto styled(const T& value, StyleT style) {
+    return detail::StyledRef<std::remove_cvref_t<T>, StyleT>(value, style);
 }
 
 /// @brief output operator for Styled
-template <detail::ostream_outputable T, detail::style StyleT>
-inline auto operator<<(std::ostream& os, const Styled<T, StyleT>& styled)
+template <concepts::styled_ref StyledRefT>
+inline auto operator<<(std::ostream& os, StyledRefT&& styled) // NOLINT
     -> std::ostream& {
+    detail::check_styled_ref<StyledRefT>();
+    static_assert(concepts::ostream_outputable<typename StyledRefT::value_type>,
+                  "deco::StyledRef: T must be ostream outputable");
+
     os << styled.style() << styled.value() << reset;
     return os;
 }

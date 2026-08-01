@@ -2,6 +2,7 @@
 #include <doctest.h>
 
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -20,6 +21,15 @@ auto sgr_params(deco::Style style) -> std::string {
     std::string result;
     style.to_sgr_params(std::back_inserter(result));
     return result;
+}
+
+struct Value {
+    int value = 128;
+};
+
+auto operator<<(std::ostream& os, Value value) -> std::ostream& {   //NOLINT
+    os << value.value;
+    return os;
 }
 
 } // namespace
@@ -69,6 +79,22 @@ TEST_CASE("style: AbsoluteStyle::to_escape") {
     // Shouldn't output ';' when inner Style is null.
     CHECK(absolute(null_style).to_escape() == "\x1b[m");
     CHECK(absolute(bold).to_escape() == "\x1b[;1m");
+}
+
+TEST_CASE("style: StyledRef") {
+    using namespace deco;
+
+    std::ostringstream os;
+    Value value {64};
+
+    os << styled(Value {32}, bold);
+    os << styled(value, italic);
+
+    CHECK(os.str()
+          == bold.to_escape() + std::string("32")
+                 + absolute(null_style).to_escape()
+                 + italic.to_escape() + std::string("64")
+                 + absolute(null_style).to_escape());
 }
 
 // NOLINTEND

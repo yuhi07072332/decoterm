@@ -19,13 +19,11 @@
 #include <version>
 
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202403L
-#define DECO_ENABLE_PRINT 1 //NOLINT
+#define DECO_ENABLE_PRINT
 #include <print>
-#else
-#define DECO_ENABLE_PRINT 0
 #endif
 
-namespace deco::detail {
+namespace deco::concepts {
 
 #if __cplusplus >= 202302L
 template <typename Arg, typename CharT = char>
@@ -48,14 +46,18 @@ concept formattable =
     };
 #endif
 
+} // namespace deco::concepts
+
+namespace deco::detail {
+
 template <typename... Args>
 consteval void check_sfmt_args() {
     static_assert(
-        ((!detail::style<std::remove_cvref_t<Args>>
+        ((!concepts::style<std::remove_cvref_t<Args>>
           && !std::is_same_v<std::remove_cvref_t<Args>, style_reset_t>)
          && ...),
-        "StyledFormat: format args cannot contain Style types. Use push(), "
-        "pop(), print(style...) instead.");
+        "deco::StyledFormat: format args cannot contain Style types. Use "
+        "push(), pop(), print(style...) instead.");
 }
 
 } // namespace deco::detail
@@ -67,7 +69,7 @@ consteval void check_sfmt_args() {
 namespace std {
 
 /// @brief formatter for Style types e.g. `Style`, `AbsoluteStyle`
-template <deco::detail::style StyleT>
+template <deco::concepts::style StyleT>
 struct formatter<StyleT> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
@@ -91,15 +93,17 @@ struct formatter<deco::style_reset_t> {
 };
 
 /// @brief formatter for `Styled`
-template <deco::detail::formattable T, deco::detail::style StyleT>
-struct formatter<deco::Styled<T, StyleT>> {
-    std::formatter<std::remove_cvref_t<T>, char> value_formatter;
+template <deco::concepts::styled_ref StyledRefT>
+    requires deco::concepts::formattable<typename StyledRefT::value_type>
+struct formatter<StyledRefT> {
+    std::formatter<typename StyledRefT::value_type, char>
+        value_formatter;
 
     constexpr auto parse(std::format_parse_context& ctx) {
         return value_formatter.parse(ctx);
     }
 
-    auto format(const deco::Styled<T, StyleT>& styled,
+    auto format(const StyledRefT& styled, /*NOLINT*/
                 std::format_context& ctx) const {
         ctx.advance_to(styled.style().to_escape(ctx.out()));
         ctx.advance_to(value_formatter.format(styled.value(), ctx));
@@ -129,7 +133,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
     /* ----- Style operations ----- */
 
-    auto push(detail::style auto style) -> StyledFormat& {
+    auto push(concepts::style auto style) -> StyledFormat& {
         push_style(style);
         current_is_pending_ = true;
         return *this;
@@ -150,12 +154,12 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     /* ----- format ----- */
 
     template <std::output_iterator<const char&> OutputIt,
-              detail::style StyleT,
+              concepts::style StyleT,
               typename... Args>
     auto format_to(OutputIt out,
                    StyleT style,
                    std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt { //NOLINT
+                   Args&&... args) -> OutputIt { // NOLINT
         detail::check_sfmt_args<Args...>();
         out = ensure_context(out);
         if (!style.is_null()) out = output_style(out, style);
@@ -167,15 +171,15 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     template <std::output_iterator<const char&> OutputIt, typename... Args>
     auto format_to(OutputIt out,
                    std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt { //NOLINT
+                   Args&&... args) -> OutputIt { // NOLINT
         return format_to(out, null_style, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     [[nodiscard]]
-    auto format(detail::style auto style,
+    auto format(concepts::style auto style,
                 std::format_string<Args...> fmt,
-                Args&&... args) -> std::string { //NOLINT
+                Args&&... args) -> std::string { // NOLINT
         std::string buf;
         format_to(
             std::back_inserter(buf), style, fmt, std::forward<Args>(args)...);
@@ -184,14 +188,14 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
     template <typename... Args>
     [[nodiscard]]
-    auto format(std::format_string<Args...> fmt, Args&&... args) //NOLINT
+    auto format(std::format_string<Args...> fmt, Args&&... args) // NOLINT
         -> std::string {
         std::string buf;
         format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
         return buf;
     }
 
-#if DECO_ENABLE_PRINT
+#ifdef DECO_ENABLE_PRINT
 
     /* ----- print ----- */
 
@@ -205,7 +209,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         return *this;
     }
 
-    template <detail::style StyleT, typename... Args>
+    template <concepts::style StyleT, typename... Args>
     auto print(StyleT style, std::format_string<Args...> fmt, Args&&... args)
         -> StyledFormat& {
         detail::check_sfmt_args<Args...>();
@@ -228,7 +232,8 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 #endif // DECO_ENABLE_PRINT
 
   private:
-    template <std::output_iterator<const char&> OutputIt, detail::style StyleT>
+    template <std::output_iterator<const char&> OutputIt,
+              concepts::style StyleT>
     auto output_style(OutputIt out, StyleT style) const -> OutputIt {
         if (style_enabled()) return style.to_escape(out);
         return out;
@@ -246,7 +251,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         return out;
     }
 
-#if DECO_ENABLE_PRINT
+#ifdef DECO_ENABLE_PRINT
 
     template <typename... Args>
     void print_stream(std::format_string<Args...> fmt, Args&&... args) const {
@@ -261,7 +266,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         }
     }
 
-    void output_style(detail::style auto style) const {
+    void output_style(concepts::style auto style) const {
         if (!style_enabled()) return;
         print_stream("{}", style);
     }
@@ -285,6 +290,8 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
 }; // namespace deco
 
+#ifdef DECO_ENABLE_PRINT
 #undef DECO_ENABLE_PRINT
+#endif
 
 #endif // !DECO_FORMAT_HPP

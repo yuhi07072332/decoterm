@@ -28,19 +28,7 @@ struct style_output_context_t {};
 ///
 /// Used to determine whether `StyleOutputState` needs to output the current
 /// style before outputting a value.
-inline const style_output_context_t* g_style_output_context = nullptr; //NOLINT
-
-/* ----- type traits ----- */
-
-// Whether `T` is a `Styled`.
-template <typename T> struct is_styled : std::false_type {};
-
-template <typename T, typename U>
-struct is_styled<Styled<T, U>> : std::true_type {};
-
-// Whether `remove_cvref_t<T>` is a `Styled`.
-template <typename T>
-concept styled = is_styled<std::remove_cvref_t<T>>::value;
+inline const style_output_context_t* g_style_output_context = nullptr; // NOLINT
 
 /* ----- StyleStack ----- */
 
@@ -111,7 +99,7 @@ class StyleStack {
 /// current style before outputting a value.
 ///
 /// @see `g_style_output_context`, `StyledOstream`
-class StyleState { //NOLINT
+class StyleState { // NOLINT
   public:
     StyleState() = default;
     StyleState(const StyleState&) = default;
@@ -225,7 +213,7 @@ class StyleStateOption {
     friend Derived;
     StyleStateOption(StyleState& state) : state_(state) {}
 
-    StyleState& state_;                                         //NOLINT
+    StyleState& state_; // NOLINT
 };
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -254,8 +242,8 @@ class StyledOstream : public StyleState,
     ///
     /// @throws `std::logic_error` if `operator<<(std::ostream, T&&)` returns
     /// different ostream object.
-    template <detail::ostream_outputable T>
-        requires(!detail::style<T> && !detail::styled<T>)
+    template <concepts::ostream_outputable T>
+        requires(!concepts::style<T> && !concepts::styled_ref<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         out.ensure_context();
 
@@ -268,7 +256,7 @@ class StyledOstream : public StyleState,
     }
 
     /// @brief output operator for Style types
-    template <detail::style StyleT>
+    template <concepts::style StyleT>
     friend auto operator<<(StyledOstream& out, StyleT style) -> StyledOstream& {
         out.ensure_context();
 
@@ -296,9 +284,11 @@ class StyledOstream : public StyleState,
     }
 
     /// @brief output operator for `Styled`
-    template <detail::ostream_outputable T, detail::style StyleT>
-    friend auto operator<<(StyledOstream& out, const Styled<T, StyleT>& styled)
+    template <concepts::styled_ref StyledRefT>
+    friend auto operator<<(StyledOstream& out, StyledRefT&& styled) // NOLINT
         -> StyledOstream& {
+        detail::check_styled_ref<StyledRefT>();
+
         out.ensure_context();
         out.output_style(styled.style());
         out.ostream() << styled.value();
@@ -346,7 +336,7 @@ class StyledOstream : public StyleState,
         if (auto style = update_context()) output_style(*style);
     }
 
-    void output_style(detail::style auto style) const {
+    void output_style(concepts::style auto style) const {
         if (style_enabled()) *ostream_ << style;
     }
 
