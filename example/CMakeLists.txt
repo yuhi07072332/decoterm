@@ -1,6 +1,7 @@
+cmake_minimum_required(VERSION 3.30)
 
-file(GLOB EXAMPLE_SRCS
-    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+set(EXAMPLE_NAMES
+    quickstart.cpp
 )
 
 foreach(source IN LISTS EXAMPLE_SRCS)

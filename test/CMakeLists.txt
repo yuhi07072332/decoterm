@@ -1,26 +1,20 @@
 #unit test
 
-include(FetchContent)
-
-FetchContent_Declare(doctest
-    GIT_REPOSITORY https://github.com/doctest/doctest
-    GIT_TAG v2.5.2
-)
-FetchContent_MakeAvailable(doctest)
-
-include("${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake")
-
 add_executable(decoterm_test
     test_color.cpp
     test_style.cpp
-    test_styled_out.cpp
+    test_output.cpp
     test_format.cpp
+)
+
+target_include_directories(decoterm_test
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
 target_link_libraries(decoterm_test
     PRIVATE
     decoterm
-    doctest::doctest
 )
 
 target_compile_features(decoterm_test PRIVATE cxx_std_23)
@@ -30,7 +24,7 @@ add_test(NAME decoterm_test COMMAND decoterm_test)
 # output test
 
 set(OUTPUT_TEST_NAMES
-    test_output
+    output
 )
 
 foreach(test_name IN LISTS OUTPUT_TEST_NAMES)

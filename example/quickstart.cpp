@@ -1,4 +1,3 @@
-#include "decoterm/styled_out.hpp"
 #include <decoterm/decoterm.hpp>
 
 #include <iostream>

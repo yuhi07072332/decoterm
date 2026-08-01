@@ -27,7 +27,7 @@ namespace deco {
 
 /* ----- forward declarations ----- */
 
-enum class ColorSupport { TrueColor, Color16 };
+enum class ColorSupport { truecolor, color16 };
 
 namespace terminal {
 
@@ -65,9 +65,9 @@ inline auto get_color_support() -> ColorSupport {
     std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
     if (contains(env_colorterm, "truecolor")
         || contains(env_colorterm, "24bit"))
-        return ColorSupport::TrueColor;
+        return ColorSupport::truecolor;
 
-    return ColorSupport::Color16;
+    return ColorSupport::color16;
 #endif
 };
 

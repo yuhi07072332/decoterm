@@ -8,13 +8,13 @@ project(decoterm
     LANGUAGES CXX
 )
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 add_library(decoterm INTERFACE include/decoterm/decoterm.hpp)
 
-target_include_directories(decoterm INTERFACE include)
+target_include_directories(decoterm
+    INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
 target_compile_features(decoterm INTERFACE cxx_std_20)
 
 if(DECOTERM_BUILD_TEST)

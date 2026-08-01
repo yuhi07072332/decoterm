@@ -24,16 +24,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO:
-// - new line with default style
-
-#ifndef DECOTERM_DECOTERM_HPP
-#define DECOTERM_DECOTERM_HPP
-
 #include "style.hpp"
 #include "output.hpp"
 #include "format.hpp"
 #include "terminal.hpp"
-#include "color256.hpp"
-
-#endif // !DECOTERM_DECOTERM_HPP
+#include "color_info.hpp"
