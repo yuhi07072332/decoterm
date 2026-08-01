@@ -27,13 +27,13 @@
 // TODO:
 // - new line with default style
 
-#ifndef DECO_DECOTERM_HPP
-#define DECO_DECOTERM_HPP
+#ifndef DECOTERM_DECOTERM_HPP
+#define DECOTERM_DECOTERM_HPP
 
 #include "style.hpp"
-#include "styled_out.hpp"
+#include "output.hpp"
 #include "format.hpp"
 #include "terminal.hpp"
 #include "color256.hpp"
 
-#endif // !DECO_DECOTERM_HPP
+#endif // !DECOTERM_DECOTERM_HPP

@@ -5,8 +5,8 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECO_STYLED_OUT_HPP
-#define DECO_STYLED_OUT_HPP
+#ifndef DECOTERM_OUTPUT_HPP
+#define DECOTERM_OUTPUT_HPP
 
 #include "style.hpp"
 
@@ -361,4 +361,4 @@ inline auto styled_ostream(std::ostream& os) -> StyledOstream {
 
 } // namespace deco
 
-#endif // !DECO_STYLED_OUT_HPP
+#endif // !DECOTERM_OUTPUT_HPP

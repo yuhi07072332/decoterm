@@ -5,8 +5,8 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECO_STYLE_HPP
-#define DECO_STYLE_HPP
+#ifndef DECOTERM_STYLE_HPP
+#define DECOTERM_STYLE_HPP
 
 #include <array>
 #include <cassert>
@@ -633,4 +633,4 @@ inline auto operator<<(std::ostream& os, StyledRefT&& styled) // NOLINT
 
 #undef DECO_CONSTEXPR_CMATH
 
-#endif // !DECO_STYLE_HPP
+#endif // !DECOTERM_STYLE_HPP

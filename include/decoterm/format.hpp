@@ -5,11 +5,11 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECO_FORMAT_HPP
-#define DECO_FORMAT_HPP
+#ifndef DECOTERM_FORMAT_HPP
+#define DECOTERM_FORMAT_HPP
 
 #include "style.hpp"
-#include "styled_out.hpp"
+#include "output.hpp"
 
 #include <format>
 #include <iterator>
@@ -292,4 +292,4 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 #undef DECO_ENABLE_PRINT
 #endif
 
-#endif // !DECO_FORMAT_HPP
+#endif // !DECOTERM_FORMAT_HPP

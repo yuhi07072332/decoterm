@@ -5,8 +5,8 @@
 // This file is part of the decoterm library.
 // For license information, see decoterm.hpp.
 
-#ifndef DECO_COLOR256_HPP
-#define DECO_COLOR256_HPP
+#ifndef DECOTERM_COLOR_INFO_HPP
+#define DECOTERM_COLOR_INFO_HPP
 
 #include <cstdint>
 
@@ -16,7 +16,7 @@ namespace deco::colors {
 
 /// non-system colors
 /// color names are from https://www.ditig.com/256-colors-cheat-sheet#google_vignette
-enum Color256 : uint8_t {
+enum Color256 : uint8_t {               // NOLINT
     Grey0             = 16,
     NavyBlue          = 17,
     DarkBlue          = 18,
@@ -263,4 +263,4 @@ enum Color256 : uint8_t {
 
 } // namespace deco::colors
 
-#endif // !DECO_COLOR256_HPP
+#endif // !DECOTERM_COLOR_INFO_HPP
