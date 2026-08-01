@@ -35,6 +35,7 @@ Checks: "
 "
 CheckOptions:
    cppcoreguidelines-rvalue-reference-param-not-moved.AllowPartialMove: true
+   modernize-use-trailing-return-type.TransformLambdas: none
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
 FormatStyle: none

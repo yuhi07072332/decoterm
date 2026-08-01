@@ -8,7 +8,6 @@
 #include <string>
 #include <type_traits>
 
-// NOLINTBEGIN
 
 namespace {
 
@@ -19,7 +18,7 @@ struct TestStyleOutputState
     using deco::StyleState::push_style;
     using deco::StyleState::reset_style;
 
-    TestStyleOutputState()
+    TestStyleOutputState() //NOLINT
         : StyleStateOption(static_cast<deco::StyleState&>(*this)) {}
 
     TestStyleOutputState(const StyleState& other)
@@ -31,14 +30,14 @@ struct Value {
     int value = 128;
 };
 
-auto operator<<(std::ostream& os, Value value) -> std::ostream& { // NOLINT
+auto operator<<(std::ostream& os, Value value) -> std::ostream& {   //NOLINT
     os << value.value;
     return os;
 }
 
 struct return_dirrerent_ostream_t {};
 
-auto operator<<(std::ostream& os, return_dirrerent_ostream_t)
+auto operator<<(std::ostream& os, return_dirrerent_ostream_t) //NOLINT
     -> std::ostream& { // NOLINT
     return std::cerr;
 }
@@ -49,6 +48,8 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
 }
 
 } // namespace
+
+// NOLINTBEGIN
 
 TEST_CASE("styled: styled(): own rvalues") {
     using namespace deco;

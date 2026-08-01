@@ -17,10 +17,10 @@ auto measure(auto&& fn) -> double {
     auto begin = std::chrono::steady_clock::now();
     fn();
     auto end = std::chrono::steady_clock::now();
-    return (end - begin) / 1ns / 1000000.0;
+    return (end - begin) / 1ns / 1000000.0;     //NOLINT
 }
 
-int main() {
+auto main() -> int {    // NOLINT
     using namespace std::chrono_literals;
 
     std::print(ENABLE_ALTERNATE_SCREEN);

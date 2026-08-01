@@ -233,21 +233,21 @@ constexpr auto rgb(uint32_t hex) -> Color {
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
 [[nodiscard]]
-inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
+inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) //NOLINT
     -> Color {
     // clang-format off
 
     if (h < 0 || h >= 360) throw std::invalid_argument(
         "deco::hsv(): h is not in range [0, 360)");
 
-    float hp = h / 60.f;                               // NOLINT
-    float sp = s / 255.0f;                             // NOLINT
-    float vp = v / 255.0f;                             // NOLINT
+    float hp = h / 60.f;                               //NOLINT
+    float sp = s / 255.0f;                             //NOLINT
+    float vp = v / 255.0f;                             //NOLINT
 
     float f = hp - std::floor(hp);
-    uint8_t p = std::round(vp * (1 - sp) * 255);             // NOLINT
-    uint8_t q = std::round(vp * (1 - (f * sp)) * 255);       // NOLINT
-    uint8_t t = std::round(vp * (1 - ((1 - f) * sp)) * 255); // NOLINT
+    uint8_t p = std::round(vp * (1 - sp) * 255);             //NOLINT
+    uint8_t q = std::round(vp * (1 - (f * sp)) * 255);       //NOLINT
+    uint8_t t = std::round(vp * (1 - ((1 - f) * sp)) * 255); //NOLINT
 
     switch (h / 60) {
         case 0 : return Color(v, t, p);
@@ -267,7 +267,7 @@ namespace colors {
 // clang-format off
 
 /// system colors
-enum Color16 : uint8_t {    // NOLINT
+enum Color16 : uint8_t {                                    //NOLINT
     Black               = 0,
     Red                 = 1,
     Green               = 2,
@@ -293,22 +293,22 @@ enum Color16 : uint8_t {    // NOLINT
 inline constexpr Color default_color   = Color::default_color();
 inline constexpr Color null_color      = Color::null_color();
 
-inline constexpr Color black           = Color(colors::Black);
-inline constexpr Color red             = Color(colors::Red);
-inline constexpr Color green           = Color(colors::Green);
-inline constexpr Color yellow          = Color(colors::Yellow);
-inline constexpr Color blue            = Color(colors::Blue);
-inline constexpr Color magenta         = Color(colors::Magenta);
-inline constexpr Color cyan            = Color(colors::Cyan);
-inline constexpr Color white           = Color(colors::White);
-inline constexpr Color bright_black    = Color(colors::BrightBlack);
-inline constexpr Color bright_red      = Color(colors::BrightRed);
-inline constexpr Color bright_green    = Color(colors::BrightGreen);
-inline constexpr Color bright_yellow   = Color(colors::BrightYellow);
-inline constexpr Color bright_blue     = Color(colors::BrightBlue);
-inline constexpr Color bright_magenta  = Color(colors::BrightMagenta);
-inline constexpr Color bright_cyan     = Color(colors::BrightCyan);
-inline constexpr Color bright_white    = Color(colors::BrightWhite);
+inline constexpr Color black           = Color(0);
+inline constexpr Color red             = Color(1);
+inline constexpr Color green           = Color(2);
+inline constexpr Color yellow          = Color(3);
+inline constexpr Color blue            = Color(4);
+inline constexpr Color magenta         = Color(5);
+inline constexpr Color cyan            = Color(6);
+inline constexpr Color white           = Color(7);
+inline constexpr Color bright_black    = Color(8);
+inline constexpr Color bright_red      = Color(9);
+inline constexpr Color bright_green    = Color(10);
+inline constexpr Color bright_yellow   = Color(11);
+inline constexpr Color bright_blue     = Color(12);
+inline constexpr Color bright_magenta  = Color(13);
+inline constexpr Color bright_cyan     = Color(14);
+inline constexpr Color bright_white    = Color(15);
 
 // clang-format on
 
@@ -600,16 +600,16 @@ struct Styled<T&, StyleT> {
     constexpr auto style() const -> StyleT { return style_; }
 
   private:
-    const T& value_;        // NOLINT
+    const T& value_;                                                //NOLINT
     StyleT style_;
 };
 
 /// @brief create a `Styled` from rvalue reference
 template <typename T, detail::style StyleT>
     requires(!std::is_lvalue_reference_v<T>)
-constexpr auto styled(T&& value, StyleT style) // NOLINT
+constexpr auto styled(T&& value, StyleT style)                      //NOLINT
     -> Styled<std::remove_const_t<T>, StyleT> {
-    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), // NOLINT
+    return Styled<std::remove_const_t<T>, StyleT>(std::move(value), //NOLINT
                                                   style);
 }
 

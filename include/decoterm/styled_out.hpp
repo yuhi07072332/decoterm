@@ -28,7 +28,7 @@ struct style_output_context_t {};
 ///
 /// Used to determine whether `StyleOutputState` needs to output the current
 /// style before outputting a value.
-inline const style_output_context_t* g_style_output_context = nullptr; // NOLINT
+inline const style_output_context_t* g_style_output_context = nullptr; //NOLINT
 
 /* ----- type traits ----- */
 
@@ -111,7 +111,7 @@ class StyleStack {
 /// current style before outputting a value.
 ///
 /// @see `g_style_output_context`, `StyledOstream`
-class StyleState { // NOLINT
+class StyleState { //NOLINT
   public:
     StyleState() = default;
     StyleState(const StyleState&) = default;
@@ -225,7 +225,7 @@ class StyleStateOption {
     friend Derived;
     StyleStateOption(StyleState& state) : state_(state) {}
 
-    StyleState& state_; // NOLINT
+    StyleState& state_;                                         //NOLINT
 };
 
 // ╔═════════════════════════════════════════════════════════╗

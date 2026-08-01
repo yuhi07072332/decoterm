@@ -19,7 +19,7 @@
 #include <version>
 
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202403L
-#define DECO_ENABLE_PRINT 1 // NOLINT
+#define DECO_ENABLE_PRINT 1 //NOLINT
 #include <print>
 #else
 #define DECO_ENABLE_PRINT 0
@@ -55,7 +55,7 @@ consteval void check_sfmt_args() {
           && !std::is_same_v<std::remove_cvref_t<Args>, style_reset_t>)
          && ...),
         "StyledFormat: format args cannot contain Style types. Use push(), "
-        "pop(), print(style...) insted.");
+        "pop(), print(style...) instead.");
 }
 
 } // namespace deco::detail
@@ -155,7 +155,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     auto format_to(OutputIt out,
                    StyleT style,
                    std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt { // NOLINT
+                   Args&&... args) -> OutputIt { //NOLINT
         detail::check_sfmt_args<Args...>();
         out = ensure_context(out);
         if (!style.empty()) out = output_style(out, style);
@@ -167,7 +167,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     template <std::output_iterator<const char&> OutputIt, typename... Args>
     auto format_to(OutputIt out,
                    std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt { // NOLINT
+                   Args&&... args) -> OutputIt { //NOLINT
         return format_to(out, blank_style, fmt, std::forward<Args>(args)...);
     }
 
@@ -175,7 +175,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     [[nodiscard]]
     auto format(detail::style auto style,
                 std::format_string<Args...> fmt,
-                Args&&... args) -> std::string { // NOLINT
+                Args&&... args) -> std::string { //NOLINT
         std::string buf;
         format_to(
             std::back_inserter(buf), style, fmt, std::forward<Args>(args)...);
@@ -184,7 +184,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
     template <typename... Args>
     [[nodiscard]]
-    auto format(std::format_string<Args...> fmt, Args&&... args) // NOLINT
+    auto format(std::format_string<Args...> fmt, Args&&... args) //NOLINT
         -> std::string {
         std::string buf;
         format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);

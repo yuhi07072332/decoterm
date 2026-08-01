@@ -40,7 +40,7 @@ namespace detail {
 
 inline constexpr auto contains(std::string_view sv, std::string_view find)
     -> bool {
-    return sv.find(find) != std::string_view::npos; // NOLINT
+    return sv.find(find) != std::string_view::npos;                //NOLINT
 }
 
 #if defined(_WIN32)
