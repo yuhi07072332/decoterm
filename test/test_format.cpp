@@ -6,7 +6,6 @@
 #include <sstream>
 #include <string>
 #include <version>
-#include <iostream>
 
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202403L
 #define DECO_ENABLE_PRINT 1 // NOLINT
@@ -43,7 +42,6 @@ TEST_CASE("format: StyledFormat: format_to()") {
           == absolute(fg(white)).to_escape() + std::string("value 42 next"));
 }
 
-
 TEST_CASE("format: StyledFormat: format_to() with style") {
     using namespace deco;
     StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
@@ -77,11 +75,48 @@ TEST_CASE("format: StyledFormat: format() with StyledRef") {
     StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
 
     CHECK(sfmt.format("base{}base", styled(std::string("bold"), bold))
-        == absolute(fg(white)).to_escape() + std::string("base")
-          + bold.to_escape() + std::string("bold")
-          + absolute(fg(white)).to_escape() + std::string("base"));
+          == absolute(fg(white)).to_escape() + std::string("base")
+                 + bold.to_escape() + std::string("bold")
+                 + absolute(fg(white)).to_escape() + std::string("base"));
 }
 
+TEST_CASE("format: StyledFormat: StyledRef restores call style") {
+    using namespace deco;
+
+    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+
+    CHECK(
+        sfmt.format(fg(red), "before{}after", styled(std::string("bold"), bold))
+        == absolute(fg(white)).to_escape() + fg(red).to_escape()
+               + std::string("before") + bold.to_escape() + std::string("bold")
+               + absolute(fg(red)).to_escape() + std::string("after")
+               + absolute(fg(white)).to_escape());
+}
+
+TEST_CASE("format: StyledFormat: StyledRef restores absolute call style") {
+    using namespace deco;
+
+    const Style base = fg(white) | bold;
+    StyledFormat sfmt = StyledFormat().set_base_style(base);
+
+    CHECK(sfmt.format(absolute(fg(red)),
+                      "before{}after",
+                      styled(std::string("italic"), italic))
+          == absolute(base).to_escape() + absolute(fg(red)).to_escape()
+                 + std::string("before") + italic.to_escape()
+                 + std::string("italic") + absolute(fg(red)).to_escape()
+                 + std::string("after") + absolute(base).to_escape());
+}
+
+TEST_CASE("format: StyledFormat: disabled style with StyledRef") {
+    using namespace deco;
+
+    StyledFormat sfmt;
+    sfmt.enable_style(false);
+
+    CHECK(sfmt.format(fg(red), "A{}B", styled(std::string("x"), bold))
+          == "AxB");
+}
 
 TEST_CASE("format: StyledFormat: print()") {
 #if DECO_ENABLE_PRINT
@@ -120,6 +155,7 @@ TEST_CASE("format: StyledFormat: print() with style") {
 }
 
 TEST_CASE("format: StyledFormat: print() with StyledRef") {
+#if DECO_ENABLE_PRINT
     using namespace deco;
 
     std::ostringstream os;
@@ -129,9 +165,51 @@ TEST_CASE("format: StyledFormat: print() with StyledRef") {
     sfmt.print("base{}base", styled(std::string("bold"), bold));
 
     CHECK(os.str()
-        == absolute(fg(white)).to_escape() + std::string("base")
+          == absolute(fg(white)).to_escape() + std::string("base")
                  + bold.to_escape() + std::string("bold")
                  + absolute(fg(white)).to_escape() + std::string("base"));
+#else
+    CHECK(true);
+#endif
+}
+
+TEST_CASE("format: StyledFormat: print StyledRef context") {
+#if DECO_ENABLE_PRINT
+    using namespace deco;
+
+    const Style base = fg(white) | bold;
+    std::ostringstream os;
+    StyledFormat sfmt = StyledFormat().set_base_style(base);
+    sfmt.set_stream(os);
+
+    sfmt.print(absolute(fg(red)),
+               "before{}after",
+               styled(std::string("italic"), italic));
+
+    CHECK(os.str()
+          == absolute(base).to_escape() + absolute(fg(red)).to_escape()
+                 + std::string("before") + italic.to_escape()
+                 + std::string("italic") + absolute(fg(red)).to_escape()
+                 + std::string("after") + absolute(base).to_escape());
+#else
+    CHECK(true);
+#endif
+}
+
+TEST_CASE("format: StyledFormat: print disabled style with StyledRef") {
+#if DECO_ENABLE_PRINT
+    using namespace deco;
+
+    std::ostringstream os;
+    StyledFormat sfmt;
+    sfmt.enable_style(false).set_stream(os);
+
+    sfmt.print(fg(red), "A{}B", styled(std::string("x"), bold));
+
+    CHECK(os.str() == "AxB");
+#else
+    CHECK(true);
+#endif
 }
 
 TEST_CASE("format: StyledFormat: set stream(std::ostream)") {

@@ -21,10 +21,19 @@ namespace deco {
 namespace detail {
 
 template <concepts::style StyleT>
-constexpr auto inner_of(StyleT style) -> Style {
+constexpr auto is_null(StyleT style) -> bool {
     using style_type = std::remove_cvref_t<StyleT>;
-    if constexpr (std::is_same_v<style_type, Style>) return style;
-    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style.style;
+    if constexpr (std::is_same_v<style_type, Style>) return style.is_null();
+    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return false;
+}
+
+template <concepts::style StyleT>
+constexpr auto apply_style(AbsoluteStyle current, StyleT style)
+    -> AbsoluteStyle {
+    using style_type = std::remove_cvref_t<StyleT>;
+    if constexpr (std::is_same_v<style_type, Style>)
+        return absolute(current.style | style);
+    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
 }
 
 /* ----- global style output context ----- */
@@ -192,7 +201,7 @@ class StyleState { // NOLINT
 };
 
 template <typename Derived>
-class StyleStateOption {    
+class StyleStateOption {
   public:
     /// @brief Enable or disable style output.
     auto enable_style(bool enable = true) -> Derived& {
@@ -229,9 +238,7 @@ class StyleStateOption {
         return static_cast<StyleState&>(static_cast<Derived&>(*this));
     }
 
-    auto derived_this() -> Derived& {
-        return static_cast<Derived&>(*this);
-    }
+    auto derived_this() -> Derived& { return static_cast<Derived&>(*this); }
 };
 
 // ╔═════════════════════════════════════════════════════════╗
