@@ -170,6 +170,27 @@ struct formatter<StyledRefT> {
     }
 };
 
+// internal
+template <deco::concepts::styled_ref StyledRefT>
+    requires deco::concepts::formattable<typename StyledRefT::value_type>
+struct formatter<deco::detail::FStyledRef<StyledRefT>>
+    : public formatter<StyledRefT> {
+    using formatter<StyledRefT>::value_formatter;
+    using formatter<StyledRefT>::parse;
+
+    constexpr formatter() : formatter<StyledRefT>(false) {}
+
+    auto format(const deco::detail::FStyledRef<StyledRefT>& fstyled, /*NOLINT*/
+                std::format_context& ctx) const {
+        if (fstyled.context.style_enabled)
+            ctx.advance_to(fstyled.styled.style().to_escape(ctx.out()));
+        ctx.advance_to(value_formatter.format(fstyled.styled.value(), ctx));
+        if (fstyled.context.style_enabled)
+            ctx.advance_to(fstyled.context.current_style.to_escape(ctx.out()));
+        return ctx.out();
+    }
+};
+
 }; // namespace std
 
 namespace deco {
@@ -374,32 +395,6 @@ inline auto styled_fmt(std::ostream& os) -> StyledFormat {
 #endif // DECO_ENABLE_PRINT
 
 }; // namespace deco
-
-namespace std {
-
-/* ----- formatters for internal types ----- */
-
-template <deco::concepts::styled_ref StyledRefT>
-    requires deco::concepts::formattable<typename StyledRefT::value_type>
-struct formatter<deco::detail::FStyledRef<StyledRefT>>
-    : public formatter<StyledRefT> {
-    using formatter<StyledRefT>::value_formatter;
-    using formatter<StyledRefT>::parse;
-
-    constexpr formatter() : formatter<StyledRefT>(false) {}
-
-    auto format(const deco::detail::FStyledRef<StyledRefT>& fstyled, /*NOLINT*/
-                std::format_context& ctx) const {
-        if (fstyled.context.style_enabled)
-            ctx.advance_to(fstyled.styled.style().to_escape(ctx.out()));
-        ctx.advance_to(value_formatter.format(fstyled.styled.value(), ctx));
-        if (fstyled.context.style_enabled)
-            ctx.advance_to(fstyled.context.current_style.to_escape(ctx.out()));
-        return ctx.out();
-    }
-};
-
-} // namespace std
 
 #ifdef DECO_ENABLE_PRINT
 #undef DECO_ENABLE_PRINT
