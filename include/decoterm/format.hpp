@@ -8,8 +8,8 @@
 #ifndef DECOTERM_FORMAT_HPP
 #define DECOTERM_FORMAT_HPP
 
-#include "style.hpp"
 #include "output.hpp"
+#include "style.hpp"
 
 #include <format>
 #include <iterator>
@@ -23,7 +23,11 @@
 #include <print>
 #endif
 
-namespace deco::concepts {
+namespace deco {
+
+class StyledFormat;
+
+namespace concepts {
 
 #if __cplusplus >= 202302L
 template <typename Arg, typename CharT = char>
@@ -46,24 +50,59 @@ concept formattable =
     };
 #endif
 
-} // namespace deco::concepts
+} // namespace concepts
 
-namespace deco::detail {
+namespace detail {
 
-/* ----- StyledFormat ----- */
-
-template <typename... Args>
-consteval void sf_check_args() {
-    static_assert(
-        ((!concepts::style<std::remove_cvref_t<Args>>
-          && !std::is_same_v<std::remove_cvref_t<Args>, style_reset_t>)
-         && ...),
-        "deco::StyledFormat: format args cannot contain Style types. Use "
-        "push(), pop(), print(style...) instead.");
+template <typename Arg>
+consteval void sf_check_arg() {
+    using arg_type = std::remove_cvref_t<Arg>;
+    if constexpr (concepts::styled_ref<arg_type>) check_styled_ref<Arg>();
+    else
+        static_assert((!concepts::style<arg_type>
+                       && !std::is_same_v<arg_type, style_reset_t>
+                       && !std::is_same_v<arg_type, style_pop_t>),
+                      "deco::StyledFormat: Using Style, reset, pop in args is "
+                      "disallowed.");
 }
 
+// StyledRef with style context.
+// This is used instead of StyledRef in StyledFormat.
+template <concepts::styled_ref StyledRefT>
+struct FStyledRef {
+    constexpr FStyledRef(StyledRefT styled, AbsoluteStyle style_context)
+        : styled(styled),
+          style_context(style_context) {}
 
-} // namespace deco::detail
+    StyledRefT styled;
+    AbsoluteStyle style_context; // NOLINT
+};
+
+// Replace StyledRef<T>& with FStyledRef<T>.
+template <typename Arg>
+constexpr auto sf_process_arg(AbsoluteStyle style_context, Arg&& arg)
+    -> decltype(auto) {
+    if constexpr (concepts::styled_ref<Arg>) {
+        return FStyledRef(arg, style_context);
+    } else return std::forward<Arg>(arg); // NOLINT
+}
+
+template <typename Arg>
+using sf_processed_arg_t =
+    std::conditional_t<concepts::styled_ref<Arg>,
+                       FStyledRef<std::remove_cvref_t<Arg>>&,
+                       Arg>;
+
+// this is used with sf_process_arg(), since make_format_args don't take rvalue
+// reference.
+template <typename... Args>
+constexpr auto sf_make_format_args(Args&&... args /*NOLINT*/) {
+    return std::make_format_args(args...);
+}
+
+} // namespace detail
+
+} // namespace deco
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                       Formatters                        ║
@@ -99,8 +138,7 @@ struct formatter<deco::style_reset_t> {
 template <deco::concepts::styled_ref StyledRefT>
     requires deco::concepts::formattable<typename StyledRefT::value_type>
 struct formatter<StyledRefT> {
-    std::formatter<typename StyledRefT::value_type, char>
-        value_formatter;
+    std::formatter<typename StyledRefT::value_type, char> value_formatter;
 
     constexpr auto parse(std::format_parse_context& ctx) {
         return value_formatter.parse(ctx);
@@ -160,11 +198,18 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     auto format_to(OutputIt out,
                    StyleT style,
                    std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt { // NOLINT
-        detail::sf_check_args<Args...>();
+                   Args&&... args) -> OutputIt {
+        (detail::sf_check_arg<Args>(), ...);
         out = ensure_context(out);
+        const AbsoluteStyle context = absolute(
+            detail::inner_of(style) | detail::inner_of(current_style()));
+
         if (!style.is_null()) out = output_style(out, style);
-        out = std::vformat_to(out, fmt.get(), std::make_format_args(args...));
+        out =
+            std::vformat_to(out,
+                            fmt.get(),
+                            detail::sf_make_format_args(detail::sf_process_arg(
+                                context, std::forward<Args>(args))...));
         if (!style.is_null()) out = output_style(out, current_style());
         return out;
     }
@@ -172,7 +217,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     template <std::output_iterator<const char&> OutputIt, typename... Args>
     auto format_to(OutputIt out,
                    std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt { // NOLINT
+                   Args&&... args) -> OutputIt {
         return format_to(out, null_style, fmt, std::forward<Args>(args)...);
     }
 
@@ -180,7 +225,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     [[nodiscard]]
     auto format(concepts::style auto style,
                 std::format_string<Args...> fmt,
-                Args&&... args) -> std::string { // NOLINT
+                Args&&... args) -> std::string {
         std::string buf;
         format_to(
             std::back_inserter(buf), style, fmt, std::forward<Args>(args)...);
@@ -189,7 +234,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
     template <typename... Args>
     [[nodiscard]]
-    auto format(std::format_string<Args...> fmt, Args&&... args) // NOLINT
+    auto format(std::format_string<Args...> fmt, Args&&... args)
         -> std::string {
         std::string buf;
         format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
@@ -213,10 +258,15 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     template <concepts::style StyleT, typename... Args>
     auto print(StyleT style, std::format_string<Args...> fmt, Args&&... args)
         -> StyledFormat& {
-        detail::sf_check_args<Args...>();
+        (detail::sf_check_arg<Args>(), ...);
         ensure_context();
+        const AbsoluteStyle context = absolute(
+            detail::inner_of(style) | detail::inner_of(current_style()));
+
         if (!style.is_null()) output_style(style);
-        print_stream(fmt, std::forward<Args>(args)...);
+        print_stream(
+            fmt, //TODO: maybe implement vprint
+            detail::sf_process_arg(context, std::forward<Args>(args))...);
         if (!style.is_null()) output_style(current_style());
         return *this;
     }
@@ -257,9 +307,8 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     template <typename... Args>
     void print_stream(std::format_string<Args...> fmt, Args&&... args) const {
         if (std::holds_alternative<FILE*>(stream_)) {
-            std::print(std::get<FILE*>(stream_),
-                       fmt,
-                       std::forward<Args>(args)...);
+            std::print(
+                std::get<FILE*>(stream_), fmt, std::forward<Args>(args)...);
         } else if (std::holds_alternative<std::ostream*>(stream_)) {
             std::print(*std::get<std::ostream*>(stream_),
                        fmt,
@@ -304,6 +353,28 @@ inline auto styled_fmt(std::ostream& os) -> StyledFormat {
 #endif // DECO_ENABLE_PRINT
 
 }; // namespace deco
+
+namespace std {
+
+/* ----- formatters for internal types ----- */
+
+template <deco::concepts::styled_ref StyledRefT>
+    requires deco::concepts::formattable<typename StyledRefT::value_type>
+struct formatter<deco::detail::FStyledRef<StyledRefT>>
+    : public formatter<StyledRefT> {
+    using formatter<StyledRefT>::value_formatter;
+    using formatter<StyledRefT>::parse;
+
+    auto format(const deco::detail::FStyledRef<StyledRefT>& sfstyled, /*NOLINT*/
+                std::format_context& ctx) const {
+        ctx.advance_to(sfstyled.styled.style().to_escape(ctx.out()));
+        ctx.advance_to(value_formatter.format(sfstyled.styled.value(), ctx));
+        return formatter<deco::AbsoluteStyle> {}.format(sfstyled.style_context,
+                                                        ctx);
+    }
+};
+
+} // namespace std
 
 #ifdef DECO_ENABLE_PRINT
 #undef DECO_ENABLE_PRINT

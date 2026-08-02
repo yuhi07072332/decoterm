@@ -54,7 +54,7 @@ auto main() -> int {
     StyledFormat sfmt = styled_fmt();
     sfmt.print(fg(colors::aquamarine1), 
                "{} and {} support\n",
-               styled("std::format", bold),
-               styled("std::print", bold));
+               styled("std::format", italic),
+               styled("std::print", italic));
 
 }

@@ -20,6 +20,13 @@ namespace deco {
 
 namespace detail {
 
+template <concepts::style StyleT>
+constexpr auto inner_of(StyleT style) -> Style {
+    using style_type = std::remove_cvref_t<StyleT>;
+    if constexpr (std::is_same_v<style_type, Style>) return style;
+    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style.style;
+}
+
 /* ----- global style output context ----- */
 
 struct style_output_context_t {};
