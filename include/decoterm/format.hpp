@@ -50,8 +50,10 @@ concept formattable =
 
 namespace deco::detail {
 
+/* ----- StyledFormat ----- */
+
 template <typename... Args>
-consteval void check_sfmt_args() {
+consteval void sf_check_args() {
     static_assert(
         ((!concepts::style<std::remove_cvref_t<Args>>
           && !std::is_same_v<std::remove_cvref_t<Args>, style_reset_t>)
@@ -59,6 +61,7 @@ consteval void check_sfmt_args() {
         "deco::StyledFormat: format args cannot contain Style types. Use "
         "push(), pop(), print(style...) instead.");
 }
+
 
 } // namespace deco::detail
 
@@ -158,7 +161,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
                    StyleT style,
                    std::format_string<Args...> fmt,
                    Args&&... args) -> OutputIt { // NOLINT
-        detail::check_sfmt_args<Args...>();
+        detail::sf_check_args<Args...>();
         out = ensure_context(out);
         if (!style.is_null()) out = output_style(out, style);
         out = std::vformat_to(out, fmt.get(), std::make_format_args(args...));
@@ -197,8 +200,8 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
     /* ----- print ----- */
 
-    auto set_stream(std::FILE* f) -> StyledFormat& {
-        stream_.emplace<std::FILE*>(f);
+    auto set_stream(FILE* f) -> StyledFormat& {
+        stream_.emplace<FILE*>(f);
         return *this;
     }
 
@@ -210,7 +213,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     template <concepts::style StyleT, typename... Args>
     auto print(StyleT style, std::format_string<Args...> fmt, Args&&... args)
         -> StyledFormat& {
-        detail::check_sfmt_args<Args...>();
+        detail::sf_check_args<Args...>();
         ensure_context();
         if (!style.is_null()) output_style(style);
         print_stream(fmt, std::forward<Args>(args)...);
@@ -253,8 +256,8 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
     template <typename... Args>
     void print_stream(std::format_string<Args...> fmt, Args&&... args) const {
-        if (std::holds_alternative<std::FILE*>(stream_)) {
-            std::print(std::get<std::FILE*>(stream_),
+        if (std::holds_alternative<FILE*>(stream_)) {
+            std::print(std::get<FILE*>(stream_),
                        fmt,
                        std::forward<Args>(args)...);
         } else if (std::holds_alternative<std::ostream*>(stream_)) {
@@ -278,13 +281,27 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         current_is_pending_ = false;
     }
 
-    stream_type stream_ = stream_type(std::in_place_type<std::FILE*>, stdout);
+    stream_type stream_ = stream_type(std::in_place_type<FILE*>, stdout);
 
 #endif // DECO_ENABLE_PRINT
 
     // needs to output current style
     bool current_is_pending_ = false;
 };
+
+#ifdef DECO_ENABLE_PRINT
+
+/// equivalent to `StyledFormat().enable_context().set_stream(f)`
+inline auto styled_fmt(std::FILE* f = stdout) -> StyledFormat {
+    return StyledFormat().enable_context().set_stream(f);
+}
+
+/// equivalent to `StyledFormat().enable_context().set_stream(os)`
+inline auto styled_fmt(std::ostream& os) -> StyledFormat {
+    return StyledFormat().enable_context().set_stream(os);
+}
+
+#endif // DECO_ENABLE_PRINT
 
 }; // namespace deco
 

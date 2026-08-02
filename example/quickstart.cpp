@@ -1,6 +1,8 @@
 #include <decoterm/decoterm.hpp>
 
 #include <iostream>
+#include <print>
+#include <string_view>
 
 // clang-format off
 
@@ -9,27 +11,34 @@ auto main() -> int {
 
     // -- 1. Basic Style output
 
-    Style warning_style = bold | fg(rgb(0xfff2b2));
+    std::cout << bold << "Hello ,"
+              << (italic | fg(bright_green)) << "world!"
+              << reset      // Reset to default style
+              << "\n\n";
 
-    std::cout   << (bold | fg(bright_blue))
-                << "Hello "
-                << (underline | fg(bright_green))
-                << "World!"
-                << reset      // Reset to default style
-                << "\n\n";
+    Style warning_style = bold | fg(rgb(0xfff2b2));
 
     // same as fmt::styled() from fmtlib
     std::cout << styled("warning: ", warning_style)
               << "insert warning message here"
-              << styled("[-Wunused-variable]", warning_style | italic)
+              << '[' << styled("-Wunused-variable", warning_style) << ']'
               << '\n';
+
+    // HSV
+    std::string_view text = "rainbowwwww~~~~";
+    for (std::size_t i = 0, len = text.size(); i < len; ++i) 
+        std::cout << fg(hsv(i * (360 / len), 120, 255))
+                  << text[i];
+
+    std::println();
 
     // -- 2. Advanced stateful output
 
-    StyledOstream sout = styled_ostream(std::cout)
+    // StyledOstream: TODO: 
+    StyledOstream sout = styled_out(std::cout)
         .set_base_style(bg(rgb(32, 32, 32)))
         .enable_style(terminal::is_stdout_tty()) // disable style output when stdout is not a tty
-        .enable_nesting(true);
+        .enable_nesting();
 
     // Style nesting
     sout << "base style "
@@ -39,4 +48,13 @@ auto main() -> int {
                  << pop << "italic blue } "
              << pop << "blue } "
          << pop << "base style";
+
+    std::println();
+
+    StyledFormat sfmt = styled_fmt();
+    sfmt.print(fg(colors::aquamarine1), 
+               "{} and {} support\n",
+               styled("std::format", bold),
+               styled("std::print", bold));
+
 }

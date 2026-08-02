@@ -143,11 +143,11 @@ auto main() -> int {
 
     std::cout << styled("\nSECTION3: StyledOutputState", style_h1) << "\n\n";
 
-    auto dout = styled_ostream(std::cout).enable_context();
+    auto dout = styled_out(std::cout);
 
     dout << styled("[Basic]\n\n", style_h2);
 
-    auto out = styled_ostream(std::cout).enable_context().set_base_style(color(white, rgb(0x21314d))).enable_nesting();
+    auto out = styled_out(std::cout).set_base_style(color(white, rgb(0x21314d))).enable_nesting();
     out << "base style "
         << styled("{ styled: italic fg(yellowlight) }", italic | fg(bright_yellow))
         << " base style "
@@ -165,10 +165,10 @@ auto main() -> int {
 
     dout << styled("\n\n[Styled Output context]\n\n", style_h2);
 
-    auto out1 = styled_ostream(std::cout).enable_context(true);
+    auto out1 = styled_out(std::cout);
     out1 << (italic | fg(bright_green));
 
-    auto out2 = styled_ostream(std::cout).enable_context(true);
+    auto out2 = styled_out(std::cout);
 
     out1 << "{ out1 }";
     out2 << "{ out2 }";

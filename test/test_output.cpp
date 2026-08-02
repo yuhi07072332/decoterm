@@ -42,9 +42,8 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
 TEST_CASE("styled_out: StyleOutputState: copy from other type") {
     using namespace deco;
 
-    auto styled_os = styled_ostream(std::cout)
+    auto styled_os = StyledOstream(std::cout)
                          .enable_style(false)
-                         .enable_context(false)
                          .set_base_style(fg(blue))
                          .enable_nesting(true);
     styled_os << bold;
@@ -88,9 +87,8 @@ TEST_CASE("styled_out: StyleOutputState: options") {
 TEST_CASE("styled_out: StyleOutputState: options after chained construction") {
     using namespace deco;
 
-    auto state = styled_ostream(std::cout)
+    auto state = styled_out(std::cout)
                      .enable_style(false)
-                     .enable_context(true)
                      .set_base_style(fg(blue))
                      .enable_nesting(true);
 
@@ -165,7 +163,6 @@ TEST_CASE("styled_out: StyledOstream: write plain values") {
 
     std::ostringstream os;
     StyledOstream styled_os(os);
-    styled_os.enable_context(false);
 
     double d = 1.5;
 
@@ -180,8 +177,7 @@ TEST_CASE("styled_out: StyledOstream: call IO manipulator") {
 
     std::ostringstream os;
     std::ostringstream expected;
-    StyledOstream styled_os = styled_ostream(os);
-    styled_os.enable_context(false);
+    StyledOstream styled_os(os);
 
     styled_os << std::boolalpha << true << ' ' << std::noboolalpha << false
               << ' ' << std::showbase << std::hex << 42 << ' '
@@ -252,7 +248,7 @@ TEST_CASE("styled_out: StyledOstream: restores nested styles") {
 
     std::ostringstream os;
     StyledOstream styled_os =
-        styled_ostream(os).set_base_style(fg(blue)).enable_nesting(true);
+        styled_out(os).set_base_style(fg(blue)).enable_nesting(true);
 
     styled_os << bold << "bold" << fg(red) << "red bold" << pop << "blue bold"
               << pop << "blue";
@@ -271,7 +267,7 @@ TEST_CASE("styled_out: StyledOstream: reset returns to base style") {
 
     std::ostringstream os;
     StyledOstream styled_os =
-        styled_ostream(os).set_base_style(fg(blue)).enable_nesting(true);
+        styled_out(os).set_base_style(fg(blue)).enable_nesting(true);
 
     styled_os << bold << "bold" << reset << "base";
 
@@ -286,8 +282,8 @@ TEST_CASE("styled_out: StyledOstream: context tracking") {
 
     std::ostringstream os1;
     std::ostringstream os2;
-    auto out1 = styled_ostream(os1).set_base_style(fg(blue)).enable_context();
-    auto out2 = styled_ostream(os2).set_base_style(fg(red)).enable_context();
+    auto out1 = styled_out(os1).set_base_style(fg(blue));
+    auto out2 = styled_out(os2).set_base_style(fg(red));
 
     out1 << "a" << "b";
     out2 << "c";
@@ -307,7 +303,7 @@ TEST_CASE("styled_out: StyledOstream: only output base style first time if conte
 
     std::ostringstream os;
     auto out =
-        styled_ostream(os).set_base_style(fg(blue)).enable_context(false);
+        StyledOstream(os).set_base_style(fg(blue));
 
     out << "a" << "b" << bold << "c" << pop << "d" << reset << "e";
 

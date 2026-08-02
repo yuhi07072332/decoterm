@@ -16,8 +16,6 @@
 #include <utility>
 #include <vector>
 
-#include <iostream>
-
 namespace deco {
 
 namespace detail {
@@ -353,10 +351,10 @@ class StyledOstream : public StyleState,
     std::ostream* ostream_;
 };
 
-/// @brief equivalent to `StyledOstream(os)`
+/// @brief equivalent to `StyledOstream(os).enable_context()`
 [[nodiscard]]
-inline auto styled_ostream(std::ostream& os) -> StyledOstream {
-    return {os};
+inline auto styled_out(std::ostream& os) -> StyledOstream {
+    return StyledOstream(os).enable_context();
 }
 
 } // namespace deco

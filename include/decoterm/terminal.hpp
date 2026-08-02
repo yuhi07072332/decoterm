@@ -120,12 +120,12 @@ inline auto color_support() -> ColorSupport {
     return s_color_support;
 }
 
-/// @brief Same as `deco::styled_out()` but with automatic configuration
+/// @brief Same as `deco::styled_ostream()` but with automatic configuration
 [[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream {
+inline auto styled_ostream(std::ostream& os) -> StyledOstream {
     bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
                   || (detail::is_ostream_stderr(os) && is_stderr_tty());
-    return deco::styled_ostream(os).enable_style(is_tty).enable_context(is_tty);
+    return deco::styled_out(os).enable_style(is_tty).enable_context(is_tty);
 }
 
 }; // namespace terminal
