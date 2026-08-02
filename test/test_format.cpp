@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 #include <version>
+#include <iostream>
 
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202403L
 #define DECO_ENABLE_PRINT 1 // NOLINT
@@ -42,6 +43,7 @@ TEST_CASE("format: StyledFormat: format_to()") {
           == absolute(fg(white)).to_escape() + std::string("value 42 next"));
 }
 
+
 TEST_CASE("format: StyledFormat: format_to() with style") {
     using namespace deco;
     StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
@@ -68,6 +70,18 @@ TEST_CASE("format: StyledFormat: format()") {
           == italic.to_escape() + std::string("italic")
                  + absolute(fg(white)).to_escape());
 }
+
+TEST_CASE("format: StyledFormat: format() with StyledRef") {
+    using namespace deco;
+
+    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+
+    CHECK(sfmt.format("base{}base", styled(std::string("bold"), bold))
+        == absolute(fg(white)).to_escape() + std::string("base")
+          + bold.to_escape() + std::string("bold")
+          + absolute(fg(white)).to_escape() + std::string("base"));
+}
+
 
 TEST_CASE("format: StyledFormat: print()") {
 #if DECO_ENABLE_PRINT
@@ -103,6 +117,21 @@ TEST_CASE("format: StyledFormat: print() with style") {
 #else
     CHECK(true);
 #endif
+}
+
+TEST_CASE("format: StyledFormat: print() with StyledRef") {
+    using namespace deco;
+
+    std::ostringstream os;
+    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+    sfmt.set_stream(os);
+
+    sfmt.print("base{}base", styled(std::string("bold"), bold));
+
+    CHECK(os.str()
+        == absolute(fg(white)).to_escape() + std::string("base")
+                 + bold.to_escape() + std::string("bold")
+                 + absolute(fg(white)).to_escape() + std::string("base"));
 }
 
 TEST_CASE("format: StyledFormat: set stream(std::ostream)") {

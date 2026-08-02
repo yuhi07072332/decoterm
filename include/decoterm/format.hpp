@@ -62,13 +62,13 @@ consteval void sf_check_arg() {
         static_assert((!concepts::style<arg_type>
                        && !std::is_same_v<arg_type, style_reset_t>
                        && !std::is_same_v<arg_type, style_pop_t>),
-                      "deco::StyledFormat: Using Style, reset, pop in args is "
-                      "disallowed.");
+                      "deco::StyledFormat: Using Style, reset, pop for arguments is "
+                      "disallowed. Use push(), pop(), styled() etc. instead");
 }
 
 // StyledRef with style context.
 // This is used instead of StyledRef in StyledFormat.
-template <concepts::styled_ref StyledRefT>
+template <typename StyledRefT>
 struct FStyledRef {
     constexpr FStyledRef(StyledRefT styled, AbsoluteStyle style_context)
         : styled(styled),
@@ -90,7 +90,7 @@ constexpr auto sf_process_arg(AbsoluteStyle style_context, Arg&& arg)
 template <typename Arg>
 using sf_processed_arg_t =
     std::conditional_t<concepts::styled_ref<Arg>,
-                       FStyledRef<std::remove_cvref_t<Arg>>&,
+                       FStyledRef<std::remove_cvref_t<Arg>>,
                        Arg>;
 
 // this is used with sf_process_arg(), since make_format_args don't take rvalue
@@ -99,6 +99,7 @@ template <typename... Args>
 constexpr auto sf_make_format_args(Args&&... args /*NOLINT*/) {
     return std::make_format_args(args...);
 }
+
 
 } // namespace detail
 
@@ -140,6 +141,10 @@ template <deco::concepts::styled_ref StyledRefT>
 struct formatter<StyledRefT> {
     std::formatter<typename StyledRefT::value_type, char> value_formatter;
 
+    bool reset_on_end;
+
+    constexpr formatter(bool reset_on_end = true) : reset_on_end(reset_on_end) {}
+
     constexpr auto parse(std::format_parse_context& ctx) {
         return value_formatter.parse(ctx);
     }
@@ -148,7 +153,9 @@ struct formatter<StyledRefT> {
                 std::format_context& ctx) const {
         ctx.advance_to(styled.style().to_escape(ctx.out()));
         ctx.advance_to(value_formatter.format(styled.value(), ctx));
-        return formatter<deco::style_reset_t> {}.format(deco::reset, ctx);
+        if (reset_on_end)
+            ctx.advance_to(formatter<deco::style_reset_t> {}.format(deco::reset, ctx));
+        return ctx.out();
     }
 };
 
@@ -159,6 +166,9 @@ namespace deco {
 // ╔═════════════════════════════════════════════════════════╗
 // ║                      StyledFormat                       ║
 // ╚═════════════════════════════════════════════════════════╝
+
+template <typename... Args>
+using FormatString = std::format_string<detail::sf_processed_arg_t<Args>...>;
 
 /// @brief A stateful writter similar to `StyledOstream`, but with
 /// `std::formatter` support.
@@ -256,7 +266,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     }
 
     template <concepts::style StyleT, typename... Args>
-    auto print(StyleT style, std::format_string<Args...> fmt, Args&&... args)
+    auto print(StyleT style, FormatString<Args...> fmt, Args&&... args)
         -> StyledFormat& {
         (detail::sf_check_arg<Args>(), ...);
         ensure_context();
@@ -265,14 +275,14 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
         if (!style.is_null()) output_style(style);
         print_stream(
-            fmt, //TODO: maybe implement vprint
+            fmt,
             detail::sf_process_arg(context, std::forward<Args>(args))...);
         if (!style.is_null()) output_style(current_style());
         return *this;
     }
 
     template <typename... Args>
-    auto print(std::format_string<Args...> fmt, Args&&... args)
+    auto print(FormatString<Args...> fmt, Args&&... args)
         -> StyledFormat& {
         print(null_style, fmt, std::forward<Args>(args)...);
         return *this;
@@ -364,6 +374,8 @@ struct formatter<deco::detail::FStyledRef<StyledRefT>>
     : public formatter<StyledRefT> {
     using formatter<StyledRefT>::value_formatter;
     using formatter<StyledRefT>::parse;
+
+    constexpr formatter() : formatter<StyledRefT>(false) {}
 
     auto format(const deco::detail::FStyledRef<StyledRefT>& sfstyled, /*NOLINT*/
                 std::format_context& ctx) const {
