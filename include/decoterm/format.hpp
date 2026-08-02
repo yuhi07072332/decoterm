@@ -25,8 +25,6 @@
 
 namespace deco {
 
-class StyledFormat;
-
 namespace concepts {
 
 #if __cplusplus >= 202302L
@@ -64,7 +62,7 @@ consteval void sf_check_arg() {
              && !std::is_same_v<arg_type, style_reset_t>
              && !std::is_same_v<arg_type, style_pop_t>),
             "deco::StyledFormat: Using Style, reset, pop for arguments is "
-            "disallowed. Use push(), pop(), styled() etc. instead");
+            "disallowed. Use push(), pop(), styled() instead");
 }
 
 struct SFormatContext {
