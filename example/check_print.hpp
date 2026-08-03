@@ -1,3 +1,6 @@
+#ifndef DECOTERM_CHECK_PRINT_HPP
+#define DECOTERM_CHECK_PRINT_HPP
+
 #include <version>
 
 #if !(defined(__cpp_lib_print) && __cpp_lib_print >= 202403L)
@@ -8,3 +11,5 @@
 #define DECO_HAS_STD_PRINT
 #include <print>
 #endif
+
+#endif // !DECOTERM_CHECK_PRINT_HPP

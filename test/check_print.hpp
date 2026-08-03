@@ -1,10 +1,15 @@
+#ifndef DECOTERM_CHECK_PRINT_HPP
+#define DECOTERM_CHECK_PRINT_HPP
+
 #include <version>
 
 #if !(defined(__cpp_lib_print) && __cpp_lib_print >= 202403L)
 #ifdef DECO_REQUIRE_STD_PRINT
-#error "This example uses <print>, but your compiler doesn't support!"
+#error "This test uses <print>, but your compiler doesn't support!"
 #endif
 #else 
 #define DECO_HAS_STD_PRINT
 #include <print>
 #endif
+
+#endif // !DECOTERM_CHECK_PRINT_HPP
