@@ -1,9 +1,11 @@
+#define DECO_REQUIRE_STD_PRINT
+#include "check_print.hpp"
+
 #include <decoterm/format.hpp>
 #include <decoterm/style.hpp>
 
 #include <array>
 #include <iostream>
-#include <print>
 #include <string_view>
 
 constexpr std::array<std::string_view, 16> color_names {

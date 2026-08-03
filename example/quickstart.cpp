@@ -1,7 +1,8 @@
+#include "check_print.hpp"
+
 #include <decoterm/decoterm.hpp>
 
 #include <iostream>
-#include <print>
 #include <string_view>
 
 // clang-format off
@@ -30,7 +31,7 @@ auto main() -> int {
         std::cout << fg(hsv(i * (360 / len), 120, 255))
                   << text[i];
 
-    std::println();
+    std::cout << '\n';
 
     // -- 2. Advanced stateful output
 
@@ -49,12 +50,15 @@ auto main() -> int {
              << pop << "blue } "
          << pop << "base style";
 
-    std::println();
+    std::cout << '\n';
 
+#ifdef DECO_HAS_STD_PRINT
     StyledFormat sfmt = styled_fmt();
     sfmt.print(fg(colors::aquamarine1), 
                "{} and {} support\n",
                styled("std::format", italic),
                styled("std::print", italic));
+#endif
+
 
 }
