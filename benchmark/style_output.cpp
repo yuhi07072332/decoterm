@@ -10,58 +10,74 @@
 
 auto main(int argc, const char** argv) -> int {
     using namespace deco;
-    const uint64_t times = argc == 2 ? std::stoi(argv[1]) : 1;
 
     std::ostringstream os = std::ostringstream();
 
-    bench_mark(
-        "terminal color output",
-        times,
-        Entry([&] { os << "\x1b[34m\x1b[m"; }).name("ostream/raw escape"),
-        Entry([&] { os << fg(blue) << reset; }).name("ostream/Style output"),
-        Entry([&] {
-            std::print(os, "\x1b[34m\x1b[m");
-        }).name("format/raw escape"),
-        Entry([&] {
-            std::print(os, "{}", fg(blue));
-        }).name("format/Style output"));
+    BenchmarkList benchlist {
+        Benchmark {
+            "terminal color output",
+            EntryCompare(
+                Entry("ostream/raw escape", [&] { os << "\x1b[34m\x1b[m"; }),
+                Entry("ostream/Style output",
+                      [&] { os << fg(blue) << reset; })),
+            EntryCompare(Entry("format/raw escape",
+                               [&] { std::print(os, "\x1b[34m\x1b[m"); }),
+                         Entry("format/Style output",
+                               [&] { std::print(os, "{}", fg(blue)); }))},
+        Benchmark {
+            "fixed RGB color output",
+            EntryCompare(Entry("ostream/raw escape",
+                               [&] { os << "\x1b[48;2;156;234;108m\x1b[;m"; }),
+                         Entry("ostream/Style output",
+                               [&] {
+                                   constexpr deco::Style s =
+                                       bg(rgb(156, 234, 108));
+                                   os << s;
+                               })),
+            EntryCompare(
+                Entry("format/raw escape",
+                      [&] { std::print(os, "\x1b[48;2;156;234;108m\x1b[;m"); }),
+                Entry("format/Style output",
+                      [&] {
+                          constexpr deco::Style s = bg(rgb(156, 234, 108));
+                          std::print(os, "{}", s);
+                      }))},
+        Benchmark {"dynamic RGB color output",
+                   EntryCompare(Entry("ostream/raw escape",
+                                      [&](uint64_t i) {
+                                          os << "\x1b[48;2;" << (i & 255) << ';'
+                                             << ((i >> 8) & 255) << ';'
+                                             << ((i >> 16) & 255) << "m\x1b[;m";
+                                      }),
+                                Entry("ostream/Style output",
+                                      [&](uint64_t i) {
+                                          os << bg(rgb(i & 255,
+                                                       (i >> 8) & 255,
+                                                       (i >> 16) & 255))
+                                             << reset;
+                                      })),
+                   EntryCompare(Entry("format/raw escape",
+                                      [&](uint64_t i) {
+                                          std::print(
+                                              os,
+                                              "\x1b[48;2;{};{};{}m\x1b[;m",
+                                              i & 255,
+                                              (i >> 8) & 225,
+                                              (i >> 16) & 255);
+                                      }),
+                                Entry("format/Style output",
+                                      [&](uint64_t i) {
+                                          std::print(os,
+                                                     "{}{}",
+                                                     bg(rgb(i & 255,
+                                                            (i >> 8) & 255,
+                                                            (i >> 16) & 255)),
+                                                     reset);
+                                      }))},
+    };
 
-    bench_mark("fixed RGB color output",
-               times,
-               Entry([&] {
-                   os << "\x1b[48;2;156;234;108m\x1b[;m";
-               }).name("ostream/raw escape"),
-               Entry([&] {
-                   os << bg(rgb(156, 234, 108));
-               }).name("ostream/Style output"),
-               Entry([&] {
-                   std::print(os, "\x1b[48;2;156;234;108m\x1b[;m");
-               }).name("format/raw escape"),
-               Entry([&] {
-                   std::print(os, "{}", bg(rgb(156, 234, 108)));
-               }).name("format/Style output"));
+    parse_args(benchlist, argc, argv);
 
-    bench_mark("dynamic RGB color output",
-               times,
-               Entry([&](uint64_t i) {
-                   os << "\x1b[48;2;" << (i & 255) << ';' << ((i >> 8) & 255)
-                      << ';' << ((i >> 16) & 255) << "m\x1b[;m";
-               }).name("ostream/raw escape"),
-               Entry([&](uint64_t i) {
-                   os << bg(rgb(i & 255, (i >> 8) & 255, (i >> 16) & 255))
-                      << reset;
-               }).name("ostream/Style output"),
-               Entry([&](uint64_t i) {
-                   std::print(os,
-                              "\x1b[48;2;{};{};{}m\x1b[;m",
-                              i & 255,
-                              (i >> 8) & 225,
-                              (i >> 16) & 255);
-               }).name("format/raw escape"),
-               Entry([&](uint64_t i) {
-                   std::print(os,
-                              "{}{}",
-                              bg(rgb(i & 255, (i >> 8) & 255, (i >> 16) & 255)),
-                              reset);
-               }).name("format/Style output"));
+    benchlist.run();
+    benchlist.print();
 }

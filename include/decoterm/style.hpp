@@ -326,6 +326,7 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
         default: assert(false);
     }
 
+    return Color::null_color();
     // clang-format on 
 }
 
@@ -582,13 +583,17 @@ constexpr auto bg(Color bg) -> Style { return {Style::none, null_color, bg}; }
 /// @brief output operator for Style types e.g. Style, AbsoluteStyle
 template <concepts::style StyleT>
 inline auto operator<<(std::ostream& os, StyleT style) -> std::ostream& {
-    style.to_escape(std::ostreambuf_iterator(os));
+    std::array<char, StyleT::MAX_ESCAPE_CODE_SIZE> buf = {0};
+    auto len = style.to_escape(buf.begin()) - buf.begin();
+    os.write(buf.begin(), len);
     return os;
 }
 
 /// @brief output operator for deco::reset
 inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
-    absolute(Style()).to_escape(std::ostreambuf_iterator(os));
+    std::array<char, Style::MAX_ESCAPE_CODE_SIZE> buf = {0};
+    auto len = absolute(Style()).to_escape(buf.begin()) - buf.begin();
+    os.write(buf.begin(), len);
     return os;
 }
 

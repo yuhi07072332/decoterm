@@ -1,2 +1,3 @@
 > [!WARNING]
-> Benchmarks in this folder are only for testing and may inaccurate. Maybe will refactor in the future.
+> Benchmark programs in this folder are likely to be inaccurate. 
+> Maybe will refactor with real benchmark libraries like Google Benchmark in the future.
