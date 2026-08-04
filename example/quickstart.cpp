@@ -1,3 +1,4 @@
+#define DECO_REQUIRE_STD_PRINT
 #include "check_print.hpp"
 
 #include <decoterm/decoterm.hpp>
@@ -52,13 +53,11 @@ auto main() -> int {
 
     std::cout << '\n';
 
-#ifdef DECO_HAS_STD_PRINT
     StyledFormat sfmt = styled_fmt();
     sfmt.print(fg(colors::aquamarine1), 
                "{} and {} support\n",
                styled("std::format", italic),
                styled("std::print", italic));
-#endif
 
 
 }
