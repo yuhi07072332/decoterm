@@ -18,10 +18,10 @@ auto main(int argc, const char** argv) -> int {
         "terminal color output",
         times,
         Entry([&] { os << "\x1b[34m\x1b[m"; }).name("ostream/raw escape"),
+        Entry([&] { os << fg(blue) << reset; }).name("ostream/Style output"),
         Entry([&] {
-            os << fg(blue) << reset;
-        }).name("ostream/Style output"),
-        Entry([&] { std::print(os, "\x1b[34m\x1b[m"); }).name("format/raw escape"),
+            std::print(os, "\x1b[34m\x1b[m");
+        }).name("format/raw escape"),
         Entry([&] {
             std::print(os, "{}", fg(blue));
         }).name("format/Style output"));
@@ -39,28 +39,28 @@ auto main(int argc, const char** argv) -> int {
                }).name("format/raw escape"),
                Entry([&] {
                    std::print(os, "{}", bg(rgb(156, 234, 108)));
-               }).name("format/raw escape"));
+               }).name("format/Style output"));
 
     bench_mark("dynamic RGB color output",
                times,
                Entry([&](uint64_t i) {
-                   os << "\x1b[48;2;" << (i & 255) << ';'
-                             << ((i >> 8) & 255) << ';' << ((i >> 16) & 255)
-                             << "m\x1b[;m";
+                   os << "\x1b[48;2;" << (i & 255) << ';' << ((i >> 8) & 255)
+                      << ';' << ((i >> 16) & 255) << "m\x1b[;m";
                }).name("ostream/raw escape"),
                Entry([&](uint64_t i) {
-                   os
-                       << bg(rgb(i & 255, (i >> 8) & 255, (i >> 16) & 255))
-                       << reset;
+                   os << bg(rgb(i & 255, (i >> 8) & 255, (i >> 16) & 255))
+                      << reset;
                }).name("ostream/Style output"),
                Entry([&](uint64_t i) {
-                   std::print(os, "\x1b[48;2;{};{};{}m\x1b[;m",
+                   std::print(os,
+                              "\x1b[48;2;{};{};{}m\x1b[;m",
                               i & 255,
                               (i >> 8) & 225,
                               (i >> 16) & 255);
                }).name("format/raw escape"),
                Entry([&](uint64_t i) {
-                   std::print(os, "{}{}",
+                   std::print(os,
+                              "{}{}",
                               bg(rgb(i & 255, (i >> 8) & 255, (i >> 16) & 255)),
                               reset);
                }).name("format/Style output"));

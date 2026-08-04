@@ -31,21 +31,25 @@ template <typename Fn>
     requires std::invocable<Fn> || std::invocable<Fn, uint64_t>
 struct Entry {
     constexpr Entry(Fn fn)
-        : fn(std::move(fn)) {}
+        : fn_(std::move(fn)) {}
 
     constexpr auto name(std::string name) -> Entry& {
         name_ = std::move(name);
         return *this;
     }
 
-    Fn fn;
+    constexpr auto fn() -> Fn& { return fn_; }
+    constexpr auto name() -> std::string_view { return name_; }
+
+private:
+    Fn fn_;
     std::string name_;
 };
 
 template <typename Fn>
 inline void run_entry(uint64_t times, Entry<Fn>& entry) {
-    double res = times == 1 ? measure(entry.fn) : measure_avg(entry.fn, times);
-    std::print("{:24}:   n={:<8}   {:.6}ms\n", entry.name_, times, res);
+    double res = times == 1 ? measure(entry.fn()) : measure_avg(entry.fn(), times);
+    std::print("{:24}:   n={:<8}   {:.8f}ms\n", entry.name(), times, res);
 }
 
 
