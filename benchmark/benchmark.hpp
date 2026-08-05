@@ -8,7 +8,9 @@
 #include <chrono>
 #include <concepts>
 #include <cstdint>
+#include <functional>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 #include "argparse.hpp"
@@ -40,7 +42,7 @@ inline auto measure(benchmark_fn auto& fn, uint64_t iterations) -> result_ns_t {
 }
 
 inline auto benchmark(benchmark_fn auto&& fn,
-                      uint64_t iterations, // NOLINT
+                      uint64_t iterations,              // NOLINT
                       uint64_t rounds) -> result_ns_t { // NOLINT
     for (int i = 0; i < 10000; ++i)
         invoke_benchmark(fn, i);
@@ -62,6 +64,8 @@ struct BenchOption : argparse::Args {
     uint64_t& iterations =
         kwarg("n,iterations", "iterations per entry").set_default(100);
     uint64_t& rounds = kwarg("r,rounds", "rounds per entry").set_default(10);
+    bool& disable_transition = flag(
+        "disable-transition", "disable running transition between entries");
 };
 // NOLINTEND
 
@@ -76,7 +80,7 @@ struct Entry {
         result = detail::benchmark(fn, iterations, rounds);
     }
 
-    void print() { std::print("{:24}:  {:8.2f}ns", name, *result); }
+    void print() { std::print("{:24}  {:8.2f}ns", name, *result); }
 
     Fn fn;
     std::string name;
@@ -87,8 +91,11 @@ template <typename E1, typename E2>
 struct EntryCompare {
     EntryCompare(E1 lhs, E2 rhs) : lhs(std::move(lhs)), rhs(std::move(rhs)) {}
 
-    void run(uint64_t iterations, uint64_t rounds) { // NOLINT
+    void run(uint64_t iterations,
+             uint64_t rounds,
+             std::function<void()>* transition_fn_ = nullptr) { // NOLINT
         lhs.run(iterations, rounds);
+        if (transition_fn_ && *transition_fn_) transition_fn_->operator()();
         rhs.run(iterations, rounds);
     }
 
@@ -121,29 +128,46 @@ struct EntryCompare {
     E2 rhs;
 };
 
+template <typename T>
+struct is_entry_compare : std::false_type {};
+
+template <typename T, typename U>
+struct is_entry_compare<EntryCompare<T, U>> : std::true_type {};
+
 template <typename... Entries>
 struct Section {
     Section(std::string name, Entries... entries)
         : name_(std::move(name)),
           entries_(std::move(entries)...) {}
 
+    constexpr auto transition(std::function<void()> fn) -> Section& {
+        transition_fn_ = std::move(fn);
+        return *this;
+    }
+
     constexpr auto get() -> std::tuple<Entries...>& { return entries_; }
 
-    void run(uint64_t iterations, uint64_t rounds) { // NOLINT
+    void run(uint64_t iterations,
+             uint64_t rounds,
+             bool enable_transition = true) { // NOLINT
         std::apply(
-            [=](auto&... entries) { (entries.run(iterations, rounds), ...); },
+            [&, this](Entries&... entries) {
+                (run_entry(entries, iterations, rounds, enable_transition), ...);
+            },
             entries_);
     }
 
     void print() {
         auto sfmt = deco::styled_fmt();
-        sfmt.print(
-            deco::bold | deco::fg(deco::bright_yellow), "SECTION: {}", name_);
+        sfmt.print(deco::bold | deco::fg(deco::bright_yellow),
+                   "SECTION{}: {}",
+                   number_ ? std::format("[{}]", *number_) : "",
+                   name_);
 
         sfmt.print("\n\n");
 
         std::apply(
-            [](auto&... entries) {
+            [](Entries&... entries) {
                 ((entries.print(), std::print("\n")), ...);
             },
             entries_);
@@ -151,35 +175,75 @@ struct Section {
     }
 
   private:
+    template <typename...>
+    friend class Benchmark;
+
+    template <typename Entry>
+    void run_entry(Entry& entry,
+                   uint64_t iterations,
+                   uint64_t rounds,
+                   bool enable_transition) { // NOLINT
+        if constexpr (is_entry_compare<std::remove_cvref_t<Entry>>::value) {
+            if (transition_fn_ && enable_transition)
+                entry.run(iterations, rounds, &transition_fn_);
+            else entry.run(iterations, rounds);
+        } else {
+            entry.run(iterations, rounds);
+        }
+        if (enable_transition && transition_fn_) transition_fn_();
+    }
+
+    constexpr void set_number(int n) { number_ = n; }
+
+    std::function<void()> transition_fn_;
+    std::optional<int> number_;
     std::string name_;
     std::tuple<Entries...> entries_;
 };
 
 template <typename... Sections>
 struct Benchmark {
-    Benchmark(Sections... sections) : sections(std::move(sections)...) {}
+    static constexpr std::size_t N = sizeof...(Sections);
+
+    constexpr Benchmark(Sections... sections) // NOLINT
+        : sections(std::move(sections)...) {
+        [this]<std::size_t... Is>(std::index_sequence<Is...>) constexpr {
+            (std::get<Is>(this->sections).set_number(Is), ...);
+        }(std::make_index_sequence<sizeof...(Sections)>());
+    }
 
     void run() {
         std::apply(
-            [this](auto&... sections) {
-                (sections.run(iterations, rounds), ...);
+            [this](Sections&... sections) constexpr {
+                    (sections.run(iterations, rounds), ...);
             },
             sections);
     }
 
     void print() {
+        if (!enable_transition)
+            std::print("{}transition disabled{}\n",
+                       deco::fg(deco::cyan) | deco::bold,
+                       deco::reset);
+
+        std::println();
+
         std::print("{}iterations: {}{}\n",
-                   deco::fg(deco::yellow) | deco::bold,
+                   deco::fg(deco::yellow),
                    iterations,
                    deco::reset);
-        std::print("rounds: {}\n\n", rounds);
+        std::print("rounds: {}\n", rounds);
 
-        std::apply([](auto&... sections) { (sections.print(), ...); },
-                   sections);
+        std::println();
+
+        std::apply(
+            [](Sections&... sections) constexpr { (sections.print(), ...); },
+            sections);
     }
 
     uint64_t iterations = 0;
     uint64_t rounds = 0;
+    bool enable_transition = true;
     std::tuple<Sections...> sections;
 };
 
@@ -192,9 +256,16 @@ void parse_args(Benchmark& benchmark, int argc, const char** argv) {
                    deco::reset);
     }
 
-    auto option = argparse::parse<BenchOption>(argc, argv, true);
-    benchmark.iterations = option.iterations;
-    benchmark.rounds = option.rounds;
+    try {
+        auto option = argparse::parse<BenchOption>(argc, argv, true);
+        benchmark.iterations = option.iterations;
+        benchmark.rounds = option.rounds;
+        benchmark.enable_transition = !option.disable_transition;
+    } catch (std::exception& e) {
+        std::cerr << deco::styled("error: ", deco::fg(deco::red) | deco::bold)
+                  << e.what() << '\n';
+        std::exit(1);
+    }
 }
 
 #endif // !DECOTERM_BENCHMARK_HPP

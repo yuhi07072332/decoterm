@@ -3,15 +3,35 @@
 
 #include <cstdint>
 #include <iostream>
+#include <ostream>
 #include <print>
-#include <sstream>
+#include <streambuf>
 
 #include "benchmark.hpp"
+
+class void_streambuf final : public std::streambuf {
+  protected:
+    auto overflow(int_type ch) -> int_type override {
+        return traits_type::not_eof(ch);
+    }
+
+    auto xsputn(const char_type*, std::streamsize count)
+        -> std::streamsize override {
+        return count;
+    }
+};
+
+class void_ostream final : public std::ostream {
+  public:
+    void_ostream() : std::ostream(&buffer_) {} // NOLINT
+  private:
+    void_streambuf buffer_;
+};
 
 auto main(int argc, const char** argv) -> int {
     using namespace deco;
 
-    std::ostringstream os = std::ostringstream();
+    void_ostream os;
 
     Benchmark benchlist {
         Section {"terminal color output",
@@ -72,7 +92,23 @@ auto main(int argc, const char** argv) -> int {
                                                           (i >> 16) & 255)),
                                                    reset);
                                     }))},
-    };
+        Section {"style composition",
+                 EntryCompare(Entry("Style",
+                                    [&] {
+                                        os << (fg(rgb(111, 122, 133))
+                                               | bg(rgb(32, 64, 128)) | bold
+                                               | italic | underline | dim
+                                               | strikethrough | blink
+                                               | invert);
+                                    }),
+                              Entry("constexpr Style", [&] {
+                                  constexpr deco::Style s =
+                                      fg(rgb(111, 122, 133))
+                                      | bg(rgb(32, 64, 128)) | bold | italic
+                                      | underline | dim | strikethrough | blink
+                                      | invert;
+                                  os << s;
+                              }))}};
 
     parse_args(benchlist, argc, argv);
 
