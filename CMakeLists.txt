@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.30)
 
-option(DECOTERM_BUILD_TEST "build tests" OFF)
-option(DECOTERM_BUILD_EXAMPLE "build examples" OFF)
-option(DECOTERM_BUILD_BENCHMARK "build benchmarks" OFF)
+option(DECOTERM_BUILD_TESTS "build tests" OFF)
+option(DECOTERM_BUILD_EXAMPLES "build examples" OFF)
+option(DECOTERM_BUILD_BENCHMARKS "build benchmarks" OFF)
 
 project(decoterm
     VERSION 0.1.0
