@@ -55,6 +55,4 @@ auto main() -> int {
                "{} and {} support\n",
                styled("std::format", italic),
                styled("std::print", italic));
-
-
 }

@@ -1,5 +1,5 @@
 {
-    "target": "../single-include/decoterm.hpp",
+    "target": "single-include/decoterm/decoterm.hpp",
     "sources": [
         "decoterm/decoterm.hpp"
     ],

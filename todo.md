@@ -7,5 +7,5 @@
 ## repo
 - [ ] CHANGELOG / release notes
 - [ ] 版本宏(?)
-- [ ] merge into single header
+- [X] merge into single header
 - [ ] cmake package

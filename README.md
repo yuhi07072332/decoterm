@@ -17,7 +17,7 @@ A header-only C++20 library for terminal styling.
   Windows virtual terminal mode setup
 - `<format>` support for styles and styled values
 
-## Installization
+## Installation
 
 
 ## Todo
