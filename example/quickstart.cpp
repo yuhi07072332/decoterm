@@ -1,6 +1,3 @@
-#define DECO_REQUIRE_STD_PRINT
-#include "check_print.hpp"
-
 #include <decoterm/decoterm.hpp>
 
 #include <iostream>

@@ -1,5 +1,4 @@
-#unit test
-
+# unit test
 add_executable(decoterm_test
     test_color.cpp
     test_style.cpp

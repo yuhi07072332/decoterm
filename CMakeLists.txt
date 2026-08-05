@@ -18,6 +18,15 @@ target_include_directories(decoterm
 )
 target_compile_features(decoterm INTERFACE cxx_std_20)
 
+#check <print> support
+if(DECOTERM_BUILD_TEST OR DECOTERM_BUILD_EXAMPLE OR DECOTERM_BUILD_BENCHMARK)
+    include(cmake/CheckStdPrint.cmake)
+    decoterm_check_std_print(DECOTERM_HAS_STD_PRINT)
+    if (NOT DECOTERM_HAS_STD_PRINT)
+        message(FATAL_ERROR "Building decoterm tests / examples / benchmarks requires std::print, but your compiler doesn't support!")
+    endif()
+endif()
+
 if(DECOTERM_BUILD_TEST)
     enable_testing()
     add_subdirectory(test)
@@ -27,6 +36,6 @@ if(DECOTERM_BUILD_EXAMPLE)
     add_subdirectory(example)
 endif()
 
-if (DECOTERM_BUILD_BENCHMARK)
+if(DECOTERM_BUILD_BENCHMARK)
     add_subdirectory(benchmark)
 endif()
