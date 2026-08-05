@@ -1,0 +1,7 @@
+{
+    "target": "../single-include/decoterm.hpp",
+    "sources": [
+        "decoterm/decoterm.hpp"
+    ],
+    "include_paths": ["decoterm"]
+}
