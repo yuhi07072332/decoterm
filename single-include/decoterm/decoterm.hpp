@@ -1052,7 +1052,7 @@ namespace deco {
 
 /* ----- forward declarations ----- */
 
-enum class ColorSupport { truecolor, color16 };
+enum class ColorSupport { truecolor, color256, color16 };
 
 namespace terminal {
 
