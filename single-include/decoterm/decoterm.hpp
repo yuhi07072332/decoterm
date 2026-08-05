@@ -1561,6 +1561,10 @@ inline auto styled_fmt(std::ostream& os) -> StyledFormat {
 
 #include <cstdint>
 
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       Color Info                        ║
+// ╚═════════════════════════════════════════════════════════╝
+
 namespace deco::colors {
 
 // NOLINTBEGIN
