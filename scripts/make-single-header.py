@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sys
+import json
 import logging as log
 import runpy
 
@@ -14,6 +15,20 @@ CONFIG_DIR: Path = SCRIPT_DIR / "make-single-header"
 TARGET_PATH: Path = SCRIPT_DIR.parent / "single-include" / "decoterm" / "decoterm.hpp"
 AMALGAMATE_PATH: Path = CONFIG_DIR / "amalgamate" / "amalgamate.py"
 
+def generate_config(config_path: Path) -> None:
+    """
+    Generate make-single-header/config.json
+    """
+    config = {
+        "target": str(TARGET_PATH),
+        "sources": [
+            "decoterm/decoterm.hpp"
+        ],
+        "include_paths": ["decoterm"]
+    }
+
+    with open(config_path, "w", encoding="UTF-8") as config_file:
+        json.dump(config, config_file)
 
 def process(target_path: Path) -> None:
     """
@@ -63,6 +78,9 @@ def main():
     log.basicConfig(
         level = log.DEBUG if debug else log.INFO,
     )
+
+    generate_config(CONFIG_DIR / "config.json")
+
     sys.argv = ["amalgamate.py",
                 "-s", str(SCRIPT_DIR.parent / "include"),
                 "-c", str(CONFIG_DIR / "config.json"),

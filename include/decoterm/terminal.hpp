@@ -65,6 +65,8 @@ inline auto get_color_support() -> ColorSupport {
         || contains(env_colorterm, "24bit"))
         return ColorSupport::truecolor;
 
+    //TODO: 
+
     return ColorSupport::color16;
 #endif
 };
@@ -118,7 +120,7 @@ inline auto color_support() -> ColorSupport {
     return s_color_support;
 }
 
-/// @brief Same as `deco::styled_ostream()` but with automatic configuration
+/// @brief Same as `deco::styled_ostream()` but with automatic configurations
 [[nodiscard]]
 inline auto styled_ostream(std::ostream& os) -> StyledOstream {
     bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
