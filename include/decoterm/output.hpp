@@ -36,17 +36,20 @@ constexpr auto apply_style(AbsoluteStyle current, StyleT style)
 
 /* ----- global style output context ----- */
 
+// NOLINTBEGIN
+
 struct style_output_context_t {};
 
-/// @brief global style output context for `StyleOutputState`.
-///
-/// Used to determine whether `StyleOutputState` needs to output the current
-/// style before outputting a value.
-inline const style_output_context_t* g_style_output_context = nullptr; // NOLINT
+/// @brief global style output context for `StyleState`.
+/// @details Used to determine whether `StyleOutputState` needs to output the
+/// current style before outputting a value.
+inline const style_output_context_t* g_style_output_context = nullptr;
+
+// NOLINTEND
 
 /* ----- StyleStack ----- */
 
-/// @brief represents a nullable, single or multiple `AbsoluteStyle`
+/// @brief Represents a nullable single-or-multiple `AbsoluteStyle`
 /// stack.
 class StyleStack {
   public:
@@ -105,14 +108,14 @@ class StyleStack {
 // ║                       StyleState                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A class representing Style output state.
+/// @brief A class representing style output state.
 ///
-/// It is used to manage the current style output state(e.g. style enabled, base
+/// It manages the current style output state (e.g. style enabled, base
 /// style, etc.) If context tracking is enabled, it will also check
 /// `detail::g_style_output_context` to determine whether it needs to output the
 /// current style before outputting a value.
 ///
-/// @see `g_style_output_context`, `StyledOstream`
+/// @see `g_style_output_context`, `StyledOstream`, `StyledFormat`
 class StyleState { // NOLINT
   public:
     StyleState() = default;
@@ -122,7 +125,7 @@ class StyleState { // NOLINT
     auto operator=(StyleState&&) -> StyleState& = default;
 
     ~StyleState() {
-        if (context_enabled_ && detail::g_style_output_context == &context_)
+        if (context_tracking_enabled_ && detail::g_style_output_context == &context_)
             detail::g_style_output_context = nullptr;
     }
 
@@ -142,8 +145,8 @@ class StyleState { // NOLINT
     }
 
     [[nodiscard]]
-    auto context_enabled() const -> bool {
-        return context_enabled_;
+    auto context_tracking_enabled() const -> bool {
+        return context_tracking_enabled_;
     }
 
     [[nodiscard]]
@@ -162,11 +165,11 @@ class StyleState { // NOLINT
         stack_.push(abs(current_style().style | style));
     }
 
-    /// @brief Updates the context if enabled. Otherwise it only checks
-    /// `is_first_output_`
-    /// @returns The Style to output when context is updated
+    /// @brief Updates the context if context tracking is enabled; otherwise
+    /// checks whether the base style changed.
+    /// @returns The Style to emit when context or base style changed
     auto update_context() -> std::optional<AbsoluteStyle> {
-        if (!context_enabled_) {
+        if (!context_tracking_enabled_) {
             if (base_style_changed_) {
                 base_style_changed_ = false;
                 return base_style_;
@@ -192,39 +195,40 @@ class StyleState { // NOLINT
     detail::StyleStack stack_;
 
     bool style_enabled_ = true;
-    bool context_enabled_ = false;
+    bool context_tracking_enabled_ = false;
 
     bool base_style_changed_ = true;
     detail::style_output_context_t context_;
 };
 
+/// @brief CRTP class that provides chainable StyleState options
 template <typename Derived>
 class StyleStateOption {
   public:
     /// @brief Enable or disable style output.
     auto enable_style(bool enable = true) -> Derived& {
         state().style_enabled_ = enable;
-        return derived_this();
+        return underlying();
     }
 
     /// @brief Enable or disable context tracking.
-    auto enable_context(bool enable = true) -> Derived& {
-        state().context_enabled_ = enable;
-        return derived_this();
+    auto enable_context_tracking(bool enable = true) -> Derived& {
+        state().context_tracking_enabled_ = enable;
+        return underlying();
     }
 
     /// @brief Set the base style for this output state.
     auto set_base_style(Style base) -> Derived& {
         state().base_style_ = abs(base);
         state().base_style_changed_ = true;
-        return derived_this();
+        return underlying();
     }
 
     /// @brief Enable or disable style nesting.
     auto enable_nesting(bool enable = true) -> Derived& {
         if (enable) state().stack_.to_multiple();
         else state().stack_.to_single();
-        return derived_this();
+        return underlying();
     }
 
   private:
@@ -236,7 +240,7 @@ class StyleStateOption {
         return static_cast<StyleState&>(static_cast<Derived&>(*this));
     }
 
-    auto derived_this() -> Derived& { return static_cast<Derived&>(*this); }
+    auto underlying() -> Derived& { return static_cast<Derived&>(*this); }
 };
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -244,10 +248,14 @@ class StyleStateOption {
 // ╚═════════════════════════════════════════════════════════╝
 
 struct style_pop_t {};
+
+/// @brief StyledOstream manipulator that restores the previous style.
+/// @details If style nesting is not enabled, it will just restores to the base style.
 inline constexpr style_pop_t pop;
 
 /// @brief A stateful lightweight writer over an existing std::ostream.
-/// @note The passed std::ostream object must outlive this object.
+/// @warning The passed std::ostream object must outlive this object.
+/// @see `StyleState`
 class StyledOstream : public StyleState,
                       public StyleStateOption<StyledOstream> {
   public:
@@ -257,10 +265,10 @@ class StyledOstream : public StyleState,
         : StyleState(std::move(state)),
           ostream_(&os) {}
 
-    /// @brief Output operator for any type that is outputable to
+    /// @brief Output operator for any type that can be written to
     /// `std::ostream`.
     ///
-    /// @throws `std::logic_error` if `operator<<(std::ostream, T&&)` returns
+    /// @throws `std::logic_error` if `operator<<(std::ostream&, T&&)` returns a
     /// different ostream object.
     template <concepts::ostream_outputable T>
         requires(!concepts::style<T> && !concepts::styled_ref<T>)
@@ -270,7 +278,7 @@ class StyledOstream : public StyleState,
         if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
             os_ptr != out.ostream_)
             throw std::logic_error(
-                "StyledOstream: std::ostream output operator returns "
+                "StyledOstream: std::ostream output operator returned a "
                 "different ostream object");
         return out;
     }
@@ -303,7 +311,7 @@ class StyledOstream : public StyleState,
         return out;
     }
 
-    /// @brief output operator for `Styled`
+    /// @brief output operator for styled values
     template <concepts::styled_ref StyledRefT>
     friend auto operator<<(StyledOstream& out, StyledRefT&& styled) // NOLINT
         -> StyledOstream& {
@@ -316,7 +324,7 @@ class StyledOstream : public StyleState,
         return out;
     }
 
-    /// @brief output operator for IO manipulators.
+    /// @brief output operator for IO manipulators
     friend auto operator<<(StyledOstream& out,
                            std::ios_base& (*fn)(std::ios_base&))
         -> StyledOstream& {
@@ -325,7 +333,7 @@ class StyledOstream : public StyleState,
         return out;
     }
 
-    /// @brief output operator for IO manipulators.
+    /// @brief output operator for IO manipulators
     friend auto operator<<(StyledOstream& out,
                            std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
         -> StyledOstream& {
@@ -334,21 +342,22 @@ class StyledOstream : public StyleState,
         return out;
     }
 
-    /// @brief output operator for IO manipulators.
-    ///
-    /// `std::operator<<(std::ostream& os, std::ostream&(*fn)(std::ostream&))`
-    /// returns `fn(os)` instead of `os`, so we should assume that it may
-    /// return a different std::ostream&.
+    /// @brief output operator for IO manipulators
     friend auto operator<<(StyledOstream& out,
                            std::ostream& (*fn)(std::ostream&))
         -> StyledOstream& {
+        // `std::operator<<(std::ostream& os, std::ostream&(*fn)(std::ostream&))`
+        // returns `fn(os)` instead of `os`, so we should assume that it may
+        // return a different std::ostream&.
         out.ensure_context();
         out.ostream_ = &(out.ostream() << fn);
         return out;
     }
 
-    void switch_ostream(std::ostream& os) { ostream_ = &os; }
+    /// @brief Swithes the underlying `std::ostream`.
+    void set_stream(std::ostream& os) { ostream_ = &os; }
 
+    /// @brief Returns the underlying `std::ostream`.
     auto ostream() const -> std::ostream& { return *ostream_; }
 
   private:
@@ -363,10 +372,11 @@ class StyledOstream : public StyleState,
     std::ostream* ostream_;
 };
 
-/// @brief equivalent to `StyledOstream(os).enable_context()`
+/// @brief Creates a `StyledOstream` with context tracking enabled.
+/// @details equivalent to `StyledOstream(os).enable_context()`
 [[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream {
-    return StyledOstream(os).enable_context();
+    return StyledOstream(os).enable_context_tracking();
 }
 
 } // namespace deco

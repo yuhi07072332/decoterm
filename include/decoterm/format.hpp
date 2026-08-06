@@ -55,12 +55,12 @@ consteval void sf_check_arg() {
     using arg_type = std::remove_cvref_t<Arg>;
     if constexpr (concepts::styled_ref<arg_type>) check_styled_ref<Arg>();
     else
-        static_assert(
-            (!concepts::style<arg_type>
-             && !std::is_same_v<arg_type, style_reset_t>
-             && !std::is_same_v<arg_type, style_pop_t>),
-            "deco::StyledFormat: Using Style, reset, pop for arguments is "
-            "disallowed. Use push(), pop(), styled() instead");
+        static_assert((!concepts::style<arg_type>
+                       && !std::is_same_v<arg_type, style_reset_t>
+                       && !std::is_same_v<arg_type, style_pop_t>),
+                      "deco::StyledFormat: Style, reset, pop are disallowed as "
+                      "format arguments. Use print(style, ...), styled(), "
+                      "push(), reset(), or pop() instead.");
 }
 
 struct SFormatContext {
@@ -116,7 +116,7 @@ constexpr auto sf_make_format_args(Args&&... args /*NOLINT*/) {
 
 namespace std {
 
-/// @brief formatter for Style types e.g. `Style`, `AbsoluteStyle`
+/// @brief formatter for Style types, e.g. `Style` and `AbsoluteStyle`
 template <deco::concepts::style StyleT>
 struct formatter<StyleT> {
     constexpr auto parse(std::format_parse_context& ctx) const {
@@ -140,7 +140,7 @@ struct formatter<deco::style_reset_t> {
     }
 };
 
-/// @brief formatter for `Styled`
+/// @brief formatter for styled values
 template <deco::concepts::styled_ref StyledRefT>
     requires deco::concepts::formattable<typename StyledRefT::value_type>
 struct formatter<StyledRefT> {
@@ -166,7 +166,7 @@ struct formatter<StyledRefT> {
     }
 };
 
-// internal
+// internal formatter
 template <deco::concepts::styled_ref StyledRefT>
     requires deco::concepts::formattable<typename StyledRefT::value_type>
 struct formatter<deco::detail::FStyledRef<StyledRefT>>
@@ -195,12 +195,14 @@ namespace deco {
 // ║                      StyledFormat                       ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief Format string type used by StyledFormat::print().
 template <typename... Args>
 using FormatString = std::format_string<detail::sf_processed_arg_t<Args>...>;
 
-/// @brief A stateful writter similar to `StyledOstream`, but with
+/// @brief A stateful writer similar to `StyledOstream`, but with
 /// `std::formatter` support.
-/// @detail Format args cannot contain Style types.
+/// @details Format arguments cannot contain Style types, reset, or pop. Use
+/// print(style, ...), styled(), push(), reset(), or pop() instead.
 class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     using stream_type = std::variant<std::FILE*, std::ostream*>;
 
@@ -210,18 +212,24 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
     /* ----- Style operations ----- */
 
+    /// Similar to `styled_os << style`, where `styled_os` is a StyledOstream
+    /// object.
     auto push(concepts::style auto style) -> StyledFormat& {
         push_style(style);
         current_is_pending_ = true;
         return *this;
     }
 
+    /// Similar to `styled_os << pop`, where `styled_os` is a StyledOstream
+    /// object.
     auto pop() -> StyledFormat& {
         pop_style();
         current_is_pending_ = true;
         return *this;
     }
 
+    /// Similar to `styled_os << reset`, where `styled_os` is a StyledOstream
+    /// object.
     auto reset() -> StyledFormat& {
         reset_style();
         current_is_pending_ = true;
@@ -294,6 +302,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         return *this;
     }
 
+    /// @brief Prints with a temporary style to the stream.
     template <concepts::style StyleT, typename... Args>
     auto print(StyleT style, FormatString<Args...> fmt, Args&&... args)
         -> StyledFormat& {
@@ -372,20 +381,24 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
 #endif // DECO_ENABLE_PRINT
 
-    // needs to output current style
+    // Whether the current style needs to be emitted before the next output.
     bool current_is_pending_ = false;
 };
 
 #ifdef DECO_ENABLE_PRINT
 
-/// equivalent to `StyledFormat().enable_context().set_stream(f)`
-inline auto fstyled_out(std::FILE* f = stdout) -> StyledFormat {
-    return StyledFormat().enable_context().set_stream(f);
+/// @brief Creates a StyledFormat with context tracking enabled.
+/// @details equivalent to
+/// `StyledFormat().enable_context_tracking().set_stream(f)`
+inline auto styled_fmt(std::FILE* f = stdout) -> StyledFormat {
+    return StyledFormat().enable_context_tracking().set_stream(f);
 }
 
-/// equivalent to `StyledFormat().enable_context().set_stream(os)`
-inline auto fstyled_out(std::ostream& os) -> StyledFormat {
-    return StyledFormat().enable_context().set_stream(os);
+/// @brief Creates a StyledFormat with context tracking enabled.
+/// @details equivalent to
+/// `StyledFormat().enable_context_tracking().set_stream(os)`
+inline auto styled_fmt(std::ostream& os) -> StyledFormat {
+    return StyledFormat().enable_context_tracking().set_stream(os);
 }
 
 #endif // DECO_ENABLE_PRINT

@@ -9,8 +9,8 @@ auto main(int argc, const char** argv) -> int {
     StyledOstream styled_os = StyledOstream(os);
     StyledOstream styled_os_ctx = styled_out(os);
 
-    StyledFormat styled_fmt = StyledFormat().set_stream(os);
-    StyledFormat styled_fmt_ctx = fstyled_out(os);
+    StyledFormat sfmt = StyledFormat().set_stream(os);
+    StyledFormat sfmt_ctx = styled_fmt(os);
 
     Benchmark benchmark {
         Section {
@@ -30,10 +30,10 @@ auto main(int argc, const char** argv) -> int {
                 Entry("format Style",
                       [&] { std::print(os, "{}", styled("", fg(blue))); }),
                 Entry("StyledFormat",
-                      [&] { styled_fmt.print("{}", styled("", fg(blue))); }),
+                      [&] { sfmt.print("{}", styled("", fg(blue))); }),
                 Entry("StyledFmt(w/ context)",
                       [&] {
-                          styled_fmt_ctx.print("{}", styled("", fg(blue)));
+                          sfmt_ctx.print("{}", styled("", fg(blue)));
                       })}},
 
     };

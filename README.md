@@ -129,7 +129,7 @@ pre-commit install
 ## Todo
 
 - [ ] Color fallback
-- [ ] link
+- [ ] Hyperlink
 - [ ] Cmake package(maybe)
 - [ ] `fmtlib` support (maybe)
 - [ ] Windows API fallback for Windows 8 or lower (maybe)

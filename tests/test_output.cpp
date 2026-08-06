@@ -51,7 +51,7 @@ TEST_CASE("styled_out: StyleOutputState: copy from other type") {
     TestStyleOutputState teststate(styled_os); // NOLINT
 
     CHECK_FALSE(teststate.style_enabled());
-    CHECK_FALSE(teststate.context_enabled());
+    CHECK_FALSE(teststate.context_tracking_enabled());
     CHECK(teststate.nesting_enabled());
     CHECK(teststate.base_style() == fg(blue));
     CHECK(teststate.current_style().style == (fg(blue) | bold));
@@ -63,15 +63,15 @@ TEST_CASE("styled_out: StyleOutputState: options") {
     StyledOstream state(std::cout);
 
     CHECK(state.style_enabled());
-    CHECK_FALSE(state.context_enabled());
+    CHECK_FALSE(state.context_tracking_enabled());
     CHECK_FALSE(state.nesting_enabled());
     CHECK(state.base_style() == null_style);
     CHECK(state.current_style().style == null_style);
 
-    state.enable_style(false).enable_context(true).set_base_style(fg(blue));
+    state.enable_style(false).enable_context_tracking(true).set_base_style(fg(blue));
 
     CHECK_FALSE(state.style_enabled());
-    CHECK(state.context_enabled());
+    CHECK(state.context_tracking_enabled());
     CHECK(state.base_style() == fg(blue));
     CHECK(state.current_style().style == fg(blue));
 
@@ -93,12 +93,12 @@ TEST_CASE("styled_out: StyleOutputState: options after chained construction") {
                      .enable_nesting(true);
 
     state.enable_style(true)
-        .enable_context(false)
+        .enable_context_tracking(false)
         .set_base_style(fg(red))
         .enable_nesting(false);
 
     CHECK(state.style_enabled());
-    CHECK_FALSE(state.context_enabled());
+    CHECK_FALSE(state.context_tracking_enabled());
     CHECK_FALSE(state.nesting_enabled());
     CHECK(state.base_style() == fg(red));
     CHECK(state.current_style().style == fg(red));
