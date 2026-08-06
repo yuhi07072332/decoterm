@@ -394,7 +394,7 @@ inline constexpr style_reset_t reset;
 /// code.
 struct Style {
     // clang-format off
-    enum Flags : uint8_t {                              //NOLINT
+    enum Emphasis : uint8_t {                              //NOLINT
         none                = 0,
         bold                = 1 << 0,
         dim                 = 1 << 1,
@@ -412,22 +412,22 @@ struct Style {
     // clang-format on
 
     /// @brief creates a null style
-    /// @details flags = 0, fg, bg = null_color
+    /// @details emphasis = 0, fg, bg = null_color
     constexpr Style() = default;
 
-    constexpr Style(uint8_t flags, Color fg = null_color, Color bg = null_color)
+    constexpr Style(uint8_t emphasis, Color fg = null_color, Color bg = null_color)
         : fg_data_(fg.data_),
           bg_data_(bg.data_),
           color_types_((static_cast<uint8_t>(fg.type_) << 4)
                        | static_cast<uint8_t>(bg.type_)),
-          flags_(flags) {}
+          emphasis_(emphasis) {}
 
     // ----- operators -----
 
     /// @brief combine two styles
     constexpr auto operator|(Style rhs) const -> Style {
         Style combined = *this;
-        combined.flags_ |= rhs.flags_;
+        combined.emphasis_ |= rhs.emphasis_;
         if (!rhs.fg_null()) {
             combined.fg_data_ = rhs.fg_data_;
             combined.set_fg_type(rhs.fg_type());
@@ -449,12 +449,12 @@ struct Style {
 
     // ----- observe -----
 
-    constexpr auto flags() const -> uint8_t { return flags_; }
+    constexpr auto emphasis() const -> uint8_t { return emphasis_; }
     constexpr auto fg() const -> Color { return {fg_type(), fg_data_}; }
     constexpr auto bg() const -> Color { return {bg_type(), bg_data_}; }
 
     constexpr auto is_null() const -> bool {
-        return flags_ == none && fg_null() && bg_null();
+        return emphasis_ == none && fg_null() && bg_null();
     }
 
     // ----- output -----
@@ -477,8 +477,8 @@ struct Style {
             needs_separate = true;
         }
 
-        if (!flags_) return out;
-        uint8_t current_flag = flags_;
+        if (!emphasis_) return out;
+        uint8_t current_flag = emphasis_;
         int count = 0;
         do {
             if (current_flag & 1) {
@@ -517,7 +517,7 @@ struct Style {
         std::array<char, 8> buf {};
         for (std::size_t i = 0; i < buf.size(); ++i) {
             uint8_t bit = 1 << (buf.size() - i - 1);
-            buf[i] = (flags_ & bit) ? '1' : '0';
+            buf[i] = (emphasis_ & bit) ? '1' : '0';
         }
         return debug.append(buf.data(), 8)
             .append(", fg=")
@@ -560,7 +560,7 @@ struct Style {
     // fg uses the upper 4 bits and bg uses the lower 4 bits.
     uint8_t color_types_ = 0;
 
-    uint8_t flags_ = none;
+    uint8_t emphasis_ = none;
 };
 
 /// @brief A Style wrapper that represents an absolute style

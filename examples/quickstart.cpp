@@ -53,7 +53,7 @@ auto main() -> int {
     std::cout << '\n';
 
     // StyledFormat: Basically the same as StyledOstream, but uses format‑based output APIs.
-    StyledFormat sfmt = fstyled_out();
+    StyledFormat sfmt = styled_fmt();
     sfmt.print(fg(colors::aquamarine1), 
                "{} and {} support\n",
                styled("std::format", italic),

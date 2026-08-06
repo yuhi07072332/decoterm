@@ -51,7 +51,7 @@ TEST_CASE("style: Style composition") {
 
     const Style composed = fg(red) | bg(blue) | bold | fg(green) | italic;
 
-    CHECK(composed.flags() == (Style::bold | Style::italic));
+    CHECK(composed.emphasis() == (Style::bold | Style::italic));
     CHECK(composed.fg() == green);
     CHECK(composed.bg() == blue);
     CHECK(sgr_params(composed) == "32;44;1;3");
