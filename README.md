@@ -69,6 +69,7 @@ See [Header Overview](#header-overview) for more information.
 The library itself requires atleast **C++20**. The examples and tests use `std::print` and therefore require **C++23** or later.
 
 ## Header Overview
+
 ```
                      ┌───────────┐    Minimal API                           
                      │ style.hpp │    [Color, Style, styled(),
@@ -128,6 +129,7 @@ pre-commit install
 ## Todo
 
 - [ ] Color fallback
+- [ ] link
+- [ ] Cmake package(maybe)
 - [ ] `fmtlib` support (maybe)
 - [ ] Windows API fallback for Windows 8 or lower (maybe)
-- [ ] link (maybe)

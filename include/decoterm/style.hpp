@@ -48,7 +48,12 @@ namespace deco {
 struct Style;
 struct AbsoluteStyle;
 
-enum class ColorType : uint8_t { null = 0, default_color, terminal_color, true_color };
+enum class ColorType : uint8_t {
+    null = 0,
+    default_color,
+    terminal_color,
+    true_color
+};
 
 namespace concepts {
 

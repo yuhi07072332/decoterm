@@ -52,7 +52,12 @@ namespace deco {
 struct Style;
 struct AbsoluteStyle;
 
-enum class ColorType : uint8_t { null = 0, default_color, terminal_color, true_color };
+enum class ColorType : uint8_t {
+    null = 0,
+    default_color,
+    terminal_color,
+    true_color
+};
 
 namespace concepts {
 
@@ -1039,11 +1044,8 @@ inline auto styled_out(std::ostream& os) -> StyledOstream {
 #include <iostream>
 
 #if defined(_WIN32)
-
 #include <windows.h>
-
 #else // POSIX
-
 #include <unistd.h>
 
 #endif
@@ -1109,7 +1111,9 @@ inline auto is_ostream_stderr(const std::ostream& os) -> bool {
 }
 
 #if defined(_WIN32)
+#ifndef DECOTERM_NO_AUTO_ENABLE_VT
 inline bool g_virtual_terminal_mode_enabled = enable_virtual_terminal_mode();
+#endif // DECOTERM_NO_AUTO_ENABLE_VT
 #endif // _WIN32
 
 } // namespace detail
@@ -1149,7 +1153,7 @@ inline auto color_support() -> ColorSupport {
 
 /// @brief Same as `deco::styled_ostream()` but with automatic configurations
 [[nodiscard]]
-inline auto styled_ostream(std::ostream& os) -> StyledOstream {
+inline auto styled_out(std::ostream& os) -> StyledOstream {
     bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
                   || (detail::is_ostream_stderr(os) && is_stderr_tty());
     return deco::styled_out(os).enable_style(is_tty).enable_context(is_tty);
