@@ -1536,12 +1536,12 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 #ifdef DECO_ENABLE_PRINT
 
 /// equivalent to `StyledFormat().enable_context().set_stream(f)`
-inline auto styled_fmt(std::FILE* f = stdout) -> StyledFormat {
+inline auto fstyled_out(std::FILE* f = stdout) -> StyledFormat {
     return StyledFormat().enable_context().set_stream(f);
 }
 
 /// equivalent to `StyledFormat().enable_context().set_stream(os)`
-inline auto styled_fmt(std::ostream& os) -> StyledFormat {
+inline auto fstyled_out(std::ostream& os) -> StyledFormat {
     return StyledFormat().enable_context().set_stream(os);
 }
 

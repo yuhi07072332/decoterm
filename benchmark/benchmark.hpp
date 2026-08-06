@@ -9,6 +9,7 @@
 #include <concepts>
 #include <cstdint>
 #include <functional>
+#include <streambuf>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -87,45 +88,56 @@ struct Entry {
     std::optional<result_ns_t> result;
 };
 
-template <typename E1, typename E2>
+template <typename Entry, typename...Entries>
 struct EntryCompare {
-    EntryCompare(E1 lhs, E2 rhs) : lhs(std::move(lhs)), rhs(std::move(rhs)) {}
+    EntryCompare(Entry target, Entries...entries)
+        : target_(std::move(target))
+        , entries_(std::move(entries)...) {}
 
     void run(uint64_t iterations,
              uint64_t rounds,
-             std::function<void()>* transition_fn_ = nullptr) { // NOLINT
-        lhs.run(iterations, rounds);
-        if (transition_fn_ && *transition_fn_) transition_fn_->operator()();
-        rhs.run(iterations, rounds);
+             std::function<void()>* transition_fn = nullptr) { // NOLINT
+        run_entry(target_, iterations, rounds, transition_fn);
+        std::apply([&, this](Entries&... entries){
+            (run_entry(entries, iterations, rounds, transition_fn), ...);
+        }, entries_);
     }
 
     void print() {
         std::print("┌ ");
-        lhs.print();
+        target_.print();
         std::println();
-        std::print("└ ");
-        rhs.print();
+        std::apply([this] (Entries&... entries){
+            ((print_entry(entries), std::println()), ...);
+        }, entries_);
+    }
 
-        const double diff = *rhs.result - *lhs.result;
-        const double diff_percent = diff / *lhs.result * 100;
+private:
+    void run_entry(auto& entry, uint64_t iters, uint64_t rs, std::function<void()>* transition_fn) {
+        entry.run(iters, rs);
+        if (transition_fn && *transition_fn) transition_fn->operator()();
+    }
+
+    void print_entry(auto& entry) {
+        std::print("├ ");
+        entry.print();
+        const double diff = *entry.result - *target_.result;
 
         if (diff > 0) {
-            std::print("  {}{:+.8f}ms ({:.1f}% slower){}",
+            std::print("  {}{:+8.2f}ns{}",
                        deco::fg(deco::red),
-                       diff / 10000000,
-                       diff_percent,
+                       diff,
                        deco::reset);
         } else if (diff < 0) {
-            std::print("  {}{:+.8f}ms ({:.1f}% faster){}",
+            std::print("  {}{:+8.2f}ns{}",
                        deco::fg(deco::green),
-                       diff / 10000000,
-                       diff_percent,
+                       diff,
                        deco::reset);
         }
     }
 
-    E1 lhs;
-    E2 rhs;
+    Entry target_;
+    std::tuple<Entries...> entries_;
 };
 
 template <typename T>
@@ -152,13 +164,14 @@ struct Section {
              bool enable_transition = true) { // NOLINT
         std::apply(
             [&, this](Entries&... entries) {
-                (run_entry(entries, iterations, rounds, enable_transition), ...);
+                (run_entry(entries, iterations, rounds, enable_transition),
+                 ...);
             },
             entries_);
     }
 
     void print() {
-        auto sfmt = deco::styled_fmt();
+        auto sfmt = deco::fstyled_out();
         sfmt.print(deco::bold | deco::fg(deco::bright_yellow),
                    "SECTION{}: {}",
                    number_ ? std::format("[{}]", *number_) : "",
@@ -215,7 +228,7 @@ struct Benchmark {
     void run() {
         std::apply(
             [this](Sections&... sections) constexpr {
-                    (sections.run(iterations, rounds), ...);
+                (sections.run(iterations, rounds), ...);
             },
             sections);
     }
@@ -229,7 +242,7 @@ struct Benchmark {
         std::println();
 
         std::print("{}iterations: {}{}\n",
-                   deco::fg(deco::yellow),
+                   deco::absolute(deco::fg(deco::yellow)),
                    iterations,
                    deco::reset);
         std::print("rounds: {}\n", rounds);
@@ -241,8 +254,8 @@ struct Benchmark {
             sections);
     }
 
-    uint64_t iterations = 0;
-    uint64_t rounds = 0;
+    uint64_t iterations = 1;
+    uint64_t rounds = 1;
     bool enable_transition = true;
     std::tuple<Sections...> sections;
 };
@@ -267,5 +280,25 @@ void parse_args(Benchmark& benchmark, int argc, const char** argv) {
         std::exit(1);
     }
 }
+
+// streambuf that doesn't write anything
+class void_streambuf final : public std::streambuf {
+  protected:
+    auto overflow(int_type ch) -> int_type override {
+        return traits_type::not_eof(ch);
+    }
+
+    auto xsputn(const char_type*, std::streamsize count)
+        -> std::streamsize override {
+        return count;
+    }
+};
+
+class void_ostream final : public std::ostream {
+  public:
+    void_ostream() : std::ostream(&buffer_) {} // NOLINT
+  private:
+    void_streambuf buffer_;
+};
 
 #endif // !DECOTERM_BENCHMARK_HPP

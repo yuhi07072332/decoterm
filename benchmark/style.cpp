@@ -5,35 +5,13 @@
 #include <iostream>
 #include <ostream>
 #include <print>
-#include <streambuf>
+#include <sstream>
 
 #include "benchmark.hpp"
 
-class void_streambuf final : public std::streambuf {
-  protected:
-    auto overflow(int_type ch) -> int_type override {
-        return traits_type::not_eof(ch);
-    }
-
-    auto xsputn(const char_type*, std::streamsize count)
-        -> std::streamsize override {
-        return count;
-    }
-};
-
-class void_ostream final : public std::ostream {
-  public:
-    void_ostream() : std::ostream(&buffer_) {} // NOLINT
-  private:
-    void_streambuf buffer_;
-};
-
-auto main(int argc, const char** argv) -> int {
+auto make_benchmark(std::ostream& os) {
     using namespace deco;
-
-    void_ostream os;
-
-    Benchmark benchlist {
+    return Benchmark {
         Section {"terminal color output",
                  EntryCompare(Entry("ostream/raw escape",
                                     [&] { os << "\x1b[34m\x1b[m"; }),
@@ -109,9 +87,35 @@ auto main(int argc, const char** argv) -> int {
                                       | invert;
                                   os << s;
                               }))}};
+}
 
-    parse_args(benchlist, argc, argv);
+auto main(int argc, const char** argv) -> int {
+    using namespace deco;
 
-    benchlist.run();
-    benchlist.print();
+    void_ostream vo;
+    std::ostringstream oss;
+
+    Benchmark bench_vo = make_benchmark(vo);
+    Benchmark bench_oss = make_benchmark(oss);
+    Benchmark bench_cout = make_benchmark(std::cout);
+
+    parse_args(bench_oss, argc, argv);
+    parse_args(bench_vo, argc, argv);
+    parse_args(bench_cout, argc, argv);
+
+
+    bench_vo.run();
+    bench_oss.run();
+    bench_cout.run();
+
+    std::cout << reset;
+    std::cout << styled("[BENCHMARK: using void_ostream]\n", fg(cyan) | bold);
+    bench_vo.print();
+
+    std::cout << styled("[BENCHMARK: using ostring_stream]\n", fg(cyan) | bold);
+    bench_oss.print();
+
+    std::cout << styled("[BENCHMARK: using std::cout]\n", fg(cyan) | bold);
+    bench_cout.print();
+
 }

@@ -16,7 +16,7 @@ std::cout << bold << "Hello ,"
 // Style composition
 const Style warning_style = bold | fg(rgb(0xfff2b2));
 
-// Same as fmt::styled() from fmtlib
+// Similar to fmt::styled() from fmtlib
 std::cout << styled("warning: ", warning_style)
           << "Unused variable 'x'"
           << styled("[-Wunused-variable]", warning_style)
@@ -44,70 +44,69 @@ sout << "base style "
 
 ## Features
 
-- Cross-platform (Windows, Linux, MacOS, etc.)
-- Simple API syntax inspired by [{fmt}](https://github.com/fmtlib/fmt)
+- Cross-platform support for Windows, Linux, macOS and other platforms
+- Simple API inspired by [{fmt}](https://github.com/fmtlib/fmt)
 - Powerful output state management
 - `std::format`, `std::print`(C++23) support
+- Performance comparable to raw ANSI escape code output
 
 ## Getting Started
 
 ### Single-header Mode
 
-Just download [single-include/decoterm/decoterm.hpp](single-include/decoterm/decoterm.hpp) and add to your *include directories*.
-> Alternatively, you can use [include/decoterm/style.hpp](include/decoterm/style.hpp) for **minimal style output functionality**.
-> See [here](#header-overview) for more information.
+Just download [single-include/decoterm/decoterm.hpp](single-include/decoterm/decoterm.hpp)
+and add it to your *include directories*.
+> Alternatively, you can use [include/decoterm/style.hpp](include/decoterm/style.hpp)
+> if you only need the minimal style output functionality.
 
 ### Header-only Mode
 
-Copy `include/decoterm` folder to your *include directories* and use whatever header files you want.
+Clone this repository and copy the `include/decoterm` directory into your *include directories* and use whatever headers you need.
 See [Header Overview](#header-overview) for more information.
 
-## Dependencies
+## Requirements
 
-The library itsself needs atleast **C++20**, examples and tests require `std::print`(**C++23** or above)to compile.
+The library itself requires atleast **C++20**. The examples and tests use `std::print` and therefore require **C++23** or later.
 
 ## Header Overview
-
 ```
-               ┌───────────┐            
-               │ style.hpp │  Minimal API       
-               └───────────┘  [Color, Style, styled(), ostream output operator]
-                     ▲            
-                     │                  
-             ┌───────┴────────┐         
-             │ color_info.hpp │  Dataset of terminal colors 
-             └────────────────┘  [color names for XTerm 256 colors]
-                     ▲                  
-                     │                  
-            ┌────────┴─────────┐           
-            │    output.hpp    │    Advanced style output functionalityies   
-            └──────────────────┘    [StyledOstream]       
-               ▲            ▲              
-               │            │              
-     ┌─────────┴──┐       ┌─┴────────────┐
-     │ format.hpp │       │ terminal.hpp │ Cross-platform terminal utilities
-     └────────────┘       └──────────────┘
-std::format, std::print support          
-[formatters, StyledFormat]
-
+                     ┌───────────┐    Minimal API                           
+                     │ style.hpp │    [Color, Style, styled(),
+                     └───────────┘     ostream output operator]             
+                           ▲                                                
+                           │                                                
+ ┌────────────────┐        │                                                
+ │ color_info.hpp │        │                                                
+ └────────────────┘        │                                                
+          ▲                │                                                
+          │                │                                                
+          │      ┌────────────────────┐  Advanced style output functionality
+          └──────│     output.hpp     │  [StyledOstream]                    
+                 └────────────────────┘                                     
+                   ▲                ▲                                       
+                   │                │                                       
+        ┌──────────┴─┐             ┌┴─────────────┐  Cross-platform terminal
+        │ format.hpp │             │ terminal.hpp │  utilities              
+        └────────────┘             └──────────────┘ 
+std::format and std::print support                                          
+[formatters, StyledFormat]                                                  
 ```
 
 > [!NOTE]
-> Currently, `color_info.hpp` only provides color names and not included by any other headers.
-> This will contain terminal color informations for `output.hpp` to implement **Color fallback**
-> function in the future.
+> Currently, `color_info.hpp` only provides color names and is not included by any other header.
+> It will contain terminal color information used by `output.hpp` to implement **Color fallback** in the future.
 
 ## Development
 
 ### Building examples and tests
 
 > [!NOTE]
-> Examples and tests uses `std::print`, so building these requires atleast **C++23**, GCC 14, Clang 17, MSVC 19.37 to work.
+> The examples and tests use `std::print`, so they require at least **C++23**, GCC 14, Clang 17, MSVC 19.37 to work.
 
 ```sh
 cmake -Bbuild \
     -DDECOTERM_BUILD_EXAMPLES=on \
-    -DDECOTERM_BUILD_TESTS=on \
+    -DDECOTERM_BUILD_TESTS=on
 
 cmake --build build
 ```
@@ -117,7 +116,7 @@ To run the tests:
 ctest --test-dir build
 ```
 
-### Enable `pre-commit` hook
+### Enabling `pre-commit` hook
 
 This repository uses [pre-commit](https://pre-commit.com/) to generate the single-header file.
 
@@ -130,5 +129,5 @@ pre-commit install
 
 - [ ] Color fallback
 - [ ] `fmtlib` support (maybe)
-- [ ] Windows API fallback for Windows8 or lower (maybe)
+- [ ] Windows API fallback for Windows 8 or lower (maybe)
 - [ ] link (maybe)

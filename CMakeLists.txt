@@ -19,7 +19,7 @@ target_include_directories(decoterm
 target_compile_features(decoterm INTERFACE cxx_std_20)
 
 #check <print> support
-if(DECOTERM_BUILD_TEST OR DECOTERM_BUILD_EXAMPLE OR DECOTERM_BUILD_BENCHMARK)
+if(DECOTERM_BUILD_TESTS OR DECOTERM_BUILD_EXAMPLES OR DECOTERM_BUILD_BENCHMARKS)
     include(cmake/CheckStdPrint.cmake)
     decoterm_check_std_print(DECOTERM_HAS_STD_PRINT)
     if (NOT DECOTERM_HAS_STD_PRINT)
@@ -27,15 +27,15 @@ if(DECOTERM_BUILD_TEST OR DECOTERM_BUILD_EXAMPLE OR DECOTERM_BUILD_BENCHMARK)
     endif()
 endif()
 
-if(DECOTERM_BUILD_TEST)
+if(DECOTERM_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
 
-if(DECOTERM_BUILD_EXAMPLE)
+if(DECOTERM_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
-if(DECOTERM_BUILD_BENCHMARK)
+if(DECOTERM_BUILD_BENCHMARKS)
     add_subdirectory(benchmark)
 endif()

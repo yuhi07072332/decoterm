@@ -1,5 +1,6 @@
 set(BENCH_SRCS
-    style_output.cpp
+    style.cpp
+    styled_out.cpp
 )
 
 foreach(source IN LISTS BENCH_SRCS)
