@@ -1,33 +1,17 @@
-BasedOnStyle: Chromium
+BasedOnStyle: LLVM
 IndentWidth: 4
 Language: Cpp
 Standard: c++20
 ColumnLimit: 80
 
-AllowAllParametersOfDeclarationOnNextLine: false
-AllowAllArgumentsOnNextLine: false
-
-BinPackArguments: false
-BinPackParameters: false
-
-BreakAfterOpenBracketBracedList: true
-BreakAfterOpenBracketFunction: true
-BreakAfterOpenBracketIf: false
-BreakAfterOpenBracketLoop: false 
-BreakAfterOpenBracketSwitch: false
-
+AlignOperands: Align
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 BreakBeforeBinaryOperators: NonAssignment
-BreakBeforeBraces: Attach
-BreakBeforeCloseBracketBracedList: true
-BreakBeforeCloseBracketFunction: true
-BreakBeforeCloseBracketIf: false
-BreakBeforeCloseBracketLoop: false
-BreakBeforeCloseBracketSwitch: false
-BreakBeforeTemplateCloser: false
-BreakBeforeTernaryOperators: true
-BreakConstructorInitializers: BeforeColon
-BreakInheritanceList: BeforeColon
-Cpp11BracedListStyle: FunctionCall
-
-
+BreakTemplateDeclarations: Leave
+FixNamespaceComments: true
+IncludeBlocks: Preserve
+SpaceBeforeCpp11BracedList: true
+BinPackArguments: false
+BinPackParameters: OnePerLine
 PackConstructorInitializers: CurrentLine
+PointerAlignment: Left
