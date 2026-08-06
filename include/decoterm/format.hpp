@@ -136,7 +136,7 @@ struct formatter<deco::style_reset_t> {
     }
 
     auto format(deco::style_reset_t, std::format_context& ctx) const {
-        return deco::absolute(deco::null_style).to_escape(ctx.out());
+        return deco::abs(deco::null_style).to_escape(ctx.out());
     }
 };
 

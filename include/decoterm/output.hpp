@@ -30,7 +30,7 @@ constexpr auto apply_style(AbsoluteStyle current, StyleT style)
     -> AbsoluteStyle {
     using style_type = std::remove_cvref_t<StyleT>;
     if constexpr (std::is_same_v<style_type, Style>)
-        return absolute(current.style | style);
+        return abs(current.style | style);
     else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
 }
 
@@ -159,7 +159,7 @@ class StyleState { // NOLINT
     void push_style(AbsoluteStyle style) { stack_.push(style); }
 
     void push_style(Style style) {
-        stack_.push(absolute(current_style().style | style));
+        stack_.push(abs(current_style().style | style));
     }
 
     /// @brief Updates the context if enabled. Otherwise it only checks
@@ -177,7 +177,7 @@ class StyleState { // NOLINT
             detail::g_style_output_context = &context_;
             if (base_style_changed_) {
                 base_style_changed_ = false;
-                return absolute(base_style_.style | current_style().style);
+                return abs(base_style_.style | current_style().style);
             }
             return current_style();
         }
@@ -188,7 +188,7 @@ class StyleState { // NOLINT
     template <typename>
     friend class StyleStateOption;
 
-    AbsoluteStyle base_style_ = absolute(null_style);
+    AbsoluteStyle base_style_ = abs(null_style);
     detail::StyleStack stack_;
 
     bool style_enabled_ = true;
@@ -215,7 +215,7 @@ class StyleStateOption {
 
     /// @brief Set the base style for this output state.
     auto set_base_style(Style base) -> Derived& {
-        state().base_style_ = absolute(base);
+        state().base_style_ = abs(base);
         state().base_style_changed_ = true;
         return derived_this();
     }

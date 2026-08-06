@@ -119,7 +119,7 @@ TEST_CASE("styled_out: StyleOutputState: single style state") {
     state.pop_style();
     CHECK(state.current_style().style == fg(blue));
 
-    state.push_style(absolute(fg(green)));
+    state.push_style(abs(fg(green)));
     CHECK(state.current_style().style == fg(green));
 
     state.reset_style();
@@ -169,7 +169,7 @@ TEST_CASE("styled_out: StyledOstream: write plain values") {
     styled_os << "value=" << 42 << ' ' << d;
 
     CHECK(os.str()
-          == absolute(null_style).to_escape() + std::string("value=42 1.5"));
+          == abs(null_style).to_escape() + std::string("value=42 1.5"));
 }
 
 TEST_CASE("styled_out: StyledOstream: call IO manipulator") {
@@ -205,7 +205,7 @@ TEST_CASE("styled_out: StyledOstream: call IO manipulator") {
              << set_width_4 << 9 << std::endl
              << std::flush << std::ends;
 
-    CHECK(os.str() == absolute(null_style).to_escape() + expected.str());
+    CHECK(os.str() == abs(null_style).to_escape() + expected.str());
 }
 
 TEST_CASE("styled_out: StyledOstream: throws if output operator returns different "
@@ -226,8 +226,8 @@ TEST_CASE("styled_out: StyledOstream: write styles") {
     styled_os << fg(red) << "error" << reset;
 
     CHECK(os.str()
-          == absolute(null_style).to_escape() + fg(red).to_escape()
-                 + std::string("error") + absolute(null_style).to_escape());
+          == abs(null_style).to_escape() + fg(red).to_escape()
+                 + std::string("error") + abs(null_style).to_escape());
 }
 
 TEST_CASE("styled_out: StyledOstream: disable style output") {
@@ -254,11 +254,11 @@ TEST_CASE("styled_out: StyledOstream: restores nested styles") {
               << pop << "blue";
 
     CHECK(os.str()
-          == absolute(fg(blue)).to_escape() + bold.to_escape()
+          == abs(fg(blue)).to_escape() + bold.to_escape()
                  + std::string("bold") + fg(red).to_escape()
                  + std::string("red bold")
-                 + absolute(fg(blue) | bold).to_escape()
-                 + std::string("blue bold") + absolute(fg(blue)).to_escape()
+                 + abs(fg(blue) | bold).to_escape()
+                 + std::string("blue bold") + abs(fg(blue)).to_escape()
                  + std::string("blue"));
 }
 
@@ -272,8 +272,8 @@ TEST_CASE("styled_out: StyledOstream: reset returns to base style") {
     styled_os << bold << "bold" << reset << "base";
 
     CHECK(os.str()
-          == absolute(fg(blue)).to_escape() + bold.to_escape()
-                 + std::string("bold") + absolute(fg(blue)).to_escape()
+          == abs(fg(blue)).to_escape() + bold.to_escape()
+                 + std::string("bold") + abs(fg(blue)).to_escape()
                  + std::string("base"));
 }
 
@@ -290,11 +290,11 @@ TEST_CASE("styled_out: StyledOstream: context tracking") {
     out1 << "d" << styled("e", bold) << "f";
 
     CHECK(os1.str()
-          == absolute(fg(blue)).to_escape() + std::string("ab")
-                 + absolute(fg(blue)).to_escape() + std::string("d")
+          == abs(fg(blue)).to_escape() + std::string("ab")
+                 + abs(fg(blue)).to_escape() + std::string("d")
                  + bold.to_escape() + std::string("e")
-                 + absolute(fg(blue)).to_escape() + std::string("f"));
-    CHECK(os2.str() == absolute(fg(red)).to_escape() + std::string("c"));
+                 + abs(fg(blue)).to_escape() + std::string("f"));
+    CHECK(os2.str() == abs(fg(red)).to_escape() + std::string("c"));
 }
 
 TEST_CASE("styled_out: StyledOstream: only output base style first time if context "
@@ -308,10 +308,10 @@ TEST_CASE("styled_out: StyledOstream: only output base style first time if conte
     out << "a" << "b" << bold << "c" << pop << "d" << reset << "e";
 
     CHECK(os.str()
-          == absolute(fg(blue)).to_escape() + std::string("ab")
+          == abs(fg(blue)).to_escape() + std::string("ab")
                  + bold.to_escape() + std::string("c")
-                 + absolute(fg(blue)).to_escape() + std::string("d")
-                 + absolute(fg(blue)).to_escape() + std::string("e"));
+                 + abs(fg(blue)).to_escape() + std::string("d")
+                 + abs(fg(blue)).to_escape() + std::string("e"));
 }
 
 // NOLINTEND

@@ -151,10 +151,10 @@ auto main() -> int {
     out << "base style "
         << styled("{ styled: italic fg(yellowlight) }", italic | fg(bright_yellow))
         << " base style "
-        << absolute(null_style) << "{ absolute(default_style) }" << reset
+        << abs(null_style) << "{ abs(default_style) }" << reset
         << " base style";
 
-    out << absolute(null_style) << "\n\n" 
+    out << abs(null_style) << "\n\n" 
         << style_h2 << "[Style nesting]\n\n" << reset;
 
     out.enable_nesting(true);

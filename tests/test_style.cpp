@@ -77,8 +77,8 @@ TEST_CASE("style: AbsoluteStyle::to_escape") {
     using namespace deco;
 
     // Shouldn't output ';' when inner Style is null.
-    CHECK(absolute(null_style).to_escape() == "\x1b[m");
-    CHECK(absolute(bold).to_escape() == "\x1b[;1m");
+    CHECK(abs(null_style).to_escape() == "\x1b[m");
+    CHECK(abs(bold).to_escape() == "\x1b[;1m");
 }
 
 TEST_CASE("style: StyledRef") {
@@ -92,9 +92,9 @@ TEST_CASE("style: StyledRef") {
 
     CHECK(os.str()
           == bold.to_escape() + std::string("32")
-                 + absolute(null_style).to_escape()
+                 + abs(null_style).to_escape()
                  + italic.to_escape() + std::string("64")
-                 + absolute(null_style).to_escape());
+                 + abs(null_style).to_escape());
 }
 
 // NOLINTEND

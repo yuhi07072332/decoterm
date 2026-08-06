@@ -15,13 +15,13 @@ TEST_CASE("format: formatters") {
 
     CHECK(std::format("{}text{}", bold, reset)
           == bold.to_escape() + std::string("text")
-                 + absolute(null_style).to_escape());
+                 + abs(null_style).to_escape());
     CHECK(std::format("{}", styled(std::string("text"), fg(red)))
           == fg(red).to_escape() + std::string("text")
-                 + absolute(null_style).to_escape());
+                 + abs(null_style).to_escape());
     CHECK(std::format("{:04}", styled(42, bold))
           == bold.to_escape() + std::string("0042")
-                 + absolute(null_style).to_escape());
+                 + abs(null_style).to_escape());
 }
 
 TEST_CASE("format: StyledFormat: format_to()") {
@@ -34,7 +34,7 @@ TEST_CASE("format: StyledFormat: format_to()") {
     sfmt.format_to(std::back_inserter(out), " {}", "next");
 
     CHECK(out
-          == absolute(fg(white)).to_escape() + std::string("value 42 next"));
+          == abs(fg(white)).to_escape() + std::string("value 42 next"));
 }
 
 TEST_CASE("format: StyledFormat: format_to() with style") {
@@ -47,8 +47,8 @@ TEST_CASE("format: StyledFormat: format_to() with style") {
     sfmt.format_to(std::back_inserter(out), "{}", "base");
 
     CHECK(out
-          == absolute(fg(white)).to_escape() + bold.to_escape()
-                 + std::string("bold") + absolute(fg(white)).to_escape()
+          == abs(fg(white)).to_escape() + bold.to_escape()
+                 + std::string("bold") + abs(fg(white)).to_escape()
                  + std::string("base"));
 }
 
@@ -58,10 +58,10 @@ TEST_CASE("format: StyledFormat: format()") {
     StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
 
     CHECK(sfmt.format("{}", "base")
-          == absolute(fg(white)).to_escape() + std::string("base"));
+          == abs(fg(white)).to_escape() + std::string("base"));
     CHECK(sfmt.format(italic, "{}", "italic")
           == italic.to_escape() + std::string("italic")
-                 + absolute(fg(white)).to_escape());
+                 + abs(fg(white)).to_escape());
 }
 
 TEST_CASE("format: StyledFormat: format() with StyledRef") {
@@ -70,9 +70,9 @@ TEST_CASE("format: StyledFormat: format() with StyledRef") {
     StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
 
     CHECK(sfmt.format("base{}base", styled(std::string("bold"), bold))
-          == absolute(fg(white)).to_escape() + std::string("base")
+          == abs(fg(white)).to_escape() + std::string("base")
                  + bold.to_escape() + std::string("bold")
-                 + absolute(fg(white)).to_escape() + std::string("base"));
+                 + abs(fg(white)).to_escape() + std::string("base"));
 }
 
 TEST_CASE("format: StyledFormat: StyledRef restores call style") {
@@ -82,10 +82,10 @@ TEST_CASE("format: StyledFormat: StyledRef restores call style") {
 
     CHECK(
         sfmt.format(fg(red), "before{}after", styled(std::string("bold"), bold))
-        == absolute(fg(white)).to_escape() + fg(red).to_escape()
+        == abs(fg(white)).to_escape() + fg(red).to_escape()
                + std::string("before") + bold.to_escape() + std::string("bold")
-               + absolute(fg(red)).to_escape() + std::string("after")
-               + absolute(fg(white)).to_escape());
+               + abs(fg(red)).to_escape() + std::string("after")
+               + abs(fg(white)).to_escape());
 }
 
 TEST_CASE("format: StyledFormat: StyledRef restores absolute call style") {
@@ -94,13 +94,13 @@ TEST_CASE("format: StyledFormat: StyledRef restores absolute call style") {
     const Style base = fg(white) | bold;
     StyledFormat sfmt = StyledFormat().set_base_style(base);
 
-    CHECK(sfmt.format(absolute(fg(red)),
+    CHECK(sfmt.format(abs(fg(red)),
                       "before{}after",
                       styled(std::string("italic"), italic))
-          == absolute(base).to_escape() + absolute(fg(red)).to_escape()
+          == abs(base).to_escape() + abs(fg(red)).to_escape()
                  + std::string("before") + italic.to_escape()
-                 + std::string("italic") + absolute(fg(red)).to_escape()
-                 + std::string("after") + absolute(base).to_escape());
+                 + std::string("italic") + abs(fg(red)).to_escape()
+                 + std::string("after") + abs(base).to_escape());
 }
 
 TEST_CASE("format: StyledFormat: disabled style with StyledRef") {
@@ -123,7 +123,7 @@ TEST_CASE("format: StyledFormat: print()") {
     sfmt.print("{} {}", "value", 42).print(" {}", "next");
 
     CHECK(os.str()
-          == absolute(fg(white)).to_escape() + std::string("value 42 next"));
+          == abs(fg(white)).to_escape() + std::string("value 42 next"));
 }
 
 TEST_CASE("format: StyledFormat: print() with style") {
@@ -136,8 +136,8 @@ TEST_CASE("format: StyledFormat: print() with style") {
     sfmt.print(bold, "{}", "bold").print("{}", "base");
 
     CHECK(os.str()
-          == absolute(fg(white)).to_escape() + bold.to_escape()
-                 + std::string("bold") + absolute(fg(white)).to_escape()
+          == abs(fg(white)).to_escape() + bold.to_escape()
+                 + std::string("bold") + abs(fg(white)).to_escape()
                  + std::string("base"));
 }
 
@@ -151,9 +151,9 @@ TEST_CASE("format: StyledFormat: print() with StyledRef") {
     sfmt.print("base{}base", styled(std::string("bold"), bold));
 
     CHECK(os.str()
-          == absolute(fg(white)).to_escape() + std::string("base")
+          == abs(fg(white)).to_escape() + std::string("base")
                  + bold.to_escape() + std::string("bold")
-                 + absolute(fg(white)).to_escape() + std::string("base"));
+                 + abs(fg(white)).to_escape() + std::string("base"));
 }
 
 TEST_CASE("format: StyledFormat: print StyledRef context") {
@@ -164,15 +164,15 @@ TEST_CASE("format: StyledFormat: print StyledRef context") {
     StyledFormat sfmt = StyledFormat().set_base_style(base);
     sfmt.set_stream(os);
 
-    sfmt.print(absolute(fg(red)),
+    sfmt.print(abs(fg(red)),
                "before{}after",
                styled(std::string("italic"), italic));
 
     CHECK(os.str()
-          == absolute(base).to_escape() + absolute(fg(red)).to_escape()
+          == abs(base).to_escape() + abs(fg(red)).to_escape()
                  + std::string("before") + italic.to_escape()
-                 + std::string("italic") + absolute(fg(red)).to_escape()
-                 + std::string("after") + absolute(base).to_escape());
+                 + std::string("italic") + abs(fg(red)).to_escape()
+                 + std::string("after") + abs(base).to_escape());
 }
 
 TEST_CASE("format: StyledFormat: print disabled style with StyledRef") {
@@ -219,12 +219,12 @@ TEST_CASE("format: StyledFormat: style nesting") {
     const Style italic_bold_white = fg(white) | bold | italic;
 
     CHECK(out
-          == absolute(fg(white)).to_escape() + std::string("base")
-                 + absolute(bold_white).to_escape() + std::string("bold")
-                 + absolute(italic_bold_white).to_escape() + fg(red).to_escape()
-                 + std::string("red") + absolute(italic_bold_white).to_escape()
-                 + absolute(bold_white).to_escape() + std::string("bold2")
-                 + absolute(fg(white)).to_escape() + std::string("base2"));
+          == abs(fg(white)).to_escape() + std::string("base")
+                 + abs(bold_white).to_escape() + std::string("bold")
+                 + abs(italic_bold_white).to_escape() + fg(red).to_escape()
+                 + std::string("red") + abs(italic_bold_white).to_escape()
+                 + abs(bold_white).to_escape() + std::string("bold2")
+                 + abs(fg(white)).to_escape() + std::string("base2"));
 }
 
 // NOLINTEND

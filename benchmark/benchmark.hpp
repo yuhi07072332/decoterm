@@ -242,7 +242,7 @@ struct Benchmark {
         std::println();
 
         std::print("{}iterations: {}{}\n",
-                   deco::absolute(deco::fg(deco::yellow)),
+                   deco::abs(deco::fg(deco::yellow)),
                    iterations,
                    deco::reset);
         std::print("rounds: {}\n", rounds);

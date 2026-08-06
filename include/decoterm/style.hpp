@@ -581,7 +581,7 @@ struct AbsoluteStyle {
 };
 
 /// @brief create an AbsoluteStyle from a Style
-constexpr auto absolute(Style style) -> AbsoluteStyle {
+constexpr auto abs(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
@@ -608,7 +608,7 @@ inline auto operator<<(std::ostream& os, StyleT style) -> std::ostream& {
 /// @brief output operator for deco::reset
 inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_CODE_SIZE> buf = {0};
-    auto len = absolute(Style()).to_escape(buf.begin()) - buf.begin();
+    auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
     os.write(buf.begin(), len);
     return os;
 }
