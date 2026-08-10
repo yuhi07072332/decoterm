@@ -18,14 +18,9 @@ namespace deco {
 
 namespace detail {
 
-template <concepts::style StyleT>
-constexpr auto is_null(StyleT style) -> bool {
-    using style_type = std::remove_cvref_t<StyleT>;
-    if constexpr (std::is_same_v<style_type, Style>) return style.is_null();
-    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return false;
-}
-
-template <concepts::style StyleT>
+template <typename StyleT>
+    requires std::is_same_v<std::remove_cvref_t<StyleT>, Style>
+    || std::is_same_v<std::remove_cvref_t<StyleT>, AbsoluteStyle>
 constexpr auto apply_style(AbsoluteStyle current, StyleT style)
     -> AbsoluteStyle {
     using style_type = std::remove_cvref_t<StyleT>;

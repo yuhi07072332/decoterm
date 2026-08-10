@@ -59,8 +59,12 @@ namespace concepts {
 
 // Whether `remove_cvref_t<T>` is a Style or an AbsoluteStyle
 template <typename T>
-concept style = (std::is_same_v<std::remove_cvref_t<T>, Style>
-                 || std::is_same_v<std::remove_cvref_t<T>, AbsoluteStyle>);
+concept style = requires(T style, T other_style, char* out) {
+    { style.is_null() } -> std::same_as<bool>;
+    { style.operator==(other_style) } -> std::same_as<bool>;
+    { style.operator!=(other_style) } -> std::same_as<bool>;
+    { style.to_escape(out) } -> std::same_as<char*>;
+};
 
 // Whether `T` has `operator<<(std::ostream&, const T&)`
 template <typename T>
@@ -580,6 +584,8 @@ struct AbsoluteStyle {
 
     constexpr auto operator==(const AbsoluteStyle&) const -> bool = default;
     constexpr auto operator!=(const AbsoluteStyle&) const -> bool = default;
+
+    constexpr auto is_null() const -> bool { return false; }
 
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {

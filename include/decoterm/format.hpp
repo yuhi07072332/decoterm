@@ -250,14 +250,14 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         const AbsoluteStyle current =
             detail::apply_style(current_style(), style);
 
-        if (!detail::is_null(style)) out = output_style(out, style);
+        if (!style.is_null()) out = output_style(out, style);
         out = std::vformat_to(
             out,
             fmt.get(),
             detail::sf_make_format_args(detail::sf_process_arg(
                 detail::SFormatContext(current, style_enabled()),
                 std::forward<Args>(args))...));
-        if (!detail::is_null(style)) out = output_style(out, current_style());
+        if (!style.is_null()) out = output_style(out, current_style());
         return out;
     }
 
@@ -311,12 +311,12 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         const AbsoluteStyle current =
             detail::apply_style(current_style(), style);
 
-        if (!detail::is_null(style)) output_style(style);
+        if (!style.is_null()) output_style(style);
         print_stream(fmt,
                      detail::sf_process_arg(
                          detail::SFormatContext(current, style_enabled()),
                          std::forward<Args>(args))...);
-        if (!detail::is_null(style)) output_style(current_style());
+        if (!style.is_null()) output_style(current_style());
         return *this;
     }
 
