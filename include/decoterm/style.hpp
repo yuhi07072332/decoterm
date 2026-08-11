@@ -57,9 +57,8 @@ enum class ColorType : uint8_t {
 
 namespace concepts {
 
-// Whether `remove_cvref_t<T>` is a Style or an AbsoluteStyle
-template <typename T>
-concept style = requires(T style, T other_style, char* out) {
+template <typename StyleT>
+concept style = requires(StyleT style, StyleT other_style, char* out) {
     { style.is_null() } -> std::same_as<bool>;
     { style.operator==(other_style) } -> std::same_as<bool>;
     { style.operator!=(other_style) } -> std::same_as<bool>;
