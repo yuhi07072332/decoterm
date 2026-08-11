@@ -1249,9 +1249,9 @@ concept formattable =
 
 namespace detail {
 
-
 struct StyledFormatContext {
-    constexpr StyledFormatContext(AbsoluteStyle current_style, bool style_enabled)
+    constexpr StyledFormatContext(AbsoluteStyle current_style,
+                                  bool style_enabled)
         : current_style(current_style),
           style_enabled(style_enabled) {}
 
@@ -1274,17 +1274,16 @@ struct FStyledRef {
 // Replace StyledRef<T>& with FStyledRef<T>.
 template <typename Arg>
 constexpr auto process_arg(detail::StyledFormatContext context, Arg&& arg)
--> decltype(auto) {
+    -> decltype(auto) {
     if constexpr (concepts::styled_ref<Arg>) {
         return FStyledRef(arg, context);
     } else return std::forward<Arg>(arg); // NOLINT
 }
 
 template <typename Arg>
-using processed_arg_t =
-    std::conditional_t<concepts::styled_ref<Arg>,
-                       FStyledRef<std::remove_cvref_t<Arg>>,
-                       Arg>;
+using processed_arg_t = std::conditional_t<concepts::styled_ref<Arg>,
+                                           FStyledRef<std::remove_cvref_t<Arg>>,
+                                           Arg>;
 
 // this is used with process_arg(), since make_format_args don't take rvalue
 // reference.
@@ -1474,20 +1473,22 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
         format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
         return buf;
     }
-private:
+
+  private:
     template <typename Arg>
     static consteval void check_arg() {
         using arg_type = std::remove_cvref_t<Arg>;
-        if constexpr (concepts::styled_ref<arg_type>) detail::check_styled_ref<Arg>();
+        if constexpr (concepts::styled_ref<arg_type>)
+            detail::check_styled_ref<Arg>();
         else
-            static_assert((!concepts::style<arg_type>
-                          && !std::is_same_v<arg_type, style_reset_t>
-                          && !std::is_same_v<arg_type, style_pop_t>),
-                          "deco::StyledFormat: Style, reset, pop are disallowed as "
-                          "format arguments. Use print(style, ...), styled(), "
-                          "push(), reset(), or pop() instead.");
+            static_assert(
+                (!concepts::style<arg_type>
+                 && !std::is_same_v<arg_type, style_reset_t>
+                 && !std::is_same_v<arg_type, style_pop_t>),
+                "deco::StyledFormat: Style, reset, pop are disallowed as "
+                "format arguments. Use print(style, ...), styled(), "
+                "push(), reset(), or pop() instead.");
     }
-
 
     template <std::output_iterator<const char&> OutputIt,
               concepts::style StyleT>
@@ -1511,11 +1512,10 @@ private:
     // Whether the current style needs to be emitted before the next output.
     bool current_is_pending_ = false;
 
-// ──────────────────────── std::print extensions ────────────────────────
+    // ──────────────────────── std::print extensions ────────────────────────
 
 #ifdef DECO_ENABLE_PRINT
-public:
-
+  public:
     /* ----- print ----- */
     auto set_stream(FILE* f) -> StyledFormat& {
         stream_.emplace<FILE*>(f);
@@ -1537,10 +1537,10 @@ public:
             detail::apply_style(current_style(), style);
 
         if (!style.is_null()) output_style(style);
-        print_stream(fmt,
-                     process_arg(
-                         detail::StyledFormatContext(current, style_enabled()),
-                         std::forward<Args>(args))...);
+        print_stream(
+            fmt,
+            process_arg(detail::StyledFormatContext(current, style_enabled()),
+                        std::forward<Args>(args))...);
         if (!style.is_null()) output_style(current_style());
         return *this;
     }
@@ -1552,7 +1552,7 @@ public:
     }
 
     // TODO: println
-private:
+  private:
     template <typename... Args>
     void print_stream(std::format_string<Args...> fmt, Args&&... args) const {
         if (std::holds_alternative<FILE*>(stream_)) {
