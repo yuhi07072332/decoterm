@@ -277,9 +277,9 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     }
 private:
     template <typename Arg>
-    consteval void check_arg() {
+    static consteval void check_arg() {
         using arg_type = std::remove_cvref_t<Arg>;
-        if constexpr (concepts::styled_ref<arg_type>) check_styled_ref<Arg>();
+        if constexpr (concepts::styled_ref<arg_type>) detail::check_styled_ref<Arg>();
         else
             static_assert((!concepts::style<arg_type>
                           && !std::is_same_v<arg_type, style_reset_t>
@@ -315,9 +315,9 @@ private:
 // ──────────────────────── std::print extensions ────────────────────────
 
 #ifdef DECO_ENABLE_PRINT
-    /* ----- print ----- */
-
 public:
+
+    /* ----- print ----- */
     auto set_stream(FILE* f) -> StyledFormat& {
         stream_.emplace<FILE*>(f);
         return *this;
