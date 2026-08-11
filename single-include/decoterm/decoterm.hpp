@@ -674,7 +674,8 @@ inline constexpr Style underline_double  = Style(Style::underline_double);
 
 /// @brief Wraps a value with a style for ostream and format output.
 /// @details The `detail::StyledRef` has **reference semantics** and is intended
-/// to be used only as a temporary. Example:
+/// to be used only as a temporary.
+/// Example:
 /// ```cpp
 /// std::cout << styled(32, bold);  // OK
 ///
@@ -689,12 +690,10 @@ constexpr auto styled(const T& value, StyleT style)
 
 /// @brief output operator for StyledRef
 template <concepts::styled_ref StyledRefT>
+    requires concepts::ostream_outputable<typename StyledRefT::value_type>
 inline auto operator<<(std::ostream& os, StyledRefT&& styled) // NOLINT
     -> std::ostream& {
     detail::check_styled_ref<StyledRefT>();
-    static_assert(concepts::ostream_outputable<typename StyledRefT::value_type>,
-                  "deco::StyledRef: T must be ostream outputable");
-
     os << styled.style() << styled.value() << reset;
     return os;
 }
