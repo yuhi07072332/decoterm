@@ -222,9 +222,25 @@ consteval void check_styled_ref() {
 // ║                          Color                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A struct representing a nullable terminal color.
+/// @brief Represents a nullable terminal color.
+/// @details A `Color` is similar to a tagged union with 4 color types.
+/// It stores a `ColorType` and a `uint8_t[3]` containing the data.
+///
+/// The meaning of each type:
+/// * `null` => A null color. It emits no ANSI escape sequence.
+///
+/// * `default_color` => The terminal's default color.
+///
+/// * `terminal_color` => System 16 color or XTerm 256 color.
+///     `data[0]` stores the index [0, 255], with indices 0-15 corresponding
+///     to the system 16 colors.
+///     (See https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit)
+///
+/// * `true_color` => A 24-bit RGB color.
+///     `data[0]`, `data[1]`, `data[2]` store the red, green and blue components
+///     respectively.
 struct Color {
-    static constexpr std::size_t MAX_ESCAPE_CODE_SIZE = 19;
+    static constexpr std::size_t MAX_ESCAPE_SEQ_SIZE = 19;
 
     /* ----- constructors ----- */
 
@@ -400,9 +416,12 @@ struct style_reset_t {};
 /// @brief IO manipulator that resets the terminal style.
 inline constexpr style_reset_t reset;
 
-/// @brief A struct representing a nullable terminal style.
-/// @details If a Style is null, to_escape() doesn't output any ANSI escape
-/// code.
+/// @brief Represents a nullable terminal style.
+/// @details
+/// * It contains 8 emphasis flags and 2 `Color`s for foreground color and
+/// background color.
+///
+/// * A null 'Style' emits no ANSI escape sequence.
 struct Style {
     // clang-format off
     enum Emphasis : uint8_t {                              //NOLINT
@@ -417,8 +436,8 @@ struct Style {
         underline_double    = 1 << 7,
     };
 
-    static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
-        (Color::MAX_ESCAPE_CODE_SIZE * 2) + 13 + 3;
+    static constexpr std::size_t MAX_ESCAPE_SEQ_SIZE =
+        ((Color::MAX_ESCAPE_SEQ_SIZE - 3 + 1) * 2) + 14 + 3;
 
     // clang-format on
 
@@ -426,7 +445,9 @@ struct Style {
     /// @details emphasis = 0, fg, bg = null_color
     constexpr Style() = default;
 
-    constexpr Style(uint8_t emphasis, Color fg = null_color, Color bg = null_color)
+    constexpr Style(uint8_t emphasis,
+                    Color fg = null_color,
+                    Color bg = null_color)
         : fg_data_(fg.data_),
           bg_data_(bg.data_),
           color_types_((static_cast<uint8_t>(fg.type_) << 4)
@@ -435,7 +456,19 @@ struct Style {
 
     // ----- operators -----
 
-    /// @brief combine two styles
+    /// @brief Combines two styles.
+    /// @details It works like applying 2 ANSI escape sequences, meaning that
+    /// `std::cout << style1 << style2` is roughly equivalent to
+    /// `std::cout << (style1 | style2)`.
+    ///
+    /// For `lhs | rhs`:
+    /// * Do `OR` operation of both emphasis.
+    /// * Each non-null color in `rhs` overrides the corresponding color in
+    ///  `lhs`.
+    ///
+    /// Examples:
+    /// (italic, fg=red) | (bold) = (italic | bold, fg=red)
+    /// (fg=black, bg=blue) | (bg=green) = (fg=black, bg=green)
     constexpr auto operator|(Style rhs) const -> Style {
         Style combined = *this;
         combined.emphasis_ |= rhs.emphasis_;
@@ -450,6 +483,7 @@ struct Style {
         return combined;
     }
 
+    /// @brief
     constexpr void operator|=(Style rhs) { *this = *this | rhs; }
 
     constexpr auto operator==(const Style&) const -> bool = default;
@@ -470,7 +504,7 @@ struct Style {
 
     // ----- output -----
 
-    /// @brief write SGR parameters to output iterator
+    /// @brief Writes SGR parameters to the output iterator.
     /// @details format: "P1;P2;...;Pn"
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
@@ -503,7 +537,7 @@ struct Style {
         return out;
     }
 
-    /// @brief write ANSI escape code to output iterator
+    /// @brief Writes ANSI escape sequence to the output iterator.
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         if (is_null()) return out;
@@ -514,7 +548,7 @@ struct Style {
         return out;
     }
 
-    /// @brief write ANSI escape code to a string
+    /// @brief Writes ANSI escape sequence to a string.
     [[nodiscard]]
     auto to_escape() const -> std::string {
         std::string esc;
@@ -574,20 +608,19 @@ struct Style {
     uint8_t emphasis_ = none;
 };
 
-/// @brief A Style wrapper that represents an absolute style
-/// @details Style output normally has **additive semantics**, writing
-/// `std::cout << style1 << style2` is roughly equivalent to writing
-/// `std::cout << (style1 | style2)`. AbsoluteStyle instead will **reset**
-/// to the inner style.
-/// Example:
+/// @brief A Style wrapper that represents an absolute style.
+/// @details Style output normally has *additive semantics*, but this does't
+/// have.
+///
+/// Example for `std::cout`:
 /// ```cpp
 /// std::cout << italic << bold; // current style: italic | bold
 /// std::cout << reset;
 /// std::cout << italic << abs(bold); // current style: bold
 /// ```
 struct AbsoluteStyle {
-    static constexpr std::size_t MAX_ESCAPE_CODE_SIZE =
-        Style::MAX_ESCAPE_CODE_SIZE + 1;
+    static constexpr std::size_t MAX_ESCAPE_SEQ_SIZE =
+        Style::MAX_ESCAPE_SEQ_SIZE + 1;
 
     Style style;
 
@@ -615,26 +648,29 @@ struct AbsoluteStyle {
     }
 };
 
-/// @brief create an AbsoluteStyle from a Style
+/// @brief Creates an AbsoluteStyle from a Style.
+/// @details equivalent to `AbsoluteStyle(style)`
 constexpr auto abs(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
-/// @brief create a Style with foreground and background colors
+/// @brief Creates a Style with foreground and background colors.
 constexpr auto color(Color fg, Color bg) -> Style {
-    return {Style::none, fg, bg};
+    return {Style::Emphasis::none, fg, bg};
 }
 
-/// @brief create a Style with foreground color
-constexpr auto fg(Color fg) -> Style { return {Style::none, fg}; }
+/// @brief Create a Style with foreground color.
+constexpr auto fg(Color fg) -> Style { return {Style::Emphasis::none, fg}; }
 
-/// @brief create a Style with background color
-constexpr auto bg(Color bg) -> Style { return {Style::none, null_color, bg}; }
+/// @brief Create a Style with background color.
+constexpr auto bg(Color bg) -> Style {
+    return {Style::Emphasis::none, null_color, bg};
+}
 
 /// @brief output operator for Style types e.g. Style, AbsoluteStyle
 template <concepts::style StyleT>
 inline auto operator<<(std::ostream& os, StyleT style) -> std::ostream& {
-    std::array<char, StyleT::MAX_ESCAPE_CODE_SIZE> buf = {0};
+    std::array<char, StyleT::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = style.to_escape(buf.begin()) - buf.begin();
     os.write(buf.begin(), len);
     return os;
@@ -642,7 +678,7 @@ inline auto operator<<(std::ostream& os, StyleT style) -> std::ostream& {
 
 /// @brief output operator for deco::reset
 inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
-    std::array<char, Style::MAX_ESCAPE_CODE_SIZE> buf = {0};
+    std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
     os.write(buf.begin(), len);
     return os;
@@ -653,14 +689,14 @@ inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
 // clang-format off
 
 inline constexpr Style null_style        = Style();
-inline constexpr Style bold              = Style(Style::bold);
-inline constexpr Style dim               = Style(Style::dim);
-inline constexpr Style italic            = Style(Style::italic);
-inline constexpr Style underline         = Style(Style::underline);
-inline constexpr Style blink             = Style(Style::blink);
-inline constexpr Style invert            = Style(Style::invert);
-inline constexpr Style strikethrough     = Style(Style::strikethrough);
-inline constexpr Style underline_double  = Style(Style::underline_double);
+inline constexpr Style bold              = Style(Style::Emphasis::bold);
+inline constexpr Style dim               = Style(Style::Emphasis::dim);
+inline constexpr Style italic            = Style(Style::Emphasis::italic);
+inline constexpr Style underline         = Style(Style::Emphasis::underline);
+inline constexpr Style blink             = Style(Style::Emphasis::blink);
+inline constexpr Style invert            = Style(Style::Emphasis::invert);
+inline constexpr Style strikethrough     = Style(Style::Emphasis::strikethrough);
+inline constexpr Style underline_double  = Style(Style::Emphasis::underline_double);
 
 // clang-format on
 
@@ -671,6 +707,7 @@ inline constexpr Style underline_double  = Style(Style::underline_double);
 /// @brief Wraps a value with a style for ostream and format output.
 /// @details The `detail::StyledRef` has **reference semantics** and is intended
 /// to be used only as a temporary.
+///
 /// Example:
 /// ```cpp
 /// std::cout << styled(32, bold);  // OK

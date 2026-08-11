@@ -103,7 +103,7 @@ class StyleStack {
 // ║                       StyleState                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief A class representing style output state.
+/// @brief Represents style output state.
 ///
 /// It manages the current style output state (e.g. style enabled, base
 /// style, etc.) If context tracking is enabled, it will also check
