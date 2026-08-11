@@ -160,7 +160,7 @@ class StyleState { // NOLINT
         stack_.push(abs(current_style().style | style));
     }
 
-    /// @brief Updates the context if context tracking is enabled; otherwise
+    /// @brief Updates the context if context tracking is enabled; otherwise only
     /// checks whether the base style changed.
     /// @returns The Style to emit when context or base style changed
     auto update_context() -> std::optional<AbsoluteStyle> {

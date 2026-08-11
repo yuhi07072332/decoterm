@@ -39,6 +39,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <version>
 
 #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
@@ -61,13 +62,24 @@ enum class ColorType : uint8_t {
 
 namespace concepts {
 
+// clang-format off
+
+// Whether remove_cvref_t<StyleT> is a Style or an AbsoluteStyle.
+// The requires expression describes the common interface of both types.
 template <typename StyleT>
-concept style = requires(StyleT style, StyleT other_style, char* out) {
+concept style = 
+    (std::is_same_v<std::remove_cvref_t<StyleT>, Style>
+    || std::is_same_v<std::remove_cvref_t<StyleT>, AbsoluteStyle>)
+    && requires(const std::remove_cvref_t<StyleT>& style,
+                const std::remove_cvref_t<StyleT> other_style,
+                char* out) {
     { style.is_null() } -> std::same_as<bool>;
-    { style.operator==(other_style) } -> std::same_as<bool>;
-    { style.operator!=(other_style) } -> std::same_as<bool>;
+    { style == other_style } -> std::same_as<bool>;
+    { style != other_style } -> std::same_as<bool>;
     { style.to_escape(out) } -> std::same_as<char*>;
 };
+
+// clang-format on
 
 // Whether `T` has `operator<<(std::ostream&, const T&)`
 template <typename T>
@@ -850,7 +862,7 @@ class StyleState { // NOLINT
         stack_.push(abs(current_style().style | style));
     }
 
-    /// @brief Updates the context if context tracking is enabled; otherwise
+    /// @brief Updates the context if context tracking is enabled; otherwise only
     /// checks whether the base style changed.
     /// @returns The Style to emit when context or base style changed
     auto update_context() -> std::optional<AbsoluteStyle> {
