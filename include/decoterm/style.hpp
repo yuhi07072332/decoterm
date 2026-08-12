@@ -67,7 +67,7 @@ concept style =
     (std::is_same_v<std::remove_cvref_t<StyleT>, Style>
     || std::is_same_v<std::remove_cvref_t<StyleT>, AbsoluteStyle>)
     && requires(const std::remove_cvref_t<StyleT>& style,
-                const std::remove_cvref_t<StyleT> other_style,
+                const std::remove_cvref_t<StyleT>& other_style,
                 char* out) {
     { style.is_null() } -> std::same_as<bool>;
     { style == other_style } -> std::same_as<bool>;
@@ -441,17 +441,13 @@ struct Style {
 
     // clang-format on
 
-    /// @brief creates a null style
-    /// @details emphasis = 0, fg, bg = null_color
-    constexpr Style() = default;
-
-    constexpr Style(uint8_t emphasis,
+    constexpr Style(uint8_t emphasis = 0,
                     Color fg = null_color,
                     Color bg = null_color)
-        : fg_data_(fg.data_),
-          bg_data_(bg.data_),
-          color_types_((static_cast<uint8_t>(fg.type_) << 4)
-                       | static_cast<uint8_t>(bg.type_)),
+        : fg_data_(fg.data()),
+          bg_data_(bg.data()),
+          color_types_((static_cast<uint8_t>(fg.type()) << 4)
+                       | static_cast<uint8_t>(bg.type())),
           emphasis_(emphasis) {}
 
     // ----- operators -----
