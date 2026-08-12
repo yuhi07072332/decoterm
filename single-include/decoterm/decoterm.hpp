@@ -742,11 +742,13 @@ inline auto operator<<(std::ostream& os, StyledRefT&& styled) // NOLINT
 #define DECOTERM_OUTPUT_HPP
 
 
+#include <array>
 #include <optional>
 #include <ostream>
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <variant>
 
 namespace deco {
 
@@ -778,57 +780,80 @@ inline const style_output_context_t* g_style_output_context = nullptr;
 
 /* ----- StyleStack ----- */
 
-/// @brief Represents a nullable single-or-multiple `AbsoluteStyle`
-/// stack.
+/// @brief Represents a small-vector like `AbsoluteStyle` stack.
+/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
+/// if the size exceeds N.
 class StyleStack {
+    static constexpr std::size_t N = 5;
+
+    using stack_storage = std::array<AbsoluteStyle, N>;
+    using heap_storage = std::vector<AbsoluteStyle>;
   public:
-    // single by default
     StyleStack() = default;
 
     [[nodiscard]]
     auto top() const -> std::optional<AbsoluteStyle> {
-        if (is_multiple_) {
-            if (multiple_.empty()) return std::nullopt;
-            return multiple_.back();
+        if (size_) {
+            if (is_heap()) return heap().back();
+            return stack()[size_ - 1];
         }
-        return single_;
+        return std::nullopt;
     }
 
-    auto is_multiple() const -> bool { return is_multiple_; }
-
     void push(AbsoluteStyle style) {
-        if (is_multiple_) multiple_.push_back(style);
-        else single_ = style;
+        size_++;
+        if (is_heap()) {
+            heap().push_back(style);
+            return;
+        } 
+        if (size_== N + 1) {
+            grow();
+            heap().push_back(style);
+            return;
+        }
+        stack()[size_ - 1] = style;
     }
 
     void pop() {
-        if (is_multiple_ && !multiple_.empty()) multiple_.pop_back();
-        else single_ = std::nullopt;
+        if (size_) {
+            if (is_heap()) heap().pop_back();
+            size_--;
+        }
     }
 
     void clear() {
-        if (is_multiple_) multiple_.clear();
-        else single_ = std::nullopt;
-    }
-
-    void to_multiple() {
-        if (is_multiple_) return;
-        multiple_.clear();
-        if (single_) multiple_.push_back(*single_);
-        is_multiple_ = true;
-    }
-
-    void to_single() {
-        if (!is_multiple_) return;
-        if (!multiple_.empty()) single_ = multiple_.back();
-        else single_ = std::nullopt;
-        is_multiple_ = false;
+        if (is_heap()) heap().clear();
+        size_ = 0;
     }
 
   private:
-    std::vector<AbsoluteStyle> multiple_;
-    std::optional<AbsoluteStyle> single_;
-    bool is_multiple_ = false;
+    auto is_heap() const -> bool {
+        return std::holds_alternative<heap_storage>(storage_);
+    }
+
+    auto stack() const -> const stack_storage& {
+        return std::get<stack_storage>(storage_);
+    }
+
+    auto stack() -> stack_storage& {
+        return std::get<stack_storage>(storage_);
+    }
+
+    auto heap() const -> const heap_storage& {
+        return std::get<heap_storage>(storage_);
+    }
+
+    auto heap() -> heap_storage& {
+        return std::get<heap_storage>(storage_);
+    }
+
+    void grow() {
+        stack_storage tmp_stor = stack();
+        storage_.emplace<heap_storage>(tmp_stor.begin(), tmp_stor.begin() + N);
+    }
+
+    std::variant<stack_storage, heap_storage> storage_;
+    std::size_t size_ = 0;
 };
 
 } // namespace detail
@@ -848,24 +873,37 @@ class StyleStack {
 class StyleState { // NOLINT
   public:
     StyleState() = default;
-    StyleState(const StyleState&) = default;
-    StyleState(StyleState&&) = default;
-    auto operator=(const StyleState&) -> StyleState& = default;
-    auto operator=(StyleState&&) -> StyleState& = default;
+
+    StyleState(const StyleState& other) {
+        if (!other.context_tracking_enabled_) try_clean_context();
+        copy_from(other);
+    };
+
+    StyleState(StyleState&& other) noexcept {
+        if (!other.context_tracking_enabled_) try_clean_context();
+        move_from(std::move(other));
+    }
+
+    auto operator=(const StyleState& other) -> StyleState& {
+        if (this == &other) return *this;
+        if (!other.context_tracking_enabled_) try_clean_context();
+        copy_from(other);
+        return *this;
+    };
+    auto operator=(StyleState&& other) noexcept -> StyleState& {
+        if (this == &other) return *this;
+        if (!other.context_tracking_enabled_) try_clean_context();
+        move_from(std::move(other));
+        return *this;
+    }
 
     ~StyleState() {
-        if (context_tracking_enabled_ && detail::g_style_output_context == &context_)
-            detail::g_style_output_context = nullptr;
+        try_clean_context();
     }
 
     [[nodiscard]]
     auto base_style() const -> Style {
         return base_style_.style;
-    }
-
-    [[nodiscard]]
-    auto nesting_enabled() const -> bool {
-        return stack_.is_multiple();
     }
 
     [[nodiscard]]
@@ -916,9 +954,33 @@ class StyleState { // NOLINT
         return std::nullopt;
     }
 
+    void try_clean_context() const {
+        if (!context_tracking_enabled_) return;
+        if (detail::g_style_output_context == &context_) 
+            detail::g_style_output_context = nullptr;
+    }
+
   private:
     template <typename>
     friend class StyleStateOption;
+
+    void copy_from(const StyleState& other) {
+        base_style_ = other.base_style_;
+        stack_ = other.stack_;
+        style_enabled_ = other.style_enabled_;
+        context_tracking_enabled_ = other.context_tracking_enabled_;
+        base_style_changed_ = other.base_style_changed_;
+        context_ = other.context_;
+    }
+
+    void move_from(StyleState&& other) {
+        base_style_ = other.base_style_;
+        stack_ = std::move(other.stack_);
+        style_enabled_ = other.style_enabled_;
+        context_tracking_enabled_ = other.context_tracking_enabled_;
+        base_style_changed_ = other.base_style_changed_;
+        context_ = other.context_;
+    }
 
     AbsoluteStyle base_style_ = abs(null_style);
     detail::StyleStack stack_;
@@ -942,6 +1004,9 @@ class StyleStateOption {
 
     /// @brief Enable or disable context tracking.
     auto enable_context_tracking(bool enable = true) -> Derived& {
+        if (state().context_tracking_enabled_ && !enable) {
+            state().try_clean_context();
+        }
         state().context_tracking_enabled_ = enable;
         return underlying();
     }
@@ -950,13 +1015,6 @@ class StyleStateOption {
     auto set_base_style(Style base) -> Derived& {
         state().base_style_ = abs(base);
         state().base_style_changed_ = true;
-        return underlying();
-    }
-
-    /// @brief Enable or disable style nesting.
-    auto enable_nesting(bool enable = true) -> Derived& {
-        if (enable) state().stack_.to_multiple();
-        else state().stack_.to_single();
         return underlying();
     }
 
@@ -979,7 +1037,6 @@ class StyleStateOption {
 struct style_pop_t {};
 
 /// @brief StyledOstream manipulator that restores the previous style.
-/// @details If style nesting is not enabled, it will just restores to the base style.
 inline constexpr style_pop_t pop;
 
 /// @brief A stateful lightweight writer over an existing std::ostream.
