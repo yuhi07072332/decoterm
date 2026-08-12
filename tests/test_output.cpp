@@ -44,15 +44,13 @@ TEST_CASE("styled_out: StyleOutputState: copy from other type") {
 
     auto styled_os = StyledOstream(std::cout)
                          .enable_style(false)
-                         .set_base_style(fg(blue))
-                         .enable_nesting(true);
+                         .set_base_style(fg(blue));
     styled_os << bold;
 
     TestStyleOutputState teststate(styled_os); // NOLINT
 
     CHECK_FALSE(teststate.style_enabled());
     CHECK_FALSE(teststate.context_tracking_enabled());
-    CHECK(teststate.nesting_enabled());
     CHECK(teststate.base_style() == fg(blue));
     CHECK(teststate.current_style().style == (fg(blue) | bold));
 }
@@ -64,7 +62,6 @@ TEST_CASE("styled_out: StyleOutputState: options") {
 
     CHECK(state.style_enabled());
     CHECK_FALSE(state.context_tracking_enabled());
-    CHECK_FALSE(state.nesting_enabled());
     CHECK(state.base_style() == null_style);
     CHECK(state.current_style().style == null_style);
 
@@ -74,14 +71,6 @@ TEST_CASE("styled_out: StyleOutputState: options") {
     CHECK(state.context_tracking_enabled());
     CHECK(state.base_style() == fg(blue));
     CHECK(state.current_style().style == fg(blue));
-
-    state.enable_nesting(true);
-    CHECK(state.nesting_enabled());
-    CHECK(state.current_style().style == fg(blue));
-
-    state.enable_nesting(false);
-    CHECK_FALSE(state.nesting_enabled());
-    CHECK(state.current_style().style == fg(blue));
 }
 
 TEST_CASE("styled_out: StyleOutputState: options after chained construction") {
@@ -89,48 +78,22 @@ TEST_CASE("styled_out: StyleOutputState: options after chained construction") {
 
     auto state = styled_out(std::cout)
                      .enable_style(false)
-                     .set_base_style(fg(blue))
-                     .enable_nesting(true);
+                     .set_base_style(fg(blue));
 
     state.enable_style(true)
         .enable_context_tracking(false)
-        .set_base_style(fg(red))
-        .enable_nesting(false);
+        .set_base_style(fg(red));
 
     CHECK(state.style_enabled());
     CHECK_FALSE(state.context_tracking_enabled());
-    CHECK_FALSE(state.nesting_enabled());
     CHECK(state.base_style() == fg(red));
     CHECK(state.current_style().style == fg(red));
-}
-
-TEST_CASE("styled_out: StyleOutputState: single style state") {
-    using namespace deco;
-
-    TestStyleOutputState state;
-    state.set_base_style(fg(blue));
-
-    state.push_style(bold);
-    CHECK(state.current_style().style == (fg(blue) | bold));
-
-    state.push_style(fg(red));
-    CHECK(state.current_style().style == (fg(red) | bold));
-
-    state.pop_style();
-    CHECK(state.current_style().style == fg(blue));
-
-    state.push_style(abs(fg(green)));
-    CHECK(state.current_style().style == fg(green));
-
-    state.reset_style();
-    CHECK(state.current_style().style == fg(blue));
 }
 
 TEST_CASE("styled_out: StyleOutputState: nested style state") {
     using namespace deco;
 
     TestStyleOutputState state;
-    state.set_base_style(fg(blue)).enable_nesting(true);
 
     state.push_style(bold);
     CHECK(state.current_style().style == (fg(blue) | bold));
@@ -248,7 +211,7 @@ TEST_CASE("styled_out: StyledOstream: restores nested styles") {
 
     std::ostringstream os;
     StyledOstream styled_os =
-        styled_out(os).set_base_style(fg(blue)).enable_nesting(true);
+        styled_out(os).set_base_style(fg(blue));
 
     styled_os << bold << "bold" << fg(red) << "red bold" << pop << "blue bold"
               << pop << "blue";
@@ -267,7 +230,7 @@ TEST_CASE("styled_out: StyledOstream: reset returns to base style") {
 
     std::ostringstream os;
     StyledOstream styled_os =
-        styled_out(os).set_base_style(fg(blue)).enable_nesting(true);
+        styled_out(os).set_base_style(fg(blue));
 
     styled_os << bold << "bold" << reset << "base";
 

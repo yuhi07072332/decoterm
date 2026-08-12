@@ -147,7 +147,7 @@ auto main() -> int {
 
     dout << styled("[Basic]\n\n", style_h2);
 
-    auto out = styled_out(std::cout).set_base_style(color(white, rgb(0x21314d))).enable_nesting();
+    auto out = styled_out(std::cout).set_base_style(color(white, rgb(0x21314d)));
     out << "base style "
         << styled("{ styled: italic fg(yellowlight) }", italic | fg(bright_yellow))
         << " base style "
@@ -157,7 +157,6 @@ auto main() -> int {
     out << abs(null_style) << "\n\n" 
         << style_h2 << "[Style nesting]\n\n" << reset;
 
-    out.enable_nesting(true);
     out << "base style "
         << (italic | fg(bright_red)) << "{ italic | fg(bright_red) "
         << (underline | color(bright_yellow, default_color)) << "{ underline | color(bright_yellow, default_color) }"

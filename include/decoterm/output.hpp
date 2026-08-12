@@ -44,57 +44,60 @@ inline const style_output_context_t* g_style_output_context = nullptr;
 
 /* ----- StyleStack ----- */
 
-/// @brief Represents a nullable single-or-multiple `AbsoluteStyle`
-/// stack.
+/// @brief Represents a small-vector like `AbsoluteStyle` stack.
+/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
+/// if the size exceeds N.
 class StyleStack {
+    static constexpr std::size_t N = 5;
   public:
-    // single by default
     StyleStack() = default;
 
     [[nodiscard]]
     auto top() const -> std::optional<AbsoluteStyle> {
-        if (is_multiple_) {
-            if (multiple_.empty()) return std::nullopt;
-            return multiple_.back();
+        if (size_) {
+            if (is_heap_) return heap_.back();
+            return stack_[size_ - 1];
         }
-        return single_;
+        return std::nullopt;
     }
 
-    auto is_multiple() const -> bool { return is_multiple_; }
-
     void push(AbsoluteStyle style) {
-        if (is_multiple_) multiple_.push_back(style);
-        else single_ = style;
+        size_++;
+        if (is_heap_) {
+            heap_.push_back(style);
+            return;
+        } 
+        if (size_ == N) {
+            grow();
+            heap_.push_back(style);
+            return;
+        }
+        stack_[size_ - 1] = style;
     }
 
     void pop() {
-        if (is_multiple_ && !multiple_.empty()) multiple_.pop_back();
-        else single_ = std::nullopt;
+        if (size_) {
+            if (is_heap_) heap_.pop_back();
+            size_--;
+        }
     }
 
     void clear() {
-        if (is_multiple_) multiple_.clear();
-        else single_ = std::nullopt;
-    }
-
-    void to_multiple() {
-        if (is_multiple_) return;
-        multiple_.clear();
-        if (single_) multiple_.push_back(*single_);
-        is_multiple_ = true;
-    }
-
-    void to_single() {
-        if (!is_multiple_) return;
-        if (!multiple_.empty()) single_ = multiple_.back();
-        else single_ = std::nullopt;
-        is_multiple_ = false;
+        if (is_heap_) heap_.clear();
+        size_ = 0;
     }
 
   private:
-    std::vector<AbsoluteStyle> multiple_;
-    std::optional<AbsoluteStyle> single_;
-    bool is_multiple_ = false;
+    void grow() {
+        is_heap_ = true;
+        heap_.reserve(N + 1);
+        heap_.assign(stack_.begin(), stack_.end());
+    }
+
+    std::size_t size_ = 0;
+    std::array<AbsoluteStyle, N> stack_;
+    std::vector<AbsoluteStyle> heap_;
+    bool is_heap_ = false;
 };
 
 } // namespace detail
@@ -127,11 +130,6 @@ class StyleState { // NOLINT
     [[nodiscard]]
     auto base_style() const -> Style {
         return base_style_.style;
-    }
-
-    [[nodiscard]]
-    auto nesting_enabled() const -> bool {
-        return stack_.is_multiple();
     }
 
     [[nodiscard]]
@@ -216,13 +214,6 @@ class StyleStateOption {
     auto set_base_style(Style base) -> Derived& {
         state().base_style_ = abs(base);
         state().base_style_changed_ = true;
-        return underlying();
-    }
-
-    /// @brief Enable or disable style nesting.
-    auto enable_nesting(bool enable = true) -> Derived& {
-        if (enable) state().stack_.to_multiple();
-        else state().stack_.to_single();
         return underlying();
     }
 
