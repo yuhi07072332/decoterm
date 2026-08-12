@@ -9,16 +9,17 @@
 
 namespace {
 
-struct TestStyleOutputState
+struct TestStyleState
     : public deco::StyleState,
-      public deco::StyleStateOption<TestStyleOutputState> {
+      public deco::StyleStateOption<TestStyleState> {
     using deco::StyleState::pop_style;
     using deco::StyleState::push_style;
     using deco::StyleState::reset_style;
+    using deco::StyleState::update_context;
 
-    TestStyleOutputState() = default; // NOLINT
+    TestStyleState() = default; // NOLINT
 
-    TestStyleOutputState(const StyleState& other)
+    TestStyleState(const StyleState& other)
         : StyleState(other) {}
 };
 
@@ -39,7 +40,7 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
 
 // NOLINTBEGIN
 
-TEST_CASE("StyleOutputState: copy from other type") {
+TEST_CASE("StyleState: copy") {
     using namespace deco;
 
     auto styled_os = StyledOstream(std::cout)
@@ -47,7 +48,7 @@ TEST_CASE("StyleOutputState: copy from other type") {
                          .set_base_style(fg(blue));
     styled_os << bold;
 
-    TestStyleOutputState teststate(styled_os); // NOLINT
+    TestStyleState teststate(styled_os); // NOLINT
 
     CHECK_FALSE(teststate.style_enabled());
     CHECK_FALSE(teststate.context_tracking_enabled());
@@ -55,7 +56,40 @@ TEST_CASE("StyleOutputState: copy from other type") {
     CHECK(teststate.current_style().style == (fg(blue) | bold));
 }
 
-TEST_CASE("StyleOutputState: options") {
+TEST_CASE("StyleState: move") {
+    using namespace deco;
+
+    auto styled_os = StyledOstream(std::cout)
+                         .enable_style(false)
+                         .set_base_style(fg(blue));
+    styled_os << bold;
+
+    TestStyleState teststate(std::move(styled_os)); // NOLINT
+
+    CHECK_FALSE(teststate.style_enabled());
+    CHECK_FALSE(teststate.context_tracking_enabled());
+    CHECK(teststate.base_style() == fg(blue));
+    CHECK(teststate.current_style().style == (fg(blue) | bold));
+}
+
+TEST_CASE("StyleState: copy from context tracking disabled ") {
+    using namespace deco;
+
+    auto styled_os = StyledOstream(std::cout)
+                         .enable_style(false)
+                         .set_base_style(fg(blue));
+    styled_os << bold;
+
+    TestStyleState teststate; // NOLINT
+    teststate.enable_context_tracking();
+    teststate.update_context();
+
+    teststate = styled_os;
+
+    CHECK(detail::g_style_output_context == nullptr);
+}
+
+TEST_CASE("StyleState: options") {
     using namespace deco;
 
     StyledOstream state(std::cout);
@@ -73,7 +107,7 @@ TEST_CASE("StyleOutputState: options") {
     CHECK(state.current_style().style == fg(blue));
 }
 
-TEST_CASE("StyleOutputState: options after chained construction") {
+TEST_CASE("StyleState: options after chained construction") {
     using namespace deco;
 
     auto state = styled_out(std::cout)
@@ -90,10 +124,10 @@ TEST_CASE("StyleOutputState: options after chained construction") {
     CHECK(state.current_style().style == fg(red));
 }
 
-TEST_CASE("StyleOutputState: nested style state") {
+TEST_CASE("StyleState: nested style state") {
     using namespace deco;
 
-    TestStyleOutputState state;
+    TestStyleState state;
     state.set_base_style(fg(blue));
 
     CHECK(state.current_style().style == fg(blue));
@@ -127,7 +161,7 @@ TEST_CASE("StyleOutputState: nested style state") {
 TEST_CASE("StyleState: StyleStack grows to heap") {
     using namespace deco;
 
-    TestStyleOutputState state;
+    TestStyleState state;
 
     for (int i = 0; i < 5; ++i) {
         state.push_style(fg(i));

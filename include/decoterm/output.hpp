@@ -139,10 +139,29 @@ class StyleStack {
 class StyleState { // NOLINT
   public:
     StyleState() = default;
-    StyleState(const StyleState&) = default;
-    StyleState(StyleState&&) = default;
-    auto operator=(const StyleState&) -> StyleState& = default;
-    auto operator=(StyleState&&) -> StyleState& = default;
+
+    StyleState(const StyleState& other) {
+        if (!other.context_tracking_enabled_) try_clean_context();
+        copy_from(other);
+    };
+
+    StyleState(StyleState&& other) noexcept {
+        if (!other.context_tracking_enabled_) try_clean_context();
+        move_from(std::move(other));
+    }
+
+    auto operator=(const StyleState& other) -> StyleState& {
+        if (this == &other) return *this;
+        if (!other.context_tracking_enabled_) try_clean_context();
+        copy_from(other);
+        return *this;
+    };
+    auto operator=(StyleState&& other) noexcept -> StyleState& {
+        if (this == &other) return *this;
+        if (!other.context_tracking_enabled_) try_clean_context();
+        move_from(std::move(other));
+        return *this;
+    }
 
     ~StyleState() {
         try_clean_context();
@@ -210,6 +229,24 @@ class StyleState { // NOLINT
   private:
     template <typename>
     friend class StyleStateOption;
+
+    void copy_from(const StyleState& other) {
+        base_style_ = other.base_style_;
+        stack_ = other.stack_;
+        style_enabled_ = other.style_enabled_;
+        context_tracking_enabled_ = other.context_tracking_enabled_;
+        base_style_changed_ = other.base_style_changed_;
+        context_ = other.context_;
+    }
+
+    void move_from(StyleState&& other) {
+        base_style_ = other.base_style_;
+        stack_ = std::move(other.stack_);
+        style_enabled_ = other.style_enabled_;
+        context_tracking_enabled_ = other.context_tracking_enabled_;
+        base_style_changed_ = other.base_style_changed_;
+        context_ = other.context_;
+    }
 
     AbsoluteStyle base_style_ = abs(null_style);
     detail::StyleStack stack_;
