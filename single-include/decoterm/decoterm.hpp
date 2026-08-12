@@ -747,6 +747,7 @@ inline auto operator<<(std::ostream& os, StyledRefT&& styled) // NOLINT
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <variant>
 
 namespace deco {
 
@@ -783,55 +784,75 @@ inline const style_output_context_t* g_style_output_context = nullptr;
 /// if the size exceeds N.
 class StyleStack {
     static constexpr std::size_t N = 5;
+
+    using stack_storage = std::array<AbsoluteStyle, N>;
+    using heap_storage = std::vector<AbsoluteStyle>;
   public:
     StyleStack() = default;
 
     [[nodiscard]]
     auto top() const -> std::optional<AbsoluteStyle> {
         if (size_) {
-            if (is_heap_) return heap_.back();
-            return stack_[size_ - 1];
+            if (is_heap()) return heap().back();
+            return stack()[size_ - 1];
         }
         return std::nullopt;
     }
 
     void push(AbsoluteStyle style) {
         size_++;
-        if (is_heap_) {
-            heap_.push_back(style);
+        if (is_heap()) {
+            heap().push_back(style);
             return;
         } 
         if (size_ == N) {
             grow();
-            heap_.push_back(style);
+            heap().push_back(style);
             return;
         }
-        stack_[size_ - 1] = style;
+        stack()[size_ - 1] = style;
     }
 
     void pop() {
         if (size_) {
-            if (is_heap_) heap_.pop_back();
+            if (is_heap()) heap().pop_back();
             size_--;
         }
     }
 
     void clear() {
-        if (is_heap_) heap_.clear();
+        if (is_heap()) heap().clear();
         size_ = 0;
     }
 
   private:
-    void grow() {
-        is_heap_ = true;
-        heap_.reserve(N + 1);
-        heap_.assign(stack_.begin(), stack_.end());
+    auto is_heap() const -> bool {
+        return std::holds_alternative<heap_storage>(storage_);
     }
 
+    auto stack() const -> const stack_storage& {
+        return std::get<stack_storage>(storage_);
+    }
+
+    auto stack() -> stack_storage& {
+        return std::get<stack_storage>(storage_);
+    }
+
+    auto heap() const -> const heap_storage& {
+        return std::get<heap_storage>(storage_);
+    }
+
+    auto heap() -> heap_storage& {
+        return std::get<heap_storage>(storage_);
+    }
+
+    void grow() {
+        auto* it = stack().begin();
+        storage_.emplace<heap_storage>(it, it + N);
+    }
+
+    std::variant<stack_storage, heap_storage> storage_;
     std::size_t size_ = 0;
-    std::array<AbsoluteStyle, N> stack_;
-    std::vector<AbsoluteStyle> heap_;
-    bool is_heap_ = false;
 };
 
 } // namespace detail
