@@ -8,6 +8,7 @@
 
 #include "style.hpp"
 
+#include <array>
 #include <optional>
 #include <ostream>
 #include <type_traits>
@@ -71,7 +72,7 @@ class StyleStack {
             heap().push_back(style);
             return;
         } 
-        if (size_ == N) {
+        if (size_== N + 1) {
             grow();
             heap().push_back(style);
             return;
@@ -113,8 +114,8 @@ class StyleStack {
     }
 
     void grow() {
-        auto* it = stack().begin();
-        storage_.emplace<heap_storage>(it, it + N);
+        stack_storage tmp_stor = stack();
+        storage_.emplace<heap_storage>(tmp_stor.begin(), tmp_stor.begin() + N);
     }
 
     std::variant<stack_storage, heap_storage> storage_;
@@ -144,8 +145,7 @@ class StyleState { // NOLINT
     auto operator=(StyleState&&) -> StyleState& = default;
 
     ~StyleState() {
-        if (context_tracking_enabled_ && detail::g_style_output_context == &context_)
-            detail::g_style_output_context = nullptr;
+        try_clean_context();
     }
 
     [[nodiscard]]
@@ -201,6 +201,12 @@ class StyleState { // NOLINT
         return std::nullopt;
     }
 
+    void try_clean_context() const {
+        if (!context_tracking_enabled_) return;
+        if (detail::g_style_output_context == &context_) 
+            detail::g_style_output_context = nullptr;
+    }
+
   private:
     template <typename>
     friend class StyleStateOption;
@@ -227,6 +233,9 @@ class StyleStateOption {
 
     /// @brief Enable or disable context tracking.
     auto enable_context_tracking(bool enable = true) -> Derived& {
+        if (state().context_tracking_enabled_ && !enable) {
+            state().try_clean_context();
+        }
         state().context_tracking_enabled_ = enable;
         return underlying();
     }
@@ -257,7 +266,6 @@ class StyleStateOption {
 struct style_pop_t {};
 
 /// @brief StyledOstream manipulator that restores the previous style.
-/// @details If style nesting is not enabled, it will just restores to the base style.
 inline constexpr style_pop_t pop;
 
 /// @brief A stateful lightweight writer over an existing std::ostream.

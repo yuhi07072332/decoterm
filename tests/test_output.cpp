@@ -39,7 +39,7 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
 
 // NOLINTBEGIN
 
-TEST_CASE("styled_out: StyleOutputState: copy from other type") {
+TEST_CASE("StyleOutputState: copy from other type") {
     using namespace deco;
 
     auto styled_os = StyledOstream(std::cout)
@@ -55,7 +55,7 @@ TEST_CASE("styled_out: StyleOutputState: copy from other type") {
     CHECK(teststate.current_style().style == (fg(blue) | bold));
 }
 
-TEST_CASE("styled_out: StyleOutputState: options") {
+TEST_CASE("StyleOutputState: options") {
     using namespace deco;
 
     StyledOstream state(std::cout);
@@ -73,7 +73,7 @@ TEST_CASE("styled_out: StyleOutputState: options") {
     CHECK(state.current_style().style == fg(blue));
 }
 
-TEST_CASE("styled_out: StyleOutputState: options after chained construction") {
+TEST_CASE("StyleOutputState: options after chained construction") {
     using namespace deco;
 
     auto state = styled_out(std::cout)
@@ -90,10 +90,13 @@ TEST_CASE("styled_out: StyleOutputState: options after chained construction") {
     CHECK(state.current_style().style == fg(red));
 }
 
-TEST_CASE("styled_out: StyleOutputState: nested style state") {
+TEST_CASE("StyleOutputState: nested style state") {
     using namespace deco;
 
     TestStyleOutputState state;
+    state.set_base_style(fg(blue));
+
+    CHECK(state.current_style().style == fg(blue));
 
     state.push_style(bold);
     CHECK(state.current_style().style == (fg(blue) | bold));
@@ -121,7 +124,24 @@ TEST_CASE("styled_out: StyleOutputState: nested style state") {
     CHECK(state.current_style().style == fg(blue));
 }
 
-TEST_CASE("styled_out: StyledOstream: write plain values") {
+TEST_CASE("StyleState: StyleStack grows to heap") {
+    using namespace deco;
+
+    TestStyleOutputState state;
+
+    for (int i = 0; i < 5; ++i) {
+        state.push_style(fg(i));
+    }
+    state.push_style(italic);
+
+    CHECK(state.current_style().style == (fg(4) | italic));
+    for (int i = 4; i >= 0; --i) {
+        state.pop_style();
+        CHECK(state.current_style().style == fg(i));
+    }
+}
+
+TEST_CASE("StyledOstream: write plain values") {
     using namespace deco;
 
     std::ostringstream os;
@@ -135,7 +155,7 @@ TEST_CASE("styled_out: StyledOstream: write plain values") {
           == abs(null_style).to_escape() + std::string("value=42 1.5"));
 }
 
-TEST_CASE("styled_out: StyledOstream: call IO manipulator") {
+TEST_CASE("StyledOstream: call IO manipulator") {
     using namespace deco;
 
     std::ostringstream os;
@@ -171,7 +191,7 @@ TEST_CASE("styled_out: StyledOstream: call IO manipulator") {
     CHECK(os.str() == abs(null_style).to_escape() + expected.str());
 }
 
-TEST_CASE("styled_out: StyledOstream: throws if output operator returns different "
+TEST_CASE("StyledOstream: throws if output operator returns different "
           "ostream object") {
     using namespace deco;
 
@@ -180,7 +200,7 @@ TEST_CASE("styled_out: StyledOstream: throws if output operator returns differen
                     std::logic_error);
 }
 
-TEST_CASE("styled_out: StyledOstream: write styles") {
+TEST_CASE("StyledOstream: write styles") {
     using namespace deco;
 
     std::ostringstream os;
@@ -193,7 +213,7 @@ TEST_CASE("styled_out: StyledOstream: write styles") {
                  + std::string("error") + abs(null_style).to_escape());
 }
 
-TEST_CASE("styled_out: StyledOstream: disable style output") {
+TEST_CASE("StyledOstream: disable style output") {
     using namespace deco;
 
     std::ostringstream os;
@@ -206,7 +226,7 @@ TEST_CASE("styled_out: StyledOstream: disable style output") {
     CHECK(styled_os.current_style().style == null_style);
 }
 
-TEST_CASE("styled_out: StyledOstream: restores nested styles") {
+TEST_CASE("StyledOstream: restores nested styles") {
     using namespace deco;
 
     std::ostringstream os;
@@ -225,7 +245,7 @@ TEST_CASE("styled_out: StyledOstream: restores nested styles") {
                  + std::string("blue"));
 }
 
-TEST_CASE("styled_out: StyledOstream: reset returns to base style") {
+TEST_CASE("StyledOstream: reset returns to base style") {
     using namespace deco;
 
     std::ostringstream os;
@@ -240,7 +260,7 @@ TEST_CASE("styled_out: StyledOstream: reset returns to base style") {
                  + std::string("base"));
 }
 
-TEST_CASE("styled_out: StyledOstream: context tracking") {
+TEST_CASE("StyledOstream: context tracking") {
     using namespace deco;
 
     std::ostringstream os1;
@@ -260,7 +280,7 @@ TEST_CASE("styled_out: StyledOstream: context tracking") {
     CHECK(os2.str() == abs(fg(red)).to_escape() + std::string("c"));
 }
 
-TEST_CASE("styled_out: StyledOstream: only output base style first time if context "
+TEST_CASE(" StyledOstream: only output base style first time if context "
           "tracking is off") {
     using namespace deco;
 
