@@ -18,43 +18,12 @@ from math import cbrt
 SCRIPT_DIR: Path = Path(__file__).resolve().parent
 DATA_DIR: Path = SCRIPT_DIR / "gen_color_names"
 
-TERMINAL_COLOR_NAMES: list[str] = [
-    "Black",
-    "Red",
-    "Green",
-    "Yellow",
-    "Blue",
-    "Magenta",
-    "Cyan",
-    "White",
-    "BrightBlack",
-    "BrightRed",
-    "BrightGreen",
-    "BrightYellow",
-    "BrightBlue",
-    "BrightMagenta",
-    "BrightCyan",
-    "BrightWhite",
-]
-
-TERMINAL_COLOR_NAMES_LOWER: list[str] = [
-    "black",
-    "red",
-    "green",
-    "yellow",
-    "blue",
-    "magenta",
-    "cyan",
-    "white",
-]
-
 class Command(Enum):
     PREVIEW = 1
     GENERATE_ENUM = 2
     GENERATE_INFO = 3
 
 class Source(Enum):
-    NONE = 0
     XORG_RGB = 1
     MEODAI_COLORNAMES = 2
 
@@ -85,9 +54,41 @@ class ColorEntry:
 @dataclass(frozen=True, slots=True)
 class Entry:
     xterm_rgb: RGB = RGB(0, 0, 0)
-    nearest_rgb: RGB = RGB(0, 0, 0)
+    nearest_rgb: RGB | None = None
     name: str = ""
-    source: Source = Source.NONE
+    source: Source | None = None
+    overridden: bool = False
+    rematched: bool = False
+
+TERMINAL_COLOR_NAMES: list[str] = [
+    "Black",
+    "Red",
+    "Green",
+    "Yellow",
+    "Blue",
+    "Magenta",
+    "Cyan",
+    "White",
+    "BrightBlack",
+    "BrightRed",
+    "BrightGreen",
+    "BrightYellow",
+    "BrightBlue",
+    "BrightMagenta",
+    "BrightCyan",
+    "BrightWhite",
+]
+
+TERMINAL_COLOR_NAMES_LOWER: list[str] = [
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+]
 
 TERMINAL_COLOR_RGBS: list[RGB] = [
     RGB( 0, 0, 0 ),
@@ -107,6 +108,11 @@ TERMINAL_COLOR_RGBS: list[RGB] = [
     RGB( 0, 255, 255 ),
     RGB( 255, 255, 255 )
 ]
+
+NAME_OVERRIDES: dict[int, str] = {
+    16: "black"
+};
+
 
 def hex2rgb(hex_str: str) -> RGB:
     hex_str = hex_str.lstrip('#')
@@ -136,8 +142,33 @@ def rgb2oklab(rgb: RGB) -> OKLab:
         0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
     )
 
-# see https://web.archive.org/web/20130125000058/http://www.frexx.de/xterm-256-notes/
+def pascalcase_to_snake_case(input: str) -> str:
+    result: str = ""
+    begin: bool = True
+    for i, c in enumerate(input):
+        if c.isupper():
+            if i != 0: result += '_'
+            result += c.lower()
+        else:
+            result += c
 
+    return result
+
+def colorname_to_snake_case(input: str) -> str:
+    result: str = ""
+    for c in input:
+        if c == '’' or c == '!':
+            continue
+
+        if c == '-' or c == ' ':
+            result += '_'
+            continue
+
+        result += c.lower()
+        
+    return result
+
+# see https://web.archive.org/web/20130125000058/http://www.frexx.de/xterm-256-notes/
 def xterm_rgb(index: int) -> RGB:
     if index < 16:
         return TERMINAL_COLOR_RGBS[index]
@@ -165,7 +196,7 @@ def xterm_rgb(index: int) -> RGB:
 
 
 def compute_xterm_rgb() -> list[RGB]:
-    return [xterm_rgb(i) for i in range (0, 255)]
+    return [xterm_rgb(i) for i in range (0, 256)]
 
 def load_xorg_rgb() -> list[ColorEntry]:
     xorg_rgb: list[ColorEntry] = []
@@ -175,14 +206,13 @@ def load_xorg_rgb() -> list[ColorEntry]:
               encoding='utf-8') as f:
         for line in f.readlines():
             r, g, b, name = line.split(maxsplit=3)
-            name = name.rstrip()
+            name = colorname_to_snake_case(name.rstrip())
             rgb = RGB(int(r), int(g), int(b))
 
-            if name in map(lambda name: name.lower(), TERMINAL_COLOR_NAMES_LOWER):
-                continue
-            if name[len(name) - 1].isdigit(): continue
-            if next((entry for entry in xorg_rgb
-                if entry.rgb == rgb), None) is not None: continue
+            # filter
+            if name in TERMINAL_COLOR_NAMES_LOWER: continue
+            if name[-1].isdigit(): continue
+            if "web" in name: continue
 
             xorg_rgb.append(ColorEntry(
                 rgb,
@@ -190,7 +220,26 @@ def load_xorg_rgb() -> list[ColorEntry]:
                 name
             ))
 
-    return xorg_rgb
+    # remove name variants with same RGB
+    result: list[ColorEntry] = []
+    groups: dict[RGB, list[ColorEntry]] = {}
+
+    for entry in xorg_rgb:
+        groups.setdefault(entry.rgb, []).append(entry)
+
+    for entries in groups.values():
+        selected = entries[0]
+        names = {entry.name for entry in entries}
+
+        for entry in entries:
+            name = entry.name
+            if "grey" in name and name.replace("grey", "gray") in names:
+                selected = entry
+                break
+
+        result.append(selected)
+
+    return result
 
 
 def load_meodai_colornames(filter_good: bool) -> list[ColorEntry]:
@@ -202,8 +251,11 @@ def load_meodai_colornames(filter_good: bool) -> list[ColorEntry]:
         reader = csv.reader(f)
         next(reader)
         for row in reader:
-            if row[2] != 'x': continue
-            color_name: str = row[0]
+            if filter_good and row[2] != 'x': continue
+
+            color_name: str = colorname_to_snake_case(row[0])
+            if color_name in TERMINAL_COLOR_NAMES_LOWER: continue
+
             rgb = hex2rgb(row[1])
             meodai_data.append(ColorEntry(
                 rgb,
@@ -223,80 +275,95 @@ def color_distance_square(lhs: OKLab, rhs: OKLab) -> float:
 def nearest_matches(
     input: RGB,
     color_entries: list[ColorEntry],
-    excluded_names: set[str],
     count: int = 3
-) -> list[tuple[RGB, str, float]]:
+) -> list[tuple[RGB, str]]:
     input_lab = rgb2oklab(input)
 
     matches = heapq.nsmallest(
         count,
-        (
-            (color_distance_square(input_lab, entry.oklab), entry)
-            for entry in color_entries
-            if entry.name not in excluded_names
-        ),
-        key=lambda item: item[0],
+        color_entries,
+        key=lambda entry: color_distance_square(input_lab, entry.oklab)
     )
 
-    return [
-        (entry.rgb, entry.name, distance)
-        for distance, entry in matches
-    ]
+    return [ (entry.rgb, entry.name) for entry in matches ]
 
-    return nearest.rgb, nearest.name, distance
 
-def match_xterm_rgbs(xterm_rgbs: list[RGB],
-          xorg_data: list[ColorEntry],
-          meodai_data: list[ColorEntry]) -> list[Entry]:
-    term_color_names = set(TERMINAL_COLOR_NAMES)
-    term_color_names_lower = set(TERMINAL_COLOR_NAMES_LOWER)
-
+def match_xterm_rgbs(
+        xterm_rgbs: list[RGB],
+        xorg_data: list[ColorEntry],
+        meodai_data: list[ColorEntry]
+) -> list[Entry]:
     result: list[Entry] = []
     result_names: list[str] = []
 
-    for rgb in xterm_rgbs:
-        nearest = nearest_matches(rgb, xorg_data, term_color_names_lower, 1)[0]
-        if not nearest[1] in result_names:
-            result.append(Entry(rgb, nearest[0], nearest[1], Source.XORG_RGB))
-            result_names.append(nearest[1])
+    for index, rgb in enumerate(xterm_rgbs, start=16):
+        nearest = nearest_matches(rgb, xorg_data, count=1)[0]
+        nearest_rgb, nearest_name = nearest
+
+        if (nearest_name not in result_names
+            and not (index < 232 and "grey" in nearest_name)):
+            result.append(Entry(rgb, nearest_rgb, nearest_name, Source.XORG_RGB))
+            result_names.append(nearest_name)
             continue
 
         matches = [match for match in 
-                   nearest_matches(rgb, meodai_data, term_color_names, 3)
+                   nearest_matches(rgb, meodai_data, count=3)
                    if match[1] not in result_names]
 
-        nearest = min(matches, key=lambda item: item[2])
-        result.append(Entry(rgb, nearest[0], nearest[1], Source.MEODAI_COLORNAMES))
-        result_names.append(nearest[1])
+        nearest_rgb, nearest_name = matches[0]
+        result.append(Entry(rgb, nearest_rgb, nearest_name, Source.MEODAI_COLORNAMES))
+        result_names.append(nearest_name)
 
     return result
 
+def override_entries(entries: list[Entry]) -> list[Entry]:
+    result: list[Entry] = []
+    override_index = NAME_OVERRIDES.keys()
 
-def pascalcase_to_snake_case(input: str) -> str:
-    result: str = ""
-    begin: bool = True
-    for i, c in enumerate(input):
-        if c.isupper():
-            if i != 0: result += '_'
-            result += c.lower()
-        else:
-            result += c
-
-    return result
-
-def colorname_to_snake_case(input: str) -> str:
-    result: str = ""
-    for c in input:
-        if c == '’' or c == '!':
+    for i, entry in enumerate(entries, start=16):
+        if i not in override_index: 
+            result.append(entry)
             continue
+        result.append(Entry(
+            xterm_rgb=entry.xterm_rgb,
+            nearest_rgb=None,
+            name=NAME_OVERRIDES[i],
+            source=None,
+            overridden=True
+        ))
 
-        if c == '-' or c == ' ':
-            result += '_'
-            continue
-
-        result += c.lower()
-        
     return result
+
+def check_duplicates(list: list) -> None:
+    if len(list) != len(set(list)):
+        print("\x1b[31;1mERROR: has duplicates\x1b[m")
+        sys.exit(1)
+
+def preview(entries: list[Entry]) -> None:
+    print("\x1b[93mYellow color names are from meodai/colornames !\x1b[m\n")
+    for i, entry in enumerate(entries, start=16):
+        print(f"[{i:0>3}] ", end='')
+        print(f"{entry.xterm_rgb}", end='')
+
+        if entry.nearest_rgb is not None:
+            print(f" <- {entry.nearest_rgb}", end='')
+        else: 
+            print("           ", end='')
+        print(" : ", end='')
+
+        if (entry.source is not None
+            and entry.source == Source.MEODAI_COLORNAMES):
+            print("\x1b[33m", end='')
+        print(f"{entry.name}\x1b[m", end='')
+
+        if entry.overridden:
+            print(" \x1b[91;1m(overridden)\x1b[m")
+        elif entry.rematched:
+            print(" \x1b[96;1m(rematched)\x1b[m")
+
+        print()
+
+
 
 def generate_info(xterm_rgbs) -> None:
     print("inline constexpr std::array<ColorInfo, 256> color_info {{")
@@ -313,8 +380,7 @@ def generate_enum(result: list[Entry]) -> None:
     print()
 
     for i, entry in enumerate(result, 16):
-        name = colorname_to_snake_case(entry.name)
-        print(f"    {name:<25} = {i:<3},    // {entry.xterm_rgb}")
+        print(f"    {entry.name:<25} = {i:<3},    // {entry.xterm_rgb}")
 
     print("};")
 
@@ -333,7 +399,7 @@ def main():
             sys.exit(1)
 
     xterm_rgbs = compute_xterm_rgb()
-    assert len(xterm_rgbs) == 255
+    assert len(xterm_rgbs) == 256
 
     if command == Command.GENERATE_INFO:
         generate_info(xterm_rgbs)
@@ -342,26 +408,18 @@ def main():
     xorg_data = load_xorg_rgb()
     meodai_data = load_meodai_colornames(True)
 
-    result: list[Entry] = match_xterm_rgbs(
-        xterm_rgbs[16:],
-        xorg_data,
-        meodai_data
+    result: list[Entry] = override_entries(
+        match_xterm_rgbs(
+            xterm_rgbs[16:],
+            xorg_data,
+            meodai_data
+        )
     )
 
-    print("Checking duplicates...", end='')
-    result_names: list[str] = [entry.name for entry in result]
-    if (len(result_names) != len(set(result_names))):
-        print("\n\x1b[31;1mERROR: has duplicates\x1b[m")
-        sys.exit(1)
-    print("  \x1b[32mOK\x1b[m")
+    check_duplicates([entry.name for entry in result])
 
     if command == Command.PREVIEW:
-        for i, entry in enumerate(result, start=16):
-            print(f"[{i:0>3}] ", end='')
-            if entry.source == Source.XORG_RGB:
-                print(f"{entry.xterm_rgb} <- {entry.nearest_rgb}: {entry.name}")
-            elif entry.source == Source.MEODAI_COLORNAMES:
-                print(f"{entry.xterm_rgb} <- {entry.nearest_rgb}: \x1b[33m{entry.name}\x1b[m")
+        preview(result)
     elif command == Command.GENERATE_ENUM: 
         generate_enum(result)
 
