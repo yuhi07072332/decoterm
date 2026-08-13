@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 
+"""
+Generates single-include/decoterm.hpp header.
+"""
+
 from pathlib import Path
 import sys
 import json
 import logging as log
 import runpy
 
-"""
-Generate single-include/decoterm.hpp header.
-"""
 
 SCRIPT_DIR: Path = Path(__file__).resolve().parent
-CONFIG_DIR: Path = SCRIPT_DIR / "make-single-header"
+CONFIG_DIR: Path = SCRIPT_DIR / "make_single_header"
 TARGET_PATH: Path = SCRIPT_DIR.parent / "single-include" / "decoterm" / "decoterm.hpp"
 AMALGAMATE_PATH: Path = CONFIG_DIR / "amalgamate" / "amalgamate.py"
 
