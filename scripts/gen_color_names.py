@@ -8,15 +8,13 @@ Usage:
 
 import sys
 import csv
-import xml.etree.ElementTree as ET
 import heapq
 from dataclasses import dataclass
 from pathlib import Path
 from enum import Enum
 from math import cbrt
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 import argparse
-import colorsys
 
 SCRIPT_DIR: Path = Path(__file__).resolve().parent
 DATA_DIR: Path = SCRIPT_DIR / "gen_color_names"
@@ -173,7 +171,7 @@ XORG_NOT_GREYSCALE: set[str] = {
 NAME_OVERRIDES: dict[int, str] = {
     16: "black_",
     45: "turquoise"
-};
+}
 
 REMATCH_INDEX: set[int] = {
     23, 31, 50, 53, 54, 79, 86, 87, 122, 123, 125, 144, 145, 150, 152, 153,
@@ -211,7 +209,6 @@ def rgb2oklab(rgb: RGB) -> OKLab:
 
 def pascalcase_to_snake_case(input: str) -> str:
     result: str = ""
-    begin: bool = True
     for i, c in enumerate(input):
         if c.isupper():
             if i != 0: result += '_'
@@ -224,16 +221,30 @@ def pascalcase_to_snake_case(input: str) -> str:
 def colorname_to_snake_case(input: str) -> str:
     result: str = ""
     for c in input:
-        if c == '’' or c == '!':
+        c = c.lower()
+        if c.isascii() and c.isalnum():
+            result += c
             continue
 
-        if c == '-' or c == ' ':
-            result += '_'
+        if c in ['-', ' ', '_']:
+            if len(result) > 0 and result[-1] != '_':
+                result += '_'
             continue
 
-        result += c.lower()
-        
+    result = result.strip('_')
+    if len(result) > 0 and result[0].isdigit():
+        result = '_' + result
+
     return result
+
+def normalize_color_name(name: str) -> str:
+    return colorname_to_snake_case(name).replace("gray", "grey")
+
+def is_terminal_color_name(name: str) -> bool:
+    return name in TERMINAL_COLOR_NAMES_LOWER
+
+def is_grey_name(name: str) -> bool:
+    return "grey" in name and name not in XORG_NOT_GREYSCALE
 
 # see https://web.archive.org/web/20130125000058/http://www.frexx.de/xterm-256-notes/
 def xterm_rgb(index: int) -> RGB:
@@ -265,6 +276,17 @@ def xterm_rgb(index: int) -> RGB:
 def compute_xterm_rgb() -> list[RGB]:
     return [xterm_rgb(i) for i in range (0, 256)]
 
+def prefer_xorg_name(entries: list[ColorEntry]) -> ColorEntry:
+    names = {entry.name for entry in entries}
+
+    for entry in entries:
+        name = entry.name
+        if "grey" in name and name.replace("grey", "gray") in names:
+            return entry
+
+    return entries[0]
+
+
 def load_xorg_rgb() -> list[ColorEntry]:
     xorg_rgb: list[ColorEntry] = []
 
@@ -273,36 +295,23 @@ def load_xorg_rgb() -> list[ColorEntry]:
               encoding='utf-8') as f:
         for line in f.readlines():
             r, g, b, name = line.split(maxsplit=3)
-            name = colorname_to_snake_case(name.rstrip())
+            name = normalize_color_name(name.rstrip())
             rgb = RGB(int(r), int(g), int(b))
 
             # filter
-            if name in TERMINAL_COLOR_NAMES_LOWER: continue
+            if is_terminal_color_name(name): continue
             if name[-1].isdigit(): continue
             if "web" in name: continue
 
             xorg_rgb.append(ColorEntry.create(rgb, name))
 
     # remove name variants with same RGB
-    result: list[ColorEntry] = []
     groups: dict[RGB, list[ColorEntry]] = {}
 
     for entry in xorg_rgb:
         groups.setdefault(entry.rgb, []).append(entry)
 
-    for entries in groups.values():
-        selected = entries[0]
-        names = {entry.name for entry in entries}
-
-        for entry in entries:
-            name = entry.name
-            if "grey" in name and name.replace("grey", "gray") in names:
-                selected = entry
-                break
-
-        result.append(selected)
-
-    return result
+    return [prefer_xorg_name(entries) for entries in groups.values()]
 
 
 def load_meodai_colornames(filter_good: bool) -> list[ColorEntry]:
@@ -316,8 +325,8 @@ def load_meodai_colornames(filter_good: bool) -> list[ColorEntry]:
         for row in reader:
             if filter_good and row[2] != 'x': continue
 
-            color_name: str = colorname_to_snake_case(row[0])
-            if color_name in TERMINAL_COLOR_NAMES_LOWER: continue
+            color_name: str = normalize_color_name(row[0])
+            if is_terminal_color_name(color_name): continue
 
             rgb = hex2rgb(row[1])
             meodai_data.append(ColorEntry.create(rgb, color_name))
@@ -348,61 +357,147 @@ def nearest_matches(
         key=lambda item: item[1]
     )
 
-def match_from_xorg(
-    xterm_data: list[ColorEntry],
-    xorg_data: list[ColorEntry],
-    must_contain_name: list[str] = []
-) -> dict[int, Entry]:
-    """
-    Returns
-        dict[xterm index, matched xorg]
-    """
+class ColorNameMatcher:
+    def __init__(
+            self,
+            xterm_data: list[ColorEntry],
+            xorg_data: list[ColorEntry],
+            meodai_data: list[ColorEntry]
+    ) -> None:
+        self.xterm_data = xterm_data
+        self.xorg_data = xorg_data
+        self.meodai_data = meodai_data
+        self.entries: list[Entry] = [Entry()] * 256
+        self.used_names: set[str] = set()
 
-    def match_and_add(entries: list[ColorEntry]):
-        for entry in entries:
-            if len(result) >= 256: break
+    def match(self) -> list[Entry]:
+        self._match_from_xorg(XORG_MUST_CONTAIN)
+        self._match_from_meodai()
+        return self.entries
 
-            # Disallow matching grey entry's name to non-grey color
-            if "grey" in entry.name and entry.name not in XORG_NOT_GREYSCALE: 
+    def rematch_far_xorg_entries(self) -> list[Entry]:
+        for entry in list(self.entries[16:]):
+            if entry.source != Source.XORG_RGB:
+                continue
+
+            if (entry.xterm_index not in REMATCH_INDEX
+                and (entry.distance is None
+                     or entry.distance <= FAR_COLOR_DISTANCE)):
+                continue
+
+            replacement = self._nearest_unused_meodai(
+                self.xterm_data[entry.xterm_index],
+                allowed_current_name=entry.name,
+            )
+            if replacement is None:
+                continue
+
+            nearest, distance = replacement
+            self._set_entry(Entry(
+                xterm_index=entry.xterm_index,
+                xterm_rgb=entry.xterm_rgb,
+                nearest_rgb=nearest.rgb,
+                distance=distance,
+                name=nearest.name,
+                source=Source.MEODAI_COLORNAMES,
+                rematched=True,
+            ))
+
+        return self.entries
+
+    def apply_overrides(self) -> list[Entry]:
+        for index, name in NAME_OVERRIDES.items():
+            entry = self.entries[index]
+            self._set_entry(Entry(
+                xterm_index=index,
+                xterm_rgb=entry.xterm_rgb,
+                nearest_rgb=None,
+                distance=None,
+                name=name,
+                source=None,
+                overridden=True,
+            ))
+
+        return self.entries
+
+    def _set_entry(self, entry: Entry) -> None:
+        old_entry = self.entries[entry.xterm_index]
+        if old_entry.name:
+            self.used_names.discard(old_entry.name)
+
+        if entry.name in self.used_names:
+            raise ValueError(f"duplicate color name: {entry.name}")
+
+        self.entries[entry.xterm_index] = entry
+        if entry.name:
+            self.used_names.add(entry.name)
+
+    def _match_from_xorg(self, must_contain_names: set[str]) -> None:
+        xterm_nongrey: set[ColorEntry] = set(self.xterm_data[16:232])
+        xterm_grey: set[ColorEntry] = set(self.xterm_data[232:])
+
+        must_contain = [
+            entry for entry in self.xorg_data
+            if entry.name in must_contain_names
+        ]
+        remaining = [
+            entry for entry in self.xorg_data
+            if entry.name not in must_contain_names
+        ]
+
+        for entry in must_contain + remaining:
+            if is_grey_name(entry.name):
                 data = xterm_grey
             else:
                 data = xterm_nongrey
 
-            match, distance = nearest_matches(
-                entry.oklab,
-                data,
-                count=1)[0]
+            if not data:
+                continue
 
+            match, distance = nearest_matches(entry.oklab, data, count=1)[0]
             assert match.index is not None
-            assert match.index not in result
 
-            result[match.index] = Entry(
+            self._set_entry(Entry(
                 xterm_index=match.index,
                 xterm_rgb=match.rgb,
-                distance=distance,
                 nearest_rgb=entry.rgb,
+                distance=distance,
                 name=entry.name,
-                source=Source.XORG_RGB
-            )
+                source=Source.XORG_RGB,
+            ))
             data.remove(match)
 
-    result: dict[int, Entry] = {}
-    xterm_nongrey: set[ColorEntry] = set(xterm_data[16:232])
-    xterm_grey: set[ColorEntry] = set(xterm_data[232:])
+    def _match_from_meodai(self) -> None:
+        for index, entry in enumerate(self.xterm_data):
+            if index < 16 or self.entries[index].name:
+                continue
 
-    must_contain: list[ColorEntry] = list(filter(
-        lambda entry: entry.name in must_contain_name,
-        xorg_data
-    ))
-    remaining: list[ColorEntry] = [
-        entry for entry in xorg_data
-        if entry.name not in must_contain_name
-    ]
-    
-    match_and_add(must_contain)
-    match_and_add(remaining)
+            replacement = self._nearest_unused_meodai(entry)
+            if replacement is None:
+                print(f"Match error: xterm index {index}", file=sys.stderr)
+                sys.exit(1)
 
-    return result
+            nearest, distance = replacement
+            self._set_entry(Entry(
+                xterm_index=index,
+                xterm_rgb=entry.rgb,
+                nearest_rgb=nearest.rgb,
+                distance=distance,
+                name=nearest.name,
+                source=Source.MEODAI_COLORNAMES,
+            ))
+
+    def _nearest_unused_meodai(
+            self,
+            entry: ColorEntry,
+            allowed_current_name: str | None = None
+    ) -> tuple[ColorEntry, float] | None:
+        for match, distance in nearest_matches(entry.oklab, self.meodai_data, count=20):
+            if match.name in self.used_names and match.name != allowed_current_name:
+                continue
+            return match, distance
+
+        return None
 
 
 def match_xterm_rgbs(
@@ -410,71 +505,7 @@ def match_xterm_rgbs(
         xorg_data: list[ColorEntry],
         meodai_data: list[ColorEntry]
 ) -> list[Entry]:
-    result: list[Entry] = [Entry()] * 256
-    result_names: set[str] = set()
-
-    matched_xorg: dict[int, Entry] = match_from_xorg(
-        xterm_data,
-        xorg_data,
-        list(XORG_MUST_CONTAIN)
-    )
-
-    for entry in matched_xorg.values():
-        result_names.add(entry.name)
-
-    for index, entry in enumerate(xterm_data):
-        if index < 16: continue
-        if index in matched_xorg: 
-            result[index] = matched_xorg[index]
-            continue
-
-        matches = nearest_matches(entry.oklab, meodai_data, count=3)
-        nearest = None
-        nearest_dist = None
-        for  match, distance in matches:
-            if match.name in result_names: continue
-            nearest = match
-            nearest_dist = distance
-
-        if nearest is None:
-            print("Match error")
-            sys.exit(1)
-
-        result[index] = Entry(
-            xterm_index=index,
-            xterm_rgb=entry.rgb,
-            nearest_rgb=nearest.rgb,
-            distance=nearest_dist,
-            name=nearest.name,
-            source=Source.MEODAI_COLORNAMES)
-        result_names.add(nearest.name)
-
-    return result
-
-def override_entries(entries: list[Entry]) -> list[Entry]:
-    for entry in entries:
-        if entry.xterm_index not in NAME_OVERRIDES: continue
-        entries[entry.xterm_index] = Entry(
-            xterm_rgb=entry.xterm_rgb,
-            nearest_rgb=None,
-            name=NAME_OVERRIDES[entry.xterm_index],
-            source=None,
-            overridden=True
-        )
-
-    return entries
-
-def rematch_entries(entries: list[Entry],
-                    meodai_data: list[ColorEntry]) -> list[Entry]:
-    for entry in entries:
-        if entry.xterm_index not in REMATCH_INDEX: continue
-        matches = nearest_matches(
-            entry.xterm_rgb,
-            meodai_data,
-            count=3
-        )
-        # TODO: 
-    return entries
+    return ColorNameMatcher(xterm_data, xorg_data, meodai_data).match()
         
 
 def check_valid(entries: list[Entry]) -> None:
@@ -590,6 +621,15 @@ def parse_args() -> argparse.Namespace:
         default="full",
         help="Preview target (default: full)",
     )
+    preview_parser.add_argument(
+        "-o", "--no-override",
+        action="store_true",
+    )
+
+    preview_parser.add_argument(
+        "-r", "--no-rematch",
+        action="store_true"
+    )
 
     # generate
     generate_parser = subparsers.add_parser(
@@ -636,20 +676,14 @@ def main():
                 preview_loaded(meodai_data)
                 return
 
-    result: list[Entry] = match_xterm_rgbs(
-        xterm_data,
-        xorg_data,
-        meodai_data,
-    )
+    matcher = ColorNameMatcher(xterm_data, xorg_data, meodai_data)
+    result = matcher.match()
 
-    for entry in result:
-        if (entry.distance is not None
-            and entry.distance > FAR_COLOR_DISTANCE):
-            REMATCH_INDEX.add(entry.xterm_index)
-    print(list(REMATCH_INDEX))
+    if not args.no_rematch:
+        matcher.rematch_far_xorg_entries()
 
-    if args.command != "debug":
-        override_entries(rematch_entries(result, meodai_data))
+    if not args.no_override:
+        matcher.apply_overrides()
 
     check_valid(result[16:])
 
@@ -670,8 +704,6 @@ def main():
         generate_enum(result[16:])
     elif args.command == "debug":
         preview(result[16:])
-        pass
 
 if __name__ == "__main__":
     main()
-

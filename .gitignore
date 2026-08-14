@@ -5,3 +5,6 @@
 /.vs
 /.vscode
 /.cache
+
+__pycache__/
+
