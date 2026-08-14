@@ -6,7 +6,6 @@ Usage:
     gen_color_names.py <preview/generate-enum/generate-info>
 """
 
-from re import X
 import sys
 import csv
 import xml.etree.ElementTree as ET
@@ -17,9 +16,12 @@ from enum import Enum
 from math import cbrt
 from collections.abc import Callable, Iterable
 import argparse
+import colorsys
 
 SCRIPT_DIR: Path = Path(__file__).resolve().parent
 DATA_DIR: Path = SCRIPT_DIR / "gen_color_names"
+
+FAR_COLOR_DISTANCE: float = 0.007
 
 class Source(Enum):
     XORG_RGB = 1
@@ -70,6 +72,7 @@ class Entry:
     xterm_index: int = 0
     xterm_rgb: RGB = RGB(0, 0, 0)
     nearest_rgb: RGB | None = None
+    distance: float | None = None
     name: str = ""
     source: Source | None = None
     overridden: bool = False
@@ -168,8 +171,14 @@ XORG_NOT_GREYSCALE: set[str] = {
 
 
 NAME_OVERRIDES: dict[int, str] = {
-    16: "black_"
+    16: "black_",
+    45: "turquoise"
 };
+
+REMATCH_INDEX: set[int] = {
+    23, 31, 50, 53, 54, 79, 86, 87, 122, 123, 125, 144, 145, 150, 152, 153,
+    156, 157, 158, 159, 
+}
 
 
 def hex2rgb(hex_str: str) -> RGB:
@@ -326,14 +335,17 @@ def nearest_matches(
     input: RGB | OKLab,
     color_entries: Iterable[ColorEntry],
     count: int = 3
-) -> list[ColorEntry]:
+) -> list[tuple[ColorEntry, float]]:
     if isinstance(input, RGB): input_lab = rgb2oklab(input)
     else: input_lab = input
 
     return heapq.nsmallest(
         count,
-        color_entries,
-        key=lambda entry: color_distance_square(input_lab, entry.oklab)
+        (
+            (entry, color_distance_square(input_lab, entry.oklab))
+            for entry in color_entries
+        ),
+        key=lambda item: item[1]
     )
 
 def match_xorg_to_xterm(
@@ -356,7 +368,7 @@ def match_xorg_to_xterm(
             else:
                 data = xterm_nongrey
 
-            match = nearest_matches(
+            match, distance = nearest_matches(
                 entry.oklab,
                 data,
                 count=1)[0]
@@ -367,6 +379,7 @@ def match_xorg_to_xterm(
             result[match.index] = Entry(
                 xterm_index=match.index,
                 xterm_rgb=match.rgb,
+                distance=distance,
                 nearest_rgb=entry.rgb,
                 name=entry.name,
                 source=Source.XORG_RGB
@@ -390,6 +403,7 @@ def match_xorg_to_xterm(
     match_and_add(remaining)
 
     return result
+
 
 def match_xterm_rgbs(
         xterm_data: list[ColorEntry],
@@ -416,9 +430,11 @@ def match_xterm_rgbs(
 
         matches = nearest_matches(entry.oklab, meodai_data, count=3)
         nearest = None
-        for  match in matches:
+        nearest_dist = None
+        for  match, distance in matches:
             if match.name in result_names: continue
             nearest = match
+            nearest_dist = distance
 
         if nearest is None:
             print("Match error")
@@ -428,6 +444,7 @@ def match_xterm_rgbs(
             xterm_index=index,
             xterm_rgb=entry.rgb,
             nearest_rgb=nearest.rgb,
+            distance=nearest_dist,
             name=nearest.name,
             source=Source.MEODAI_COLORNAMES)
         result_names.add(nearest.name)
@@ -435,22 +452,38 @@ def match_xterm_rgbs(
     return result
 
 def override_entries(entries: list[Entry]) -> list[Entry]:
-    result: list[Entry] = [Entry()] * 256
-    override_index = NAME_OVERRIDES.keys()
-
-    for i, entry in enumerate(entries):
-        if i not in override_index: 
-            result[i] = entry
-            continue
-        result[i] = Entry(
+    for entry in entries:
+        if entry.xterm_index not in NAME_OVERRIDES: continue
+        entries[entry.xterm_index] = Entry(
             xterm_rgb=entry.xterm_rgb,
             nearest_rgb=None,
-            name=NAME_OVERRIDES[i],
+            name=NAME_OVERRIDES[entry.xterm_index],
             source=None,
             overridden=True
         )
 
-    return result
+    return entries
+
+def rematch_entries(entries: list[Entry],
+                    meodai_data: list[ColorEntry]) -> list[Entry]:
+    for entry in entries:
+        if entry.xterm_index not in REMATCH_INDEX: continue
+        matches = nearest_matches(
+            entry.xterm_rgb,
+            meodai_data,
+            count=3
+        )
+        entries[entry.xterm_index] = Entry(
+            xterm_index=entry.xterm_index,
+            xterm_rgb=entry.xterm_rgb,
+            nearest_rgb=match.rgb,
+            distance=dist,
+            name=match.name,
+            source=Source.MEODAI_COLORNAMES,
+            rematched=True
+        )
+    return entries
+        
 
 def check_valid(entries: list[Entry]) -> None:
     entry_names = [entry.name for entry in entries]
@@ -459,14 +492,16 @@ def check_valid(entries: list[Entry]) -> None:
             print(f"\x1b[91;1mERROR: must contain {name}\x1b[m", file=sys.stderr)
             sys.exit(1)
 
-    seen: set[str] = set()
+    seen: dict[str, Entry] = {}
     duplicates: dict[int, Entry] = {}
 
-    for index, entry in enumerate(entries):
+    for entry in entries:
         if entry.name in seen:
-            duplicates[index] = entry
+            seen_entry = seen[entry.name]
+            duplicates[seen_entry.xterm_index] = seen_entry
+            duplicates[entry.xterm_index] = entry
         else:
-            seen.add(entry.name)
+            seen[entry.name] = entry
 
     if len(duplicates) == 0: return
     print("\x1b[91;1mERROR: has duplicates\x1b[m", file=sys.stderr)
@@ -490,7 +525,8 @@ def preview(
         if entry.nearest_rgb is not None:
             if entry.nearest_rgb == entry.xterm_rgb:
                 print("     (same)", end='')
-            else: print(f" <- {entry.nearest_rgb}", end='')
+            else:
+                print(f" <- {entry.nearest_rgb}", end='')
         else: 
             print("           ", end='')
         print(" : ", end='')
@@ -498,7 +534,14 @@ def preview(
         if (entry.source is not None
             and entry.source == Source.MEODAI_COLORNAMES):
             print("\x1b[33m", end='')
-        print(f"{entry.name}\x1b[m", end='')
+        print(f"{entry.name:<23}\x1b[m", end='')
+
+        if entry.nearest_rgb is not None:
+            print("  dist:", end='')
+            if (entry.distance is not None
+                and entry.distance > FAR_COLOR_DISTANCE):
+                print("\x1b[91;1m", end='')
+            print(f"{entry.distance:<.6f}\x1b[m", end='')
 
         if entry.overridden:
             print(" \x1b[91;1m(overridden)\x1b[m", end='')
@@ -518,7 +561,7 @@ def generate_info(xterm_rgbs) -> None:
 
 def generate_enum(result: list[Entry]) -> None:
     print("enum TerminalColors: uint8_t {")
-    for i, name in enumerate(TERMINAL_COLOR_NAMES_LOWER):
+    for i, name in enumerate(TERMINAL_COLOR_NAMES):
         print(f"    {pascalcase_to_snake_case(name):<25} = {i:<3},    // {TERMINAL_COLOR_RGBS[i]}")
 
     print()
@@ -530,6 +573,7 @@ def generate_enum(result: list[Entry]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+
 
     subparsers = parser.add_subparsers(
         dest="command",
@@ -569,6 +613,10 @@ def parse_args() -> argparse.Namespace:
         help="Generate target",
     )
 
+    subparsers.add_parser(
+        "debug"
+    )
+
     return parser.parse_args()
 
 def main():
@@ -596,13 +644,20 @@ def main():
                 preview_loaded(meodai_data)
                 return
 
-    result: list[Entry] = override_entries(
-        match_xterm_rgbs(
-            xterm_data,
-            xorg_data,
-            meodai_data,
-        )
+    result: list[Entry] = match_xterm_rgbs(
+        xterm_data,
+        xorg_data,
+        meodai_data,
     )
+
+    for entry in result:
+        if (entry.distance is not None
+            and entry.distance > FAR_COLOR_DISTANCE):
+            REMATCH_INDEX.add(entry.xterm_index)
+    print(list(REMATCH_INDEX))
+
+    if args.command != "debug":
+        override_entries(rematch_entries(result, meodai_data))
 
     check_valid(result[16:])
 
@@ -621,6 +676,9 @@ def main():
                 ])
     elif args.command == "generate" and args.target == "enum":
         generate_enum(result[16:])
+    elif args.command == "debug":
+        preview(result[16:])
+        pass
 
 if __name__ == "__main__":
     main()
