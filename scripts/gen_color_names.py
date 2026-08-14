@@ -348,7 +348,7 @@ def nearest_matches(
         key=lambda item: item[1]
     )
 
-def match_xorg_to_xterm(
+def match_from_xorg(
     xterm_data: list[ColorEntry],
     xorg_data: list[ColorEntry],
     must_contain_name: list[str] = []
@@ -413,7 +413,7 @@ def match_xterm_rgbs(
     result: list[Entry] = [Entry()] * 256
     result_names: set[str] = set()
 
-    matched_xorg: dict[int, Entry] = match_xorg_to_xterm(
+    matched_xorg: dict[int, Entry] = match_from_xorg(
         xterm_data,
         xorg_data,
         list(XORG_MUST_CONTAIN)
@@ -473,15 +473,7 @@ def rematch_entries(entries: list[Entry],
             meodai_data,
             count=3
         )
-        entries[entry.xterm_index] = Entry(
-            xterm_index=entry.xterm_index,
-            xterm_rgb=entry.xterm_rgb,
-            nearest_rgb=match.rgb,
-            distance=dist,
-            name=match.name,
-            source=Source.MEODAI_COLORNAMES,
-            rematched=True
-        )
+        # TODO: 
     return entries
         
 
