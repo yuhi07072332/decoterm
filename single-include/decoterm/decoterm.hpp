@@ -754,9 +754,7 @@ namespace deco {
 
 namespace detail {
 
-template <typename StyleT>
-    requires std::is_same_v<std::remove_cvref_t<StyleT>, Style>
-    || std::is_same_v<std::remove_cvref_t<StyleT>, AbsoluteStyle>
+template <concepts::style StyleT>
 constexpr auto apply_style(AbsoluteStyle current, StyleT style)
     -> AbsoluteStyle {
     using style_type = std::remove_cvref_t<StyleT>;
@@ -855,6 +853,12 @@ class StyleStack {
     std::variant<stack_storage, heap_storage> storage_;
     std::size_t size_ = 0;
 };
+
+/* ----- color fallback ----- */
+
+constexpr auto color_fallback_to_16(Color color) -> Color {
+    
+}
 
 } // namespace detail
 

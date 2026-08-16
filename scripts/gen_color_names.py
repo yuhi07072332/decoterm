@@ -2,8 +2,6 @@
 
 """
 Generates Xterm 256-color colornames by using x11 rgb.txt and meodai/colornames.
-Usage:
-    gen_color_names.py <preview/generate-enum/generate-info>
 """
 
 import sys
@@ -173,9 +171,8 @@ NAME_OVERRIDES: dict[int, str] = {
     45: "turquoise"
 }
 
-REMATCH_INDEX: set[int] = {
-    23, 31, 50, 53, 54, 79, 86, 87, 122, 123, 125, 144, 145, 150, 152, 153,
-    156, 157, 158, 159, 
+REMATCH_XORG_INDEX: set[int] = {
+    23, 31, 50, 53, 79, 87
 }
 
 
@@ -380,7 +377,7 @@ class ColorNameMatcher:
             if entry.source != Source.XORG_RGB:
                 continue
 
-            if (entry.xterm_index not in REMATCH_INDEX
+            if (entry.xterm_index not in REMATCH_XORG_INDEX
                 and (entry.distance is None
                      or entry.distance <= FAR_COLOR_DISTANCE)):
                 continue
@@ -433,8 +430,12 @@ class ColorNameMatcher:
             self.used_names.add(entry.name)
 
     def _match_from_xorg(self, must_contain_names: set[str]) -> None:
+        # TODO: 修改逻辑： 对于每一个xorg: 
+        #       如果xterm match未被匹配 -> 匹配该match
+        #       如果已被匹配 -> 比较match的distance, 重匹配distance更大的一方
         xterm_nongrey: set[ColorEntry] = set(self.xterm_data[16:232])
         xterm_grey: set[ColorEntry] = set(self.xterm_data[232:])
+
 
         must_contain = [
             entry for entry in self.xorg_data
