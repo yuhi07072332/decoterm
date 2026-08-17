@@ -1106,12 +1106,13 @@ inline constexpr std::array<RGB, 256> color_info {
 
 
 #include <array>
+#include <cstring>
+#include <iostream>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <type_traits>
 #include <utility>
-#include <variant>
-#include <vector>
 
 namespace deco {
 
@@ -1145,74 +1146,92 @@ inline const style_output_context_t* g_style_output_context = nullptr;
 /// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
 /// if the size exceeds N.
 class StyleStack {
-    // OPTIMIZE: using std::variant is a bit slow
+  public:
     static constexpr std::size_t N = 5;
 
-    using stack_storage = std::array<AbsoluteStyle, N>;
-    using heap_storage = std::vector<AbsoluteStyle>;
-
-  public:
     StyleStack() = default;
+    StyleStack(const StyleStack& other) { copy_from(other); }
+    StyleStack(StyleStack&& other) noexcept { move_from(std::move(other)); }
+
+    auto operator=(const StyleStack& other) -> StyleStack& {
+        if (this == &other) return *this;
+        copy_from(other);
+        return *this;
+    }
+
+    auto operator=(StyleStack&& other) noexcept -> StyleStack& {
+        if (this == &other) return *this;
+        move_from(std::move(other));
+        return *this;
+    }
+
+    ~StyleStack() = default;
+
 
     [[nodiscard]]
     auto top() const -> std::optional<AbsoluteStyle> {
-        if (size_) {
-            if (is_heap()) return heap().back();
-            return stack()[size_ - 1];
-        }
+        if (size_) return data_[size_ - 1];
         return std::nullopt;
     }
 
     void push(AbsoluteStyle style) {
-        size_++;
-        if (is_heap()) {
-            heap().push_back(style);
-            return;
-        }
-        if (size_ == N + 1) {
-            grow();
-            heap().push_back(style);
-            return;
-        }
-        stack()[size_ - 1] = style;
+        if (size_ == capacity_) grow();
+        data_[size_++] = style; // NOLINT
     }
 
     void pop() {
-        if (size_) {
-            if (is_heap()) heap().pop_back();
-            size_--;
-        }
+        if (size_) size_--;
     }
 
-    void clear() {
-        if (is_heap()) heap().clear();
-        size_ = 0;
-    }
+    void clear() { size_ = 0; }
 
   private:
-    auto is_heap() const -> bool {
-        return std::holds_alternative<heap_storage>(storage_);
+    auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
+
+    void copy_from(const StyleStack& other) {
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+        if (!other.is_heap()) {
+            local_ = other.local_;
+            data_ = local_.data();
+            return;
+        }
+        heap_ = std::make_unique_for_overwrite<AbsoluteStyle[]>(capacity_);
+        std::memcpy(heap_.get(),
+                    other.heap_.get(),
+                    sizeof(AbsoluteStyle) * other.size_);
+        data_ = heap_.get();
     }
 
-    auto stack() const -> const stack_storage& {
-        return std::get<stack_storage>(storage_);
+    void move_from(StyleStack&& other) noexcept {
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+        other.size_ = 0;
+        other.capacity_ = N;
+        other.data_ = nullptr;
+
+        if (!other.is_heap()) {
+            local_ = other.local_;
+            data_ = local_.data();
+            return;
+        }
+        heap_ = std::move(other.heap_);
+        data_ = heap_.get();
     }
-
-    auto stack() -> stack_storage& { return std::get<stack_storage>(storage_); }
-
-    auto heap() const -> const heap_storage& {
-        return std::get<heap_storage>(storage_);
-    }
-
-    auto heap() -> heap_storage& { return std::get<heap_storage>(storage_); }
 
     void grow() {
-        stack_storage tmp_stor = stack();
-        storage_.emplace<heap_storage>(tmp_stor.begin(), tmp_stor.begin() + N);
+        capacity_ *= 2;
+        heap_ = std::make_unique_for_overwrite<AbsoluteStyle[]>(capacity_);
+        std::memcpy(heap_.get(), data_, sizeof(AbsoluteStyle) * size_);
+        data_ = heap_.get();
     }
 
-    std::variant<stack_storage, heap_storage> storage_;
+    std::array<AbsoluteStyle, N> local_;
+    std::unique_ptr<AbsoluteStyle[]> heap_;
+
+    AbsoluteStyle* data_ = local_.data();
     std::size_t size_ = 0;
+    std::size_t capacity_ = N;
 };
 
 /* ----- color fallback ----- */
@@ -1234,7 +1253,7 @@ constexpr auto fallback_to_16(Color color) -> Color {
 
     RGB rgb; // NOLINT
     if (type == ColorType::terminal_color) {
-        const uint8_t index = color.data()[0]; 
+        const uint8_t index = color.data()[0];
         if (index < 16) return color;
         rgb = color_info[index];
     } else if (type == ColorType::true_color) {
@@ -1306,6 +1325,7 @@ class StyleState { // NOLINT
         copy_from(other);
         return *this;
     };
+
     auto operator=(StyleState&& other) noexcept -> StyleState& {
         if (this == &other) return *this;
         if (!other.context_tracking_enabled_) try_clean_context();
@@ -1405,7 +1425,7 @@ class StyleState { // NOLINT
         context_ = other.context_;
     }
 
-    void move_from(StyleState&& other) {
+    void move_from(StyleState&& other) noexcept {
         base_style_ = other.base_style_;
         stack_ = std::move(other.stack_);
         style_enabled_ = other.style_enabled_;
