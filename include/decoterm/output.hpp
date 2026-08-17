@@ -71,10 +71,11 @@ class StyleStack {
 
     ~StyleStack() = default;
 
-    [[nodiscard]]
-    auto top() const -> std::optional<AbsoluteStyle> {
+    auto base() const -> AbsoluteStyle { return base_; }
+
+    auto top() const -> AbsoluteStyle {
         if (size_) return data_[size_ - 1];
-        return std::nullopt;
+        return base_;
     }
 
     void push(AbsoluteStyle style) {
@@ -87,6 +88,8 @@ class StyleStack {
     }
 
     void clear() { size_ = 0; }
+
+    void set_base(AbsoluteStyle base) { base_ = base; }
 
   private:
     auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
@@ -104,6 +107,7 @@ class StyleStack {
         }
         size_ = other.size_;
         capacity_ = other.capacity_;
+        base_ = other.base_;
     }
 
     void move_from(StyleStack&& other) noexcept {
@@ -117,6 +121,7 @@ class StyleStack {
 
         size_ = other.size_;
         capacity_ = other.capacity_;
+        base_ = other.base_;
 
         other.size_ = 0;
         other.capacity_ = N;
@@ -124,8 +129,7 @@ class StyleStack {
     }
 
     void grow() {
-        auto new_heap =
-            std::make_unique<AbsoluteStyle[]>(capacity_ * 2);
+        auto new_heap = std::make_unique<AbsoluteStyle[]>(capacity_ * 2);
         std::memcpy(new_heap.get(), data_, sizeof(AbsoluteStyle) * size_);
         heap_ = std::move(new_heap);
         data_ = heap_.get();
@@ -138,6 +142,8 @@ class StyleStack {
     AbsoluteStyle* data_ = local_.data();
     std::size_t size_ = 0;
     std::size_t capacity_ = N;
+
+    AbsoluteStyle base_ = AbsoluteStyle();
 };
 
 /* ----- color fallback ----- */
@@ -243,7 +249,7 @@ class StyleState { // NOLINT
 
     [[nodiscard]]
     auto base_style() const -> Style {
-        return base_style_.style;
+        return stack_.base().style;
     }
 
     [[nodiscard]]
@@ -263,7 +269,7 @@ class StyleState { // NOLINT
 
     [[nodiscard]]
     auto current_style() const -> AbsoluteStyle {
-        return stack_.top().value_or(base_style_);
+        return stack_.top();
     }
 
   protected:
@@ -284,7 +290,7 @@ class StyleState { // NOLINT
         if (!context_tracking_enabled_) {
             if (base_style_changed_) {
                 base_style_changed_ = false;
-                return base_style_;
+                return abs(base_style());
             }
             return std::nullopt;
         }
@@ -292,7 +298,7 @@ class StyleState { // NOLINT
             detail::g_style_output_context = &context_;
             if (base_style_changed_) {
                 base_style_changed_ = false;
-                return abs(base_style_.style | current_style().style);
+                return abs(base_style() | current_style().style);
             }
             return current_style();
         }
@@ -322,7 +328,6 @@ class StyleState { // NOLINT
     friend class StyleStateSetter;
 
     void copy_from(const StyleState& other) {
-        base_style_ = other.base_style_;
         stack_ = other.stack_;
         style_enabled_ = other.style_enabled_;
         color_mode_ = other.color_mode_;
@@ -332,7 +337,6 @@ class StyleState { // NOLINT
     }
 
     void move_from(StyleState&& other) noexcept {
-        base_style_ = other.base_style_;
         stack_ = std::move(other.stack_);
         style_enabled_ = other.style_enabled_;
         color_mode_ = other.color_mode_;
@@ -342,7 +346,6 @@ class StyleState { // NOLINT
     }
 
     // config
-    AbsoluteStyle base_style_ = abs(null_style);
     ColorMode color_mode_ = ColorMode::true_color;
     bool style_enabled_ = true;
     bool context_tracking_enabled_ = false;
@@ -379,7 +382,7 @@ class StyleStateSetter {
 
     /// @brief Set the base style for this output state.
     auto set_base_style(Style base) -> Self& {
-        state().base_style_ = abs(base);
+        state().stack_.set_base(abs(base));
         state().base_style_changed_ = true;
         return self();
     }
