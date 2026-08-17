@@ -94,18 +94,18 @@ namespace detail {
 template <typename, concepts::style>
 struct StyledRef;
 
+template <typename T>
+struct is_styled_ref : std::false_type {};
+
+template <typename T, concepts::style StyleT>
+struct is_styled_ref<detail::StyledRef<T, StyleT>> : std::true_type {};
+
 } // namespace detail
 
 namespace concepts {
 
 template <typename T>
-struct is_styled_ref : std::false_type {};
-
-template <typename T, style StyleT>
-struct is_styled_ref<detail::StyledRef<T, StyleT>> : std::true_type {};
-
-template <typename T>
-concept styled_ref = is_styled_ref<std::remove_cvref_t<T>>::value;
+concept styled_ref = detail::is_styled_ref<std::remove_cvref_t<T>>::value;
 
 } // namespace concepts
 
@@ -738,999 +738,17 @@ inline auto operator<<(std::ostream& os, StyledRefT&& styled) // NOLINT
 #endif // !DECOTERM_STYLE_HPP
 
 
-#ifndef DECOTERM_OUTPUT_HPP
-#define DECOTERM_OUTPUT_HPP
-
-
-#include <array>
-#include <optional>
-#include <ostream>
-#include <type_traits>
-#include <utility>
-#include <vector>
-#include <variant>
-
-namespace deco {
-
-namespace detail {
-
-template <concepts::style StyleT>
-constexpr auto apply_style(AbsoluteStyle current, StyleT style)
-    -> AbsoluteStyle {
-    using style_type = std::remove_cvref_t<StyleT>;
-    if constexpr (std::is_same_v<style_type, Style>)
-        return abs(current.style | style);
-    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
-}
-
-/* ----- global style output context ----- */
-
-// NOLINTBEGIN
-
-struct style_output_context_t {};
-
-/// @brief global style output context for `StyleState`.
-/// @details Used to determine whether `StyleOutputState` needs to output the
-/// current style before outputting a value.
-inline const style_output_context_t* g_style_output_context = nullptr;
-
-// NOLINTEND
-
-/* ----- StyleStack ----- */
-
-/// @brief Represents a small-vector like `AbsoluteStyle` stack.
-/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
-/// if the size exceeds N.
-class StyleStack {
-    static constexpr std::size_t N = 5;
-
-    using stack_storage = std::array<AbsoluteStyle, N>;
-    using heap_storage = std::vector<AbsoluteStyle>;
-  public:
-    StyleStack() = default;
-
-    [[nodiscard]]
-    auto top() const -> std::optional<AbsoluteStyle> {
-        if (size_) {
-            if (is_heap()) return heap().back();
-            return stack()[size_ - 1];
-        }
-        return std::nullopt;
-    }
-
-    void push(AbsoluteStyle style) {
-        size_++;
-        if (is_heap()) {
-            heap().push_back(style);
-            return;
-        } 
-        if (size_== N + 1) {
-            grow();
-            heap().push_back(style);
-            return;
-        }
-        stack()[size_ - 1] = style;
-    }
-
-    void pop() {
-        if (size_) {
-            if (is_heap()) heap().pop_back();
-            size_--;
-        }
-    }
-
-    void clear() {
-        if (is_heap()) heap().clear();
-        size_ = 0;
-    }
-
-  private:
-    auto is_heap() const -> bool {
-        return std::holds_alternative<heap_storage>(storage_);
-    }
-
-    auto stack() const -> const stack_storage& {
-        return std::get<stack_storage>(storage_);
-    }
-
-    auto stack() -> stack_storage& {
-        return std::get<stack_storage>(storage_);
-    }
-
-    auto heap() const -> const heap_storage& {
-        return std::get<heap_storage>(storage_);
-    }
-
-    auto heap() -> heap_storage& {
-        return std::get<heap_storage>(storage_);
-    }
-
-    void grow() {
-        stack_storage tmp_stor = stack();
-        storage_.emplace<heap_storage>(tmp_stor.begin(), tmp_stor.begin() + N);
-    }
-
-    std::variant<stack_storage, heap_storage> storage_;
-    std::size_t size_ = 0;
-};
-
-/* ----- color fallback ----- */
-
-constexpr auto color_fallback_to_16(Color color) -> Color {
-    
-}
-
-} // namespace detail
-
-// ╔═════════════════════════════════════════════════════════╗
-// ║                       StyleState                        ║
-// ╚═════════════════════════════════════════════════════════╝
-
-/// @brief Represents style output state.
-///
-/// It manages the current style output state (e.g. style enabled, base
-/// style, etc.) If context tracking is enabled, it will also check
-/// `detail::g_style_output_context` to determine whether it needs to output the
-/// current style before outputting a value.
-///
-/// @see `g_style_output_context`, `StyledOstream`, `StyledFormat`
-class StyleState { // NOLINT
-  public:
-    StyleState() = default;
-
-    StyleState(const StyleState& other) {
-        if (!other.context_tracking_enabled_) try_clean_context();
-        copy_from(other);
-    };
-
-    StyleState(StyleState&& other) noexcept {
-        if (!other.context_tracking_enabled_) try_clean_context();
-        move_from(std::move(other));
-    }
-
-    auto operator=(const StyleState& other) -> StyleState& {
-        if (this == &other) return *this;
-        if (!other.context_tracking_enabled_) try_clean_context();
-        copy_from(other);
-        return *this;
-    };
-    auto operator=(StyleState&& other) noexcept -> StyleState& {
-        if (this == &other) return *this;
-        if (!other.context_tracking_enabled_) try_clean_context();
-        move_from(std::move(other));
-        return *this;
-    }
-
-    ~StyleState() {
-        try_clean_context();
-    }
-
-    [[nodiscard]]
-    auto base_style() const -> Style {
-        return base_style_.style;
-    }
-
-    [[nodiscard]]
-    auto style_enabled() const -> bool {
-        return style_enabled_;
-    }
-
-    [[nodiscard]]
-    auto context_tracking_enabled() const -> bool {
-        return context_tracking_enabled_;
-    }
-
-    [[nodiscard]]
-    auto current_style() const -> AbsoluteStyle {
-        return stack_.top().value_or(base_style_);
-    }
-
-  protected:
-    void pop_style() { stack_.pop(); }
-
-    void reset_style() { stack_.clear(); }
-
-    void push_style(AbsoluteStyle style) { stack_.push(style); }
-
-    void push_style(Style style) {
-        stack_.push(abs(current_style().style | style));
-    }
-
-    /// @brief Updates the context if context tracking is enabled; otherwise only
-    /// checks whether the base style changed.
-    /// @returns The Style to emit when context or base style changed
-    auto update_context() -> std::optional<AbsoluteStyle> {
-        if (!context_tracking_enabled_) {
-            if (base_style_changed_) {
-                base_style_changed_ = false;
-                return base_style_;
-            }
-            return std::nullopt;
-        }
-        if (detail::g_style_output_context != &context_) {
-            detail::g_style_output_context = &context_;
-            if (base_style_changed_) {
-                base_style_changed_ = false;
-                return abs(base_style_.style | current_style().style);
-            }
-            return current_style();
-        }
-        return std::nullopt;
-    }
-
-    void try_clean_context() const {
-        if (!context_tracking_enabled_) return;
-        if (detail::g_style_output_context == &context_) 
-            detail::g_style_output_context = nullptr;
-    }
-
-  private:
-    template <typename>
-    friend class StyleStateOption;
-
-    void copy_from(const StyleState& other) {
-        base_style_ = other.base_style_;
-        stack_ = other.stack_;
-        style_enabled_ = other.style_enabled_;
-        context_tracking_enabled_ = other.context_tracking_enabled_;
-        base_style_changed_ = other.base_style_changed_;
-        context_ = other.context_;
-    }
-
-    void move_from(StyleState&& other) {
-        base_style_ = other.base_style_;
-        stack_ = std::move(other.stack_);
-        style_enabled_ = other.style_enabled_;
-        context_tracking_enabled_ = other.context_tracking_enabled_;
-        base_style_changed_ = other.base_style_changed_;
-        context_ = other.context_;
-    }
-
-    AbsoluteStyle base_style_ = abs(null_style);
-    detail::StyleStack stack_;
-
-    bool style_enabled_ = true;
-    bool context_tracking_enabled_ = false;
-
-    bool base_style_changed_ = true;
-    detail::style_output_context_t context_;
-};
-
-/// @brief CRTP class that provides chainable StyleState options
-template <typename Derived>
-class StyleStateOption {
-  public:
-    /// @brief Enable or disable style output.
-    auto enable_style(bool enable = true) -> Derived& {
-        state().style_enabled_ = enable;
-        return underlying();
-    }
-
-    /// @brief Enable or disable context tracking.
-    auto enable_context_tracking(bool enable = true) -> Derived& {
-        if (state().context_tracking_enabled_ && !enable) {
-            state().try_clean_context();
-        }
-        state().context_tracking_enabled_ = enable;
-        return underlying();
-    }
-
-    /// @brief Set the base style for this output state.
-    auto set_base_style(Style base) -> Derived& {
-        state().base_style_ = abs(base);
-        state().base_style_changed_ = true;
-        return underlying();
-    }
-
-  private:
-    friend Derived;
-
-    StyleStateOption() = default;
-
-    auto state() -> StyleState& {
-        return static_cast<StyleState&>(static_cast<Derived&>(*this));
-    }
-
-    auto underlying() -> Derived& { return static_cast<Derived&>(*this); }
-};
-
-// ╔═════════════════════════════════════════════════════════╗
-// ║                      StyledOstream                      ║
-// ╚═════════════════════════════════════════════════════════╝
-
-struct style_pop_t {};
-
-/// @brief StyledOstream manipulator that restores the previous style.
-inline constexpr style_pop_t pop;
-
-/// @brief A stateful lightweight writer over an existing std::ostream.
-/// @warning The passed std::ostream object must outlive this object.
-/// @see `StyleState`
-class StyledOstream : public StyleState,
-                      public StyleStateOption<StyledOstream> {
-  public:
-    StyledOstream(std::ostream& os) : ostream_(&os) {}
-
-    StyledOstream(StyleState state, std::ostream& os)
-        : StyleState(std::move(state)),
-          ostream_(&os) {}
-
-    /// @brief Output operator for any type that can be written to
-    /// `std::ostream`.
-    ///
-    /// @throws `std::logic_error` if `operator<<(std::ostream&, T&&)` returns a
-    /// different ostream object.
-    template <concepts::ostream_outputable T>
-        requires(!concepts::style<T> && !concepts::styled_ref<T>)
-    friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
-        out.ensure_context();
-
-        if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
-            os_ptr != out.ostream_)
-            throw std::logic_error(
-                "StyledOstream: std::ostream output operator returned a "
-                "different ostream object");
-        return out;
-    }
-
-    /// @brief output operator for Style types
-    template <concepts::style StyleT>
-    friend auto operator<<(StyledOstream& out, StyleT style) -> StyledOstream& {
-        out.ensure_context();
-
-        if constexpr (std::is_same_v<StyleT, Style>
-                      || std::is_same_v<StyleT, AbsoluteStyle>)
-            out.push_style(style);
-        out.output_style(style);
-        return out;
-    }
-
-    /// @brief output operator for `reset`
-    friend auto operator<<(StyledOstream& out, style_reset_t)
-        -> StyledOstream& {
-        out.reset_style();
-        out.output_style(out.current_style());
-        return out;
-    }
-
-    /// @brief output operator for `pop`
-    friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
-        out.ensure_context();
-        out.pop_style();
-        out.output_style(out.current_style());
-        return out;
-    }
-
-    /// @brief output operator for styled values
-    template <concepts::styled_ref StyledRefT>
-    friend auto operator<<(StyledOstream& out, StyledRefT&& styled) // NOLINT
-        -> StyledOstream& {
-        detail::check_styled_ref<StyledRefT>();
-        out.ensure_context();
-
-        out.output_style(styled.style());
-        out.ostream() << styled.value();
-        out.ostream() << out.current_style();
-        return out;
-    }
-
-    /// @brief output operator for IO manipulators
-    friend auto operator<<(StyledOstream& out,
-                           std::ios_base& (*fn)(std::ios_base&))
-        -> StyledOstream& {
-        out.ensure_context();
-        out.ostream() << fn;
-        return out;
-    }
-
-    /// @brief output operator for IO manipulators
-    friend auto operator<<(StyledOstream& out,
-                           std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
-        -> StyledOstream& {
-        out.ensure_context();
-        out.ostream() << fn;
-        return out;
-    }
-
-    /// @brief output operator for IO manipulators
-    friend auto operator<<(StyledOstream& out,
-                           std::ostream& (*fn)(std::ostream&))
-        -> StyledOstream& {
-        // `std::operator<<(std::ostream& os, std::ostream&(*fn)(std::ostream&))`
-        // returns `fn(os)` instead of `os`, so we should assume that it may
-        // return a different std::ostream&.
-        out.ensure_context();
-        out.ostream_ = &(out.ostream() << fn);
-        return out;
-    }
-
-    /// @brief Swithes the underlying `std::ostream`.
-    void set_stream(std::ostream& os) { ostream_ = &os; }
-
-    /// @brief Returns the underlying `std::ostream`.
-    auto ostream() const -> std::ostream& { return *ostream_; }
-
-  private:
-    void ensure_context() {
-        if (auto style = update_context()) output_style(*style);
-    }
-
-    void output_style(concepts::style auto style) const {
-        if (style_enabled()) *ostream_ << style;
-    }
-
-    std::ostream* ostream_;
-};
-
-/// @brief Creates a `StyledOstream` with context tracking enabled.
-/// @details equivalent to `StyledOstream(os).enable_context()`
-[[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream {
-    return StyledOstream(os).enable_context_tracking();
-}
-
-} // namespace deco
-
-#endif // !DECOTERM_OUTPUT_HPP
-
-
-#ifndef DECOTERM_TERMINAL_HPP
-#define DECOTERM_TERMINAL_HPP
-
-
-#include <cstdlib>
-#include <iostream>
-
-#if defined(_WIN32)
-#include <windows.h>
-#else // POSIX
-#include <unistd.h>
-
-#endif
-
-namespace deco {
-
-/// @brief Terminal color capability levels.
-enum class ColorSupport { true_color, color256, color16 };
-
-namespace terminal {
-
-inline auto is_stdout_tty() -> bool;
-inline auto is_stderr_tty() -> bool;
-
-} // namespace terminal
-
-namespace detail {
-
-inline constexpr auto contains(std::string_view sv, std::string_view find)
-    -> bool {
-    return sv.find(find) != std::string_view::npos; // NOLINT
-}
-
-#if defined(_WIN32)
-[[nodiscard]]
-inline auto enable_virtual_terminal_mode() -> bool {
-    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD mode;
-    if (!GetConsoleMode(h_stdout, &mode)) return false;
-    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    return SetConsoleMode(h_stdout, mode);
-}
-#endif // _WIN32
-
-// Based on https://github.com/termstandard/colors?tab=readme-ov-file
-[[nodiscard]]
-inline auto get_color_support() -> ColorSupport {
-#if defined(_WIN32)
-    return ColorSupport::true_color;
-#else // POSIX
-    const char* colorterm_p = std::getenv("COLORTERM");
-
-    std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
-    if (contains(env_colorterm, "truecolor")
-        || contains(env_colorterm, "24bit"))
-        return ColorSupport::true_color;
-
-    // TODO:
-
-    return ColorSupport::color16;
-#endif
-};
-
-// HACK: Uses the same approach as the termcolor library to detect whether
-// an ostream is stdout or stderr.
-inline auto is_ostream_stdout(const std::ostream& os) -> bool {
-    return &os == &std::cout;
-}
-
-inline auto is_ostream_stderr(const std::ostream& os) -> bool {
-    return (&os == &std::cerr) || (&os == &std::clog);
-}
-
-} // namespace detail
-
-namespace terminal {
-
-#if defined(_WIN32)
-// Automatically enables Windows virtual terminal processing unless
-// DECOTERM_NO_AUTO_ENABLE_VT is defined.
-#ifndef DECOTERM_NO_AUTO_ENABLE_VT
-inline bool g_virtual_terminal_mode_enabled = enable_virtual_terminal_mode();
-#endif // DECOTERM_NO_AUTO_ENABLE_VT
-#endif // _WIN32
-
-/// @brief Checks whether stdout is pointed to a terminal.
-[[nodiscard]]
-inline auto is_stdout_tty() -> bool {
-#if defined(_WIN32)
-    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD mode;
-    return GetConsoleMode(h_stdout, &mode);
-#else // POSIX
-    return isatty(STDOUT_FILENO);
-#endif
-};
-
-/// @brief Check whether stderr is pointed to a terminal.
-[[nodiscard]]
-inline auto is_stderr_tty() -> bool {
-#if defined(_WIN32)
-    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
-    DWORD mode;
-    return GetConsoleMode(h_stderr, &mode);
-#else // POSIX
-    return isatty(STDERR_FILENO);
-#endif
-};
-
-/// @brief Returns the detected color support of teh current terminal.
-[[nodiscard]]
-inline auto color_support() -> ColorSupport {
-    static ColorSupport s_color_support = detail::get_color_support();
-    return s_color_support;
-}
-
-/// @brief Creates a StyledOstream with TTY-based automatic configuration.
-/// @details Equivalent to `deco::styled_out(os)`, but style output and context
-/// tracking are enabled only when os is detected as stdout or stderr attached
-/// to a terminal.
-[[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream {
-    bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
-                  || (detail::is_ostream_stderr(os) && is_stderr_tty());
-    return deco::styled_out(os).enable_style(is_tty).enable_context_tracking(
-        is_tty);
-}
-
-}; // namespace terminal
-
-} // namespace deco
-
-#endif // !DECOTERM_TERMINAL_HPP
-
-
-#ifndef DECOTERM_FORMAT_HPP
-#define DECOTERM_FORMAT_HPP
-
-
-#include <format>
-#include <iterator>
-#include <optional>
-#include <type_traits>
-#include <variant>
-#include <version>
-
-#if defined(__cpp_lib_print) && __cpp_lib_print >= 202403L
-#define DECO_ENABLE_PRINT
-#include <print>
-#endif
-
-namespace deco {
-
-namespace concepts {
-
-#if __cplusplus >= 202302L
-template <typename Arg, typename CharT = char>
-concept formattable = std::formattable<Arg, CharT>;
-#else
-// fallback for C++20. This only checks if `std::formatter<Arg>` exists
-// and has `parse()` and `format()`.
-template <typename Arg, typename CharT = char>
-concept formattable =
-    requires(std::formatter<std::remove_cvref_t<Arg>, CharT> formatter,
-             Arg&& arg,
-             std::basic_format_parse_context<CharT> parse_ctx,
-             std::basic_format_context<char*, CharT> fmt_ctx) {
-        {
-            formatter.parse(parse_ctx)
-        } -> std::same_as<typename decltype(parse_ctx)::iterator>;
-        {
-            formatter.format(std::forward<Arg>(arg), fmt_ctx)
-        } -> std::same_as<typename decltype(fmt_ctx)::iterator>;
-    };
-#endif
-
-} // namespace concepts
-
-namespace detail {
-
-struct StyledFormatContext {
-    constexpr StyledFormatContext(AbsoluteStyle current_style,
-                                  bool style_enabled)
-        : current_style(current_style),
-          style_enabled(style_enabled) {}
-
-    AbsoluteStyle current_style;
-    bool style_enabled;
-};
-
-// StyledRef with style context.
-// This is used instead of StyledRef in StyledFormat.
-template <typename StyledRefT>
-struct FStyledRef {
-    constexpr FStyledRef(StyledRefT styled, StyledFormatContext context)
-        : styled(styled),
-          context(context) {}
-
-    StyledRefT styled;
-    StyledFormatContext context; // NOLINT
-};
-
-// Replace StyledRef<T>& with FStyledRef<T>.
-template <typename Arg>
-constexpr auto process_arg(detail::StyledFormatContext context, Arg&& arg)
-    -> decltype(auto) {
-    if constexpr (concepts::styled_ref<Arg>) {
-        return FStyledRef(arg, context);
-    } else return std::forward<Arg>(arg); // NOLINT
-}
-
-template <typename Arg>
-using processed_arg_t = std::conditional_t<concepts::styled_ref<Arg>,
-                                           FStyledRef<std::remove_cvref_t<Arg>>,
-                                           Arg>;
-
-// this is used with process_arg(), since make_format_args don't take rvalue
-// reference.
-template <typename... Args>
-constexpr auto make_format_args(Args&&... args /*NOLINT*/) {
-    return std::make_format_args(args...);
-}
-
-} // namespace detail
-
-} // namespace deco
-
-// ╔═════════════════════════════════════════════════════════╗
-// ║                       Formatters                        ║
-// ╚═════════════════════════════════════════════════════════╝
-
-namespace std {
-
-/// @brief formatter for Style types, e.g. `Style` and `AbsoluteStyle`
-template <deco::concepts::style StyleT>
-struct formatter<StyleT> {
-    constexpr auto parse(std::format_parse_context& ctx) const {
-        return ctx.begin();
-    }
-
-    auto format(StyleT style, std::format_context& ctx) const {
-        return style.to_escape(ctx.out());
-    }
-};
-
-/// @brief formatter for `deco::reset`
-template <>
-struct formatter<deco::style_reset_t> {
-    constexpr auto parse(std::format_parse_context& ctx) const {
-        return ctx.begin();
-    }
-
-    auto format(deco::style_reset_t, std::format_context& ctx) const {
-        return deco::abs(deco::null_style).to_escape(ctx.out());
-    }
-};
-
-/// @brief formatter for styled values
-template <deco::concepts::styled_ref StyledRefT>
-    requires deco::concepts::formattable<typename StyledRefT::value_type>
-struct formatter<StyledRefT> {
-    std::formatter<typename StyledRefT::value_type, char> value_formatter;
-
-    bool reset_on_end;
-
-    constexpr formatter(bool reset_on_end = true)
-        : reset_on_end(reset_on_end) {}
-
-    constexpr auto parse(std::format_parse_context& ctx) {
-        return value_formatter.parse(ctx);
-    }
-
-    auto format(const StyledRefT& styled, /*NOLINT*/
-                std::format_context& ctx) const {
-        ctx.advance_to(styled.style().to_escape(ctx.out()));
-        ctx.advance_to(value_formatter.format(styled.value(), ctx));
-        if (reset_on_end)
-            ctx.advance_to(
-                formatter<deco::style_reset_t> {}.format(deco::reset, ctx));
-        return ctx.out();
-    }
-};
-
-// internal formatter
-template <deco::concepts::styled_ref StyledRefT>
-    requires deco::concepts::formattable<typename StyledRefT::value_type>
-struct formatter<deco::detail::FStyledRef<StyledRefT>>
-    : public formatter<StyledRefT> {
-    using formatter<StyledRefT>::value_formatter;
-    using formatter<StyledRefT>::parse;
-
-    constexpr formatter() : formatter<StyledRefT>(false) {}
-
-    auto format(const deco::detail::FStyledRef<StyledRefT>& fstyled, /*NOLINT*/
-                std::format_context& ctx) const {
-        if (fstyled.context.style_enabled)
-            ctx.advance_to(fstyled.styled.style().to_escape(ctx.out()));
-        ctx.advance_to(value_formatter.format(fstyled.styled.value(), ctx));
-        if (fstyled.context.style_enabled)
-            ctx.advance_to(fstyled.context.current_style.to_escape(ctx.out()));
-        return ctx.out();
-    }
-};
-
-}; // namespace std
-
-namespace deco {
-
-// ╔═════════════════════════════════════════════════════════╗
-// ║                      StyledFormat                       ║
-// ╚═════════════════════════════════════════════════════════╝
-
-/// @brief Format string type used by StyledFormat::print().
-template <typename... Args>
-using FormatString = std::format_string<detail::processed_arg_t<Args>...>;
-
-/// @brief A stateful writer similar to `StyledOstream`, but with
-/// `std::formatter` support.
-/// @details Format arguments cannot contain Style types, reset, or pop. Use
-/// print(style, ...), styled(), push(), reset(), or pop() instead.
-class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
-    using stream_type = std::variant<std::FILE*, std::ostream*>;
-
-  public:
-    StyledFormat() = default;
-    StyledFormat(StyleState state) : StyleState(std::move(state)) {}
-
-    /* ----- Style operations ----- */
-
-    /// Similar to `styled_os << style`, where `styled_os` is a StyledOstream
-    /// object.
-    auto push(concepts::style auto style) -> StyledFormat& {
-        push_style(style);
-        current_is_pending_ = true;
-        return *this;
-    }
-
-    /// Similar to `styled_os << pop`, where `styled_os` is a StyledOstream
-    /// object.
-    auto pop() -> StyledFormat& {
-        pop_style();
-        current_is_pending_ = true;
-        return *this;
-    }
-
-    /// Similar to `styled_os << reset`, where `styled_os` is a StyledOstream
-    /// object.
-    auto reset() -> StyledFormat& {
-        reset_style();
-        current_is_pending_ = true;
-        return *this;
-    }
-
-    /* ----- format ----- */
-
-    template <std::output_iterator<const char&> OutputIt,
-              concepts::style StyleT,
-              typename... Args>
-    auto format_to(OutputIt out,
-                   StyleT style,
-                   std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt {
-        (check_arg<Args>(), ...);
-        out = ensure_context(out);
-        const AbsoluteStyle current =
-            detail::apply_style(current_style(), style);
-
-        if (!style.is_null()) out = output_style(out, style);
-        out = std::vformat_to(
-            out,
-            fmt.get(),
-            detail::make_format_args(process_arg(
-                detail::StyledFormatContext(current, style_enabled()),
-                std::forward<Args>(args))...));
-        if (!style.is_null()) out = output_style(out, current_style());
-        return out;
-    }
-
-    template <std::output_iterator<const char&> OutputIt, typename... Args>
-    auto format_to(OutputIt out,
-                   std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt {
-        return format_to(out, null_style, fmt, std::forward<Args>(args)...);
-    }
-
-    template <typename... Args>
-    [[nodiscard]]
-    auto format(concepts::style auto style,
-                std::format_string<Args...> fmt,
-                Args&&... args) -> std::string {
-        std::string buf;
-        format_to(
-            std::back_inserter(buf), style, fmt, std::forward<Args>(args)...);
-        return buf;
-    }
-
-    template <typename... Args>
-    [[nodiscard]]
-    auto format(std::format_string<Args...> fmt, Args&&... args)
-        -> std::string {
-        std::string buf;
-        format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
-        return buf;
-    }
-
-  private:
-    template <typename Arg>
-    static consteval void check_arg() {
-        using arg_type = std::remove_cvref_t<Arg>;
-        if constexpr (concepts::styled_ref<arg_type>)
-            detail::check_styled_ref<Arg>();
-        else
-            static_assert(
-                (!concepts::style<arg_type>
-                 && !std::is_same_v<arg_type, style_reset_t>
-                 && !std::is_same_v<arg_type, style_pop_t>),
-                "deco::StyledFormat: Style, reset, pop are disallowed as "
-                "format arguments. Use print(style, ...), styled(), "
-                "push(), reset(), or pop() instead.");
-    }
-
-    template <std::output_iterator<const char&> OutputIt,
-              concepts::style StyleT>
-    auto output_style(OutputIt out, StyleT style) const -> OutputIt {
-        if (style_enabled()) return style.to_escape(out);
-        return out;
-    }
-
-    template <std::output_iterator<const char&> OutputIt>
-    auto ensure_context(OutputIt out) -> OutputIt {
-        const auto update = update_context();
-        const AbsoluteStyle current = current_style();
-
-        if (update) out = output_style(out, *update);
-        if (current_is_pending_ && (!update || current != *update))
-            out = output_style(out, current);
-        current_is_pending_ = false;
-        return out;
-    }
-
-    // Whether the current style needs to be emitted before the next output.
-    bool current_is_pending_ = false;
-
-    // ──────────────────────── std::print extensions ────────────────────────
-
-#ifdef DECO_ENABLE_PRINT
-  public:
-    /* ----- print ----- */
-    auto set_stream(FILE* f) -> StyledFormat& {
-        stream_.emplace<FILE*>(f);
-        return *this;
-    }
-
-    auto set_stream(std::ostream& os) -> StyledFormat& {
-        stream_.emplace<std::ostream*>(&os);
-        return *this;
-    }
-
-    /// @brief Prints with a temporary style to the stream.
-    template <concepts::style StyleT, typename... Args>
-    auto print(StyleT style, FormatString<Args...> fmt, Args&&... args)
-        -> StyledFormat& {
-        (check_arg<Args>(), ...);
-        ensure_context();
-        const AbsoluteStyle current =
-            detail::apply_style(current_style(), style);
-
-        if (!style.is_null()) output_style(style);
-        print_stream(
-            fmt,
-            process_arg(detail::StyledFormatContext(current, style_enabled()),
-                        std::forward<Args>(args))...);
-        if (!style.is_null()) output_style(current_style());
-        return *this;
-    }
-
-    template <typename... Args>
-    auto print(FormatString<Args...> fmt, Args&&... args) -> StyledFormat& {
-        print(null_style, fmt, std::forward<Args>(args)...);
-        return *this;
-    }
-
-    // TODO: println
-  private:
-    template <typename... Args>
-    void print_stream(std::format_string<Args...> fmt, Args&&... args) const {
-        if (std::holds_alternative<FILE*>(stream_)) {
-            std::print(
-                std::get<FILE*>(stream_), fmt, std::forward<Args>(args)...);
-        } else if (std::holds_alternative<std::ostream*>(stream_)) {
-            std::print(*std::get<std::ostream*>(stream_),
-                       fmt,
-                       std::forward<Args>(args)...);
-        }
-    }
-
-    void output_style(concepts::style auto style) const {
-        if (!style_enabled()) return;
-        print_stream("{}", style);
-    }
-
-    void ensure_context() {
-        const auto update = update_context();
-        const AbsoluteStyle current = current_style();
-        if (update) output_style(*update);
-        if (current_is_pending_ && (!update || current != *update))
-            output_style(current);
-        current_is_pending_ = false;
-    }
-
-    stream_type stream_ = stream_type(std::in_place_type<FILE*>, stdout);
-
-#endif // DECO_ENABLE_PRINT
-};
-
-#ifdef DECO_ENABLE_PRINT
-
-/// @brief Creates a StyledFormat with context tracking enabled.
-/// @details equivalent to
-/// `StyledFormat().enable_context_tracking().set_stream(f)`
-inline auto styled_fmt(std::FILE* f = stdout) -> StyledFormat {
-    return StyledFormat().enable_context_tracking().set_stream(f);
-}
-
-/// @brief Creates a StyledFormat with context tracking enabled.
-/// @details equivalent to
-/// `StyledFormat().enable_context_tracking().set_stream(os)`
-inline auto styled_fmt(std::ostream& os) -> StyledFormat {
-    return StyledFormat().enable_context_tracking().set_stream(os);
-}
-
-#endif // DECO_ENABLE_PRINT
-
-}; // namespace deco
-
-#ifdef DECO_ENABLE_PRINT
-#undef DECO_ENABLE_PRINT
-#endif
-
-#endif // !DECOTERM_FORMAT_HPP
-
-
 #ifndef DECOTERM_COLOR_INFO_HPP
 #define DECOTERM_COLOR_INFO_HPP
 
-#include <cstdint>
 #include <array>
+#include <cstdint>
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                       Color Info                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
 namespace deco::colors {
-
-struct ColorInfo {
-    uint8_t r, g, b;
-};
 
 // NOLINTBEGIN
 // clang-format off
@@ -1997,270 +1015,1137 @@ enum TerminalColors : uint8_t {               // NOLINT
     yellow4_1         = 106,
 };
 
-// ──────────────────────── Terminal color info ─────────────────────
-
-inline constexpr std::array<ColorInfo, 256> color_info {{
-    { 0, 0, 0 },
-    { 128, 0, 0 },
-    { 0, 128, 0 },
-    { 128, 128, 0 },
-    { 0, 0, 128 },
-    { 128, 0, 128 },
-    { 0, 128, 128 },
-    { 192, 192, 192 },
-    { 128, 128, 128 },
-    { 255, 0, 0 },
-    { 0, 255, 0 },
-    { 255, 255, 0 },
-    { 0, 0, 255 },
-    { 255, 0, 255 },
-    { 0, 255, 255 },
-    { 255, 255, 255 },
-    { 0, 0, 0 },
-    { 0, 0, 95 },
-    { 0, 0, 135 },
-    { 0, 0, 175 },
-    { 0, 0, 215 },
-    { 0, 0, 255 },
-    { 0, 95, 0 },
-    { 0, 95, 95 },
-    { 0, 95, 135 },
-    { 0, 95, 175 },
-    { 0, 95, 215 },
-    { 0, 95, 255 },
-    { 0, 135, 0 },
-    { 0, 135, 95 },
-    { 0, 135, 135 },
-    { 0, 135, 175 },
-    { 0, 135, 215 },
-    { 0, 135, 255 },
-    { 0, 175, 0 },
-    { 0, 175, 95 },
-    { 0, 175, 135 },
-    { 0, 175, 175 },
-    { 0, 175, 215 },
-    { 0, 175, 255 },
-    { 0, 215, 0 },
-    { 0, 215, 95 },
-    { 0, 215, 135 },
-    { 0, 215, 175 },
-    { 0, 215, 215 },
-    { 0, 215, 255 },
-    { 0, 255, 0 },
-    { 0, 255, 95 },
-    { 0, 255, 135 },
-    { 0, 255, 175 },
-    { 0, 255, 215 },
-    { 0, 255, 255 },
-    { 95, 0, 0 },
-    { 95, 0, 95 },
-    { 95, 0, 135 },
-    { 95, 0, 175 },
-    { 95, 0, 215 },
-    { 95, 0, 255 },
-    { 95, 95, 0 },
-    { 95, 95, 95 },
-    { 95, 95, 135 },
-    { 95, 95, 175 },
-    { 95, 95, 215 },
-    { 95, 95, 255 },
-    { 95, 135, 0 },
-    { 95, 135, 95 },
-    { 95, 135, 135 },
-    { 95, 135, 175 },
-    { 95, 135, 215 },
-    { 95, 135, 255 },
-    { 95, 175, 0 },
-    { 95, 175, 95 },
-    { 95, 175, 135 },
-    { 95, 175, 175 },
-    { 95, 175, 215 },
-    { 95, 175, 255 },
-    { 95, 215, 0 },
-    { 95, 215, 95 },
-    { 95, 215, 135 },
-    { 95, 215, 175 },
-    { 95, 215, 215 },
-    { 95, 215, 255 },
-    { 95, 255, 0 },
-    { 95, 255, 95 },
-    { 95, 255, 135 },
-    { 95, 255, 175 },
-    { 95, 255, 215 },
-    { 95, 255, 255 },
-    { 135, 0, 0 },
-    { 135, 0, 95 },
-    { 135, 0, 135 },
-    { 135, 0, 175 },
-    { 135, 0, 215 },
-    { 135, 0, 255 },
-    { 135, 95, 0 },
-    { 135, 95, 95 },
-    { 135, 95, 135 },
-    { 135, 95, 175 },
-    { 135, 95, 215 },
-    { 135, 95, 255 },
-    { 135, 135, 0 },
-    { 135, 135, 95 },
-    { 135, 135, 135 },
-    { 135, 135, 175 },
-    { 135, 135, 215 },
-    { 135, 135, 255 },
-    { 135, 175, 0 },
-    { 135, 175, 95 },
-    { 135, 175, 135 },
-    { 135, 175, 175 },
-    { 135, 175, 215 },
-    { 135, 175, 255 },
-    { 135, 215, 0 },
-    { 135, 215, 95 },
-    { 135, 215, 135 },
-    { 135, 215, 175 },
-    { 135, 215, 215 },
-    { 135, 215, 255 },
-    { 135, 255, 0 },
-    { 135, 255, 95 },
-    { 135, 255, 135 },
-    { 135, 255, 175 },
-    { 135, 255, 215 },
-    { 135, 255, 255 },
-    { 175, 0, 0 },
-    { 175, 0, 95 },
-    { 175, 0, 135 },
-    { 175, 0, 175 },
-    { 175, 0, 215 },
-    { 175, 0, 255 },
-    { 175, 95, 0 },
-    { 175, 95, 95 },
-    { 175, 95, 135 },
-    { 175, 95, 175 },
-    { 175, 95, 215 },
-    { 175, 95, 255 },
-    { 175, 135, 0 },
-    { 175, 135, 95 },
-    { 175, 135, 135 },
-    { 175, 135, 175 },
-    { 175, 135, 215 },
-    { 175, 135, 255 },
-    { 175, 175, 0 },
-    { 175, 175, 95 },
-    { 175, 175, 135 },
-    { 175, 175, 175 },
-    { 175, 175, 215 },
-    { 175, 175, 255 },
-    { 175, 215, 0 },
-    { 175, 215, 95 },
-    { 175, 215, 135 },
-    { 175, 215, 175 },
-    { 175, 215, 215 },
-    { 175, 215, 255 },
-    { 175, 255, 0 },
-    { 175, 255, 95 },
-    { 175, 255, 135 },
-    { 175, 255, 175 },
-    { 175, 255, 215 },
-    { 175, 255, 255 },
-    { 215, 0, 0 },
-    { 215, 0, 95 },
-    { 215, 0, 135 },
-    { 215, 0, 175 },
-    { 215, 0, 215 },
-    { 215, 0, 255 },
-    { 215, 95, 0 },
-    { 215, 95, 95 },
-    { 215, 95, 135 },
-    { 215, 95, 175 },
-    { 215, 95, 215 },
-    { 215, 95, 255 },
-    { 215, 135, 0 },
-    { 215, 135, 95 },
-    { 215, 135, 135 },
-    { 215, 135, 175 },
-    { 215, 135, 215 },
-    { 215, 135, 255 },
-    { 215, 175, 0 },
-    { 215, 175, 95 },
-    { 215, 175, 135 },
-    { 215, 175, 175 },
-    { 215, 175, 215 },
-    { 215, 175, 255 },
-    { 215, 215, 0 },
-    { 215, 215, 95 },
-    { 215, 215, 135 },
-    { 215, 215, 175 },
-    { 215, 215, 215 },
-    { 215, 215, 255 },
-    { 215, 255, 0 },
-    { 215, 255, 95 },
-    { 215, 255, 135 },
-    { 215, 255, 175 },
-    { 215, 255, 215 },
-    { 215, 255, 255 },
-    { 255, 0, 0 },
-    { 255, 0, 95 },
-    { 255, 0, 135 },
-    { 255, 0, 175 },
-    { 255, 0, 215 },
-    { 255, 0, 255 },
-    { 255, 95, 0 },
-    { 255, 95, 95 },
-    { 255, 95, 135 },
-    { 255, 95, 175 },
-    { 255, 95, 215 },
-    { 255, 95, 255 },
-    { 255, 135, 0 },
-    { 255, 135, 95 },
-    { 255, 135, 135 },
-    { 255, 135, 175 },
-    { 255, 135, 215 },
-    { 255, 135, 255 },
-    { 255, 175, 0 },
-    { 255, 175, 95 },
-    { 255, 175, 135 },
-    { 255, 175, 175 },
-    { 255, 175, 215 },
-    { 255, 175, 255 },
-    { 255, 215, 0 },
-    { 255, 215, 95 },
-    { 255, 215, 135 },
-    { 255, 215, 175 },
-    { 255, 215, 215 },
-    { 255, 215, 255 },
-    { 255, 255, 0 },
-    { 255, 255, 95 },
-    { 255, 255, 135 },
-    { 255, 255, 175 },
-    { 255, 255, 215 },
-    { 255, 255, 255 },
-    { 8, 8, 8 },
-    { 18, 18, 18 },
-    { 28, 28, 28 },
-    { 38, 38, 38 },
-    { 48, 48, 48 },
-    { 58, 58, 58 },
-    { 68, 68, 68 },
-    { 78, 78, 78 },
-    { 88, 88, 88 },
-    { 98, 98, 98 },
-    { 108, 108, 108 },
-    { 118, 118, 118 },
-    { 128, 128, 128 },
-    { 138, 138, 138 },
-    { 148, 148, 148 },
-    { 158, 158, 158 },
-    { 168, 168, 168 },
-    { 178, 178, 178 },
-    { 188, 188, 188 },
-    { 198, 198, 198 },
-    { 208, 208, 208 },
-    { 218, 218, 218 },
-    { 228, 228, 228 },
-}};
-
 // clang-format on
 // NOLINTEND
 
 } // namespace deco::colors
 
+namespace deco::detail {
+
+// ──────────────────────── Terminal color info ─────────────────────
+
+struct RGB {
+    uint8_t r, g, b;
+};
+
+// NOLINTBEGIN
+inline constexpr std::array<RGB, 256> color_info {
+    {{0, 0, 0},       {128, 0, 0},     {0, 128, 0},     {128, 128, 0},
+     {0, 0, 128},     {128, 0, 128},   {0, 128, 128},   {192, 192, 192},
+     {128, 128, 128}, {255, 0, 0},     {0, 255, 0},     {255, 255, 0},
+     {0, 0, 255},     {255, 0, 255},   {0, 255, 255},   {255, 255, 255},
+     {0, 0, 0},       {0, 0, 95},      {0, 0, 135},     {0, 0, 175},
+     {0, 0, 215},     {0, 0, 255},     {0, 95, 0},      {0, 95, 95},
+     {0, 95, 135},    {0, 95, 175},    {0, 95, 215},    {0, 95, 255},
+     {0, 135, 0},     {0, 135, 95},    {0, 135, 135},   {0, 135, 175},
+     {0, 135, 215},   {0, 135, 255},   {0, 175, 0},     {0, 175, 95},
+     {0, 175, 135},   {0, 175, 175},   {0, 175, 215},   {0, 175, 255},
+     {0, 215, 0},     {0, 215, 95},    {0, 215, 135},   {0, 215, 175},
+     {0, 215, 215},   {0, 215, 255},   {0, 255, 0},     {0, 255, 95},
+     {0, 255, 135},   {0, 255, 175},   {0, 255, 215},   {0, 255, 255},
+     {95, 0, 0},      {95, 0, 95},     {95, 0, 135},    {95, 0, 175},
+     {95, 0, 215},    {95, 0, 255},    {95, 95, 0},     {95, 95, 95},
+     {95, 95, 135},   {95, 95, 175},   {95, 95, 215},   {95, 95, 255},
+     {95, 135, 0},    {95, 135, 95},   {95, 135, 135},  {95, 135, 175},
+     {95, 135, 215},  {95, 135, 255},  {95, 175, 0},    {95, 175, 95},
+     {95, 175, 135},  {95, 175, 175},  {95, 175, 215},  {95, 175, 255},
+     {95, 215, 0},    {95, 215, 95},   {95, 215, 135},  {95, 215, 175},
+     {95, 215, 215},  {95, 215, 255},  {95, 255, 0},    {95, 255, 95},
+     {95, 255, 135},  {95, 255, 175},  {95, 255, 215},  {95, 255, 255},
+     {135, 0, 0},     {135, 0, 95},    {135, 0, 135},   {135, 0, 175},
+     {135, 0, 215},   {135, 0, 255},   {135, 95, 0},    {135, 95, 95},
+     {135, 95, 135},  {135, 95, 175},  {135, 95, 215},  {135, 95, 255},
+     {135, 135, 0},   {135, 135, 95},  {135, 135, 135}, {135, 135, 175},
+     {135, 135, 215}, {135, 135, 255}, {135, 175, 0},   {135, 175, 95},
+     {135, 175, 135}, {135, 175, 175}, {135, 175, 215}, {135, 175, 255},
+     {135, 215, 0},   {135, 215, 95},  {135, 215, 135}, {135, 215, 175},
+     {135, 215, 215}, {135, 215, 255}, {135, 255, 0},   {135, 255, 95},
+     {135, 255, 135}, {135, 255, 175}, {135, 255, 215}, {135, 255, 255},
+     {175, 0, 0},     {175, 0, 95},    {175, 0, 135},   {175, 0, 175},
+     {175, 0, 215},   {175, 0, 255},   {175, 95, 0},    {175, 95, 95},
+     {175, 95, 135},  {175, 95, 175},  {175, 95, 215},  {175, 95, 255},
+     {175, 135, 0},   {175, 135, 95},  {175, 135, 135}, {175, 135, 175},
+     {175, 135, 215}, {175, 135, 255}, {175, 175, 0},   {175, 175, 95},
+     {175, 175, 135}, {175, 175, 175}, {175, 175, 215}, {175, 175, 255},
+     {175, 215, 0},   {175, 215, 95},  {175, 215, 135}, {175, 215, 175},
+     {175, 215, 215}, {175, 215, 255}, {175, 255, 0},   {175, 255, 95},
+     {175, 255, 135}, {175, 255, 175}, {175, 255, 215}, {175, 255, 255},
+     {215, 0, 0},     {215, 0, 95},    {215, 0, 135},   {215, 0, 175},
+     {215, 0, 215},   {215, 0, 255},   {215, 95, 0},    {215, 95, 95},
+     {215, 95, 135},  {215, 95, 175},  {215, 95, 215},  {215, 95, 255},
+     {215, 135, 0},   {215, 135, 95},  {215, 135, 135}, {215, 135, 175},
+     {215, 135, 215}, {215, 135, 255}, {215, 175, 0},   {215, 175, 95},
+     {215, 175, 135}, {215, 175, 175}, {215, 175, 215}, {215, 175, 255},
+     {215, 215, 0},   {215, 215, 95},  {215, 215, 135}, {215, 215, 175},
+     {215, 215, 215}, {215, 215, 255}, {215, 255, 0},   {215, 255, 95},
+     {215, 255, 135}, {215, 255, 175}, {215, 255, 215}, {215, 255, 255},
+     {255, 0, 0},     {255, 0, 95},    {255, 0, 135},   {255, 0, 175},
+     {255, 0, 215},   {255, 0, 255},   {255, 95, 0},    {255, 95, 95},
+     {255, 95, 135},  {255, 95, 175},  {255, 95, 215},  {255, 95, 255},
+     {255, 135, 0},   {255, 135, 95},  {255, 135, 135}, {255, 135, 175},
+     {255, 135, 215}, {255, 135, 255}, {255, 175, 0},   {255, 175, 95},
+     {255, 175, 135}, {255, 175, 175}, {255, 175, 215}, {255, 175, 255},
+     {255, 215, 0},   {255, 215, 95},  {255, 215, 135}, {255, 215, 175},
+     {255, 215, 215}, {255, 215, 255}, {255, 255, 0},   {255, 255, 95},
+     {255, 255, 135}, {255, 255, 175}, {255, 255, 215}, {255, 255, 255},
+     {8, 8, 8},       {18, 18, 18},    {28, 28, 28},    {38, 38, 38},
+     {48, 48, 48},    {58, 58, 58},    {68, 68, 68},    {78, 78, 78},
+     {88, 88, 88},    {98, 98, 98},    {108, 108, 108}, {118, 118, 118},
+     {128, 128, 128}, {138, 138, 138}, {148, 148, 148}, {158, 158, 158},
+     {168, 168, 168}, {178, 178, 178}, {188, 188, 188}, {198, 198, 198},
+     {208, 208, 208}, {218, 218, 218}, {228, 228, 228}, {238, 238, 238}}};
+// NOLINTEND
+
+} // namespace deco::detail
+
 #endif // !DECOTERM_COLOR_INFO_HPP
+
+
+#ifndef DECOTERM_OUTPUT_HPP
+#define DECOTERM_OUTPUT_HPP
+
+
+#include <array>
+#include <optional>
+#include <ostream>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
+
+namespace deco {
+
+namespace detail {
+
+template <concepts::style StyleT>
+constexpr auto apply_style(AbsoluteStyle current, StyleT style)
+    -> AbsoluteStyle {
+    using style_type = std::remove_cvref_t<StyleT>;
+    if constexpr (std::is_same_v<style_type, Style>)
+        return abs(current.style | style);
+    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
+}
+
+/* ----- global style output context ----- */
+
+// NOLINTBEGIN
+
+struct style_output_context_t {};
+
+/// @brief global style output context for `StyleState`.
+/// @details Used to determine whether `StyleOutputState` needs to output the
+/// current style before outputting a value.
+inline const style_output_context_t* g_style_output_context = nullptr;
+
+// NOLINTEND
+
+/* ----- StyleStack ----- */
+
+/// @brief Represents a small-vector like `AbsoluteStyle` stack.
+/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
+/// if the size exceeds N.
+class StyleStack {
+    // OPTIMIZE: using std::variant is a bit slow
+    static constexpr std::size_t N = 5;
+
+    using stack_storage = std::array<AbsoluteStyle, N>;
+    using heap_storage = std::vector<AbsoluteStyle>;
+
+  public:
+    StyleStack() = default;
+
+    [[nodiscard]]
+    auto top() const -> std::optional<AbsoluteStyle> {
+        if (size_) {
+            if (is_heap()) return heap().back();
+            return stack()[size_ - 1];
+        }
+        return std::nullopt;
+    }
+
+    void push(AbsoluteStyle style) {
+        size_++;
+        if (is_heap()) {
+            heap().push_back(style);
+            return;
+        }
+        if (size_ == N + 1) {
+            grow();
+            heap().push_back(style);
+            return;
+        }
+        stack()[size_ - 1] = style;
+    }
+
+    void pop() {
+        if (size_) {
+            if (is_heap()) heap().pop_back();
+            size_--;
+        }
+    }
+
+    void clear() {
+        if (is_heap()) heap().clear();
+        size_ = 0;
+    }
+
+  private:
+    auto is_heap() const -> bool {
+        return std::holds_alternative<heap_storage>(storage_);
+    }
+
+    auto stack() const -> const stack_storage& {
+        return std::get<stack_storage>(storage_);
+    }
+
+    auto stack() -> stack_storage& { return std::get<stack_storage>(storage_); }
+
+    auto heap() const -> const heap_storage& {
+        return std::get<heap_storage>(storage_);
+    }
+
+    auto heap() -> heap_storage& { return std::get<heap_storage>(storage_); }
+
+    void grow() {
+        stack_storage tmp_stor = stack();
+        storage_.emplace<heap_storage>(tmp_stor.begin(), tmp_stor.begin() + N);
+    }
+
+    std::variant<stack_storage, heap_storage> storage_;
+    std::size_t size_ = 0;
+};
+
+/* ----- color fallback ----- */
+
+using color_fallback_fn = auto (*)(Color) -> Color;
+
+// TODO: replace this with better algorithm
+constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
+    const uint8_t dr = lhs.r - rhs.r;
+    const uint8_t dg = lhs.g - rhs.g;
+    const uint8_t db = lhs.b - rhs.b;
+    return (2 * (dr * dr)) + (4 * (db * db)) + (3 * (dg * dg));
+}
+
+constexpr auto fallback_to_16(Color color) -> Color {
+    const ColorType type = color.type();
+    if (type == ColorType::null || type == ColorType::default_color)
+        return color;
+
+    RGB rgb; // NOLINT
+    if (type == ColorType::terminal_color) {
+        const uint8_t index = color.data()[0]; 
+        if (index < 16) return color;
+        rgb = color_info[index];
+    } else if (type == ColorType::true_color) {
+        const auto [r, g, b] = color.data();
+        rgb = RGB(r, g, b);
+    }
+
+    int closest = (256 * 256) * 3; // max distance
+    uint8_t closest_idx = 0;
+    for (uint8_t i = 0; i < 16; ++i) {
+        int distance = rgb_distance(rgb, color_info[i]);
+        if (distance < closest) {
+            closest = distance;
+            closest_idx = i;
+        }
+    }
+
+    return {closest_idx};
+}
+
+constexpr auto fallback_to_256(Color color) -> Color {
+    // TODO:
+    return color;
+}
+
+constexpr auto fallback(Style style, color_fallback_fn fallback_fn) -> Style {
+    return {style.emphasis(), fallback_fn(style.fg()), fallback_fn(style.bg())};
+}
+
+constexpr auto fallback(AbsoluteStyle style, color_fallback_fn fallback_fn)
+    -> AbsoluteStyle {
+    return abs(fallback(style.style, fallback_fn));
+}
+
+} // namespace detail
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       StyleState                        ║
+// ╚═════════════════════════════════════════════════════════╝
+
+/// @brief Terminal color capability levels.
+enum class ColorMode : uint8_t { color16 = 0, color256 = 1, true_color = 2 };
+
+/// @brief Represents style output state.
+///
+/// It manages the current style output state (e.g. style enabled, base
+/// style, etc.) If context tracking is enabled, it will also check
+/// `detail::g_style_output_context` to determine whether it needs to output the
+/// current style before outputting a value.
+///
+/// @see `g_style_output_context`, `StyledOstream`, `StyledFormat`
+class StyleState { // NOLINT
+  public:
+    StyleState() = default;
+
+    StyleState(const StyleState& other) {
+        if (!other.context_tracking_enabled_) try_clean_context();
+        copy_from(other);
+    };
+
+    StyleState(StyleState&& other) noexcept {
+        if (!other.context_tracking_enabled_) try_clean_context();
+        move_from(std::move(other));
+    }
+
+    auto operator=(const StyleState& other) -> StyleState& {
+        if (this == &other) return *this;
+        if (!other.context_tracking_enabled_) try_clean_context();
+        copy_from(other);
+        return *this;
+    };
+    auto operator=(StyleState&& other) noexcept -> StyleState& {
+        if (this == &other) return *this;
+        if (!other.context_tracking_enabled_) try_clean_context();
+        move_from(std::move(other));
+        return *this;
+    }
+
+    ~StyleState() { try_clean_context(); }
+
+    [[nodiscard]]
+    auto base_style() const -> Style {
+        return base_style_.style;
+    }
+
+    [[nodiscard]]
+    auto style_enabled() const -> bool {
+        return style_enabled_;
+    }
+
+    [[nodiscard]]
+    auto color_mode() const -> ColorMode {
+        return color_mode_;
+    }
+
+    [[nodiscard]]
+    auto context_tracking_enabled() const -> bool {
+        return context_tracking_enabled_;
+    }
+
+    [[nodiscard]]
+    auto current_style() const -> AbsoluteStyle {
+        return stack_.top().value_or(base_style_);
+    }
+
+  protected:
+    void pop_style() { stack_.pop(); }
+
+    void reset_style() { stack_.clear(); }
+
+    void push_style(AbsoluteStyle style) { stack_.push(style); }
+
+    void push_style(Style style) {
+        stack_.push(abs(current_style().style | style));
+    }
+
+    /// @brief Updates the context if context tracking is enabled; otherwise
+    /// only checks whether the base style changed.
+    /// @returns The Style to emit when context or base style changed
+    auto update_context() -> std::optional<AbsoluteStyle> {
+        if (!context_tracking_enabled_) {
+            if (base_style_changed_) {
+                base_style_changed_ = false;
+                return base_style_;
+            }
+            return std::nullopt;
+        }
+        if (detail::g_style_output_context != &context_) {
+            detail::g_style_output_context = &context_;
+            if (base_style_changed_) {
+                base_style_changed_ = false;
+                return abs(base_style_.style | current_style().style);
+            }
+            return current_style();
+        }
+        return std::nullopt;
+    }
+
+    void try_clean_context() const {
+        if (!context_tracking_enabled_) return;
+        if (detail::g_style_output_context == &context_)
+            detail::g_style_output_context = nullptr;
+    }
+
+    template <concepts::style StyleT>
+    auto fallback_style(StyleT style) const -> StyleT {
+        switch (color_mode()) {
+        case ColorMode::color16:
+            return detail::fallback(style, detail::fallback_to_16);
+        case ColorMode::color256:
+            return detail::fallback(style, detail::fallback_to_256);
+        default:
+            return style;
+        }
+    }
+
+  private:
+    template <typename>
+    friend class StyleStateSetter;
+
+    void copy_from(const StyleState& other) {
+        base_style_ = other.base_style_;
+        stack_ = other.stack_;
+        style_enabled_ = other.style_enabled_;
+        color_mode_ = other.color_mode_;
+        context_tracking_enabled_ = other.context_tracking_enabled_;
+        base_style_changed_ = other.base_style_changed_;
+        context_ = other.context_;
+    }
+
+    void move_from(StyleState&& other) {
+        base_style_ = other.base_style_;
+        stack_ = std::move(other.stack_);
+        style_enabled_ = other.style_enabled_;
+        color_mode_ = other.color_mode_;
+        context_tracking_enabled_ = other.context_tracking_enabled_;
+        base_style_changed_ = other.base_style_changed_;
+        context_ = other.context_;
+    }
+
+    // config
+    AbsoluteStyle base_style_ = abs(null_style);
+    ColorMode color_mode_ = ColorMode::true_color;
+    bool style_enabled_ = true;
+    bool context_tracking_enabled_ = false;
+
+    // state
+    bool base_style_changed_ = true;
+    detail::style_output_context_t context_;
+    detail::StyleStack stack_;
+};
+
+/// @brief CRTP class that provides chainable StyleState options
+template <typename Self>
+class StyleStateSetter {
+  public:
+    /// @brief Enable or disable style output.
+    auto enable_style(bool enable = true) -> Self& {
+        state().style_enabled_ = enable;
+        return self();
+    }
+
+    /// @brief Enable or disable context tracking.
+    auto enable_context_tracking(bool enable = true) -> Self& {
+        if (state().context_tracking_enabled_ && !enable) {
+            state().try_clean_context();
+        }
+        state().context_tracking_enabled_ = enable;
+        return self();
+    }
+
+    auto set_color_mode(ColorMode color_mode) -> Self& {
+        state().color_mode_ = color_mode;
+        return self();
+    }
+
+    /// @brief Set the base style for this output state.
+    auto set_base_style(Style base) -> Self& {
+        state().base_style_ = abs(base);
+        state().base_style_changed_ = true;
+        return self();
+    }
+
+  private:
+    friend Self;
+
+    StyleStateSetter() = default;
+
+    auto state() -> StyleState& {
+        return static_cast<StyleState&>(static_cast<Self&>(*this));
+    }
+
+    auto self() -> Self& { return static_cast<Self&>(*this); }
+};
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                      StyledOstream                      ║
+// ╚═════════════════════════════════════════════════════════╝
+
+struct style_pop_t {};
+
+/// @brief StyledOstream manipulator that restores the previous style.
+inline constexpr style_pop_t pop;
+
+/// @brief A stateful lightweight writer over an existing std::ostream.
+/// @warning The passed std::ostream object must outlive this object.
+/// @see `StyleState`
+class StyledOstream : public StyleState,
+                      public StyleStateSetter<StyledOstream> {
+  public:
+    StyledOstream(std::ostream& os) : ostream_(&os) {}
+
+    StyledOstream(StyleState state, std::ostream& os)
+        : StyleState(std::move(state)),
+          ostream_(&os) {}
+
+    /// @brief Output operator for any type that can be written to
+    /// `std::ostream`.
+    ///
+    /// @throws `std::logic_error` if `operator<<(std::ostream&, T&&)` returns a
+    /// different ostream object.
+    template <concepts::ostream_outputable T>
+        requires(!concepts::style<T> && !concepts::styled_ref<T>)
+    friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
+        out.ensure_context();
+
+        if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
+            os_ptr != out.ostream_)
+            throw std::logic_error(
+                "StyledOstream: std::ostream output operator returned a "
+                "different ostream object");
+        return out;
+    }
+
+    /// @brief output operator for Style types
+    template <concepts::style StyleT>
+    friend auto operator<<(StyledOstream& out, StyleT style) -> StyledOstream& {
+        out.ensure_context();
+
+        if constexpr (std::is_same_v<StyleT, Style>
+                      || std::is_same_v<StyleT, AbsoluteStyle>)
+            out.push_style(style);
+        out.output_style(style);
+        return out;
+    }
+
+    /// @brief output operator for `reset`
+    friend auto operator<<(StyledOstream& out, style_reset_t)
+        -> StyledOstream& {
+        out.reset_style();
+        out.output_style(out.current_style());
+        return out;
+    }
+
+    /// @brief output operator for `pop`
+    friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
+        out.ensure_context();
+        out.pop_style();
+        out.output_style(out.current_style());
+        return out;
+    }
+
+    /// @brief output operator for styled values
+    template <concepts::styled_ref StyledRefT>
+    friend auto operator<<(StyledOstream& out, StyledRefT&& styled) // NOLINT
+        -> StyledOstream& {
+        detail::check_styled_ref<StyledRefT>();
+        out.ensure_context();
+
+        out.output_style(styled.style());
+        out.ostream() << styled.value();
+        out.ostream() << out.current_style();
+        return out;
+    }
+
+    /// @brief output operator for IO manipulators
+    friend auto operator<<(StyledOstream& out,
+                           std::ios_base& (*fn)(std::ios_base&))
+        -> StyledOstream& {
+        out.ensure_context();
+        out.ostream() << fn;
+        return out;
+    }
+
+    /// @brief output operator for IO manipulators
+    friend auto operator<<(StyledOstream& out,
+                           std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
+        -> StyledOstream& {
+        out.ensure_context();
+        out.ostream() << fn;
+        return out;
+    }
+
+    /// @brief output operator for IO manipulators
+    friend auto operator<<(StyledOstream& out,
+                           std::ostream& (*fn)(std::ostream&))
+        -> StyledOstream& {
+        // `std::operator<<(std::ostream& os,
+        // std::ostream&(*fn)(std::ostream&))` returns `fn(os)` instead of `os`,
+        // so we should assume that it may return a different std::ostream&.
+        out.ensure_context();
+        out.ostream_ = &(out.ostream() << fn);
+        return out;
+    }
+
+    /// @brief Swithes the underlying `std::ostream`.
+    void set_stream(std::ostream& os) { ostream_ = &os; }
+
+    /// @brief Returns the underlying `std::ostream`.
+    auto ostream() const -> std::ostream& { return *ostream_; }
+
+  private:
+    void ensure_context() {
+        if (auto style = update_context()) output_style(*style);
+    }
+
+    void output_style(concepts::style auto style) const {
+        if (!style_enabled()) return;
+        ostream() << fallback_style(style);
+    }
+
+    std::ostream* ostream_;
+};
+
+/// @brief Creates a `StyledOstream` with context tracking enabled.
+/// @details equivalent to `StyledOstream(os).enable_context()`
+[[nodiscard]]
+inline auto styled_out(std::ostream& os) -> StyledOstream {
+    return StyledOstream(os).enable_context_tracking();
+}
+
+} // namespace deco
+
+#endif // !DECOTERM_OUTPUT_HPP
+
+
+#ifndef DECOTERM_TERMINAL_HPP
+#define DECOTERM_TERMINAL_HPP
+
+
+#include <cstdlib>
+#include <iostream>
+
+#if defined(_WIN32)
+#include <windows.h>
+#else // POSIX
+#include <unistd.h>
+
+#endif
+
+namespace deco {
+
+namespace terminal {
+
+inline auto is_stdout_tty() -> bool;
+inline auto is_stderr_tty() -> bool;
+
+} // namespace terminal
+
+namespace detail {
+
+inline constexpr auto contains(std::string_view sv, std::string_view find)
+    -> bool {
+    return sv.find(find) != std::string_view::npos; // NOLINT
+}
+
+#if defined(_WIN32)
+[[nodiscard]]
+inline auto enable_virtual_terminal_mode() -> bool {
+    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode;
+    if (!GetConsoleMode(h_stdout, &mode)) return false;
+    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    return SetConsoleMode(h_stdout, mode);
+}
+#endif // _WIN32
+
+// Based on https://github.com/termstandard/colors?tab=readme-ov-file
+[[nodiscard]]
+inline auto get_color_support() -> ColorMode {
+#if defined(_WIN32)
+    return ColorSupport::true_color;
+#else // POSIX
+    const char* colorterm_p = std::getenv("COLORTERM");
+
+    std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
+    if (contains(env_colorterm, "truecolor")
+        || contains(env_colorterm, "24bit"))
+        return ColorMode::true_color;
+
+    // TODO:
+
+    return ColorMode::color16;
+#endif
+};
+
+// HACK: Uses the same approach as the termcolor library to detect whether
+// an ostream is stdout or stderr.
+inline auto is_ostream_stdout(const std::ostream& os) -> bool {
+    return &os == &std::cout;
+}
+
+inline auto is_ostream_stderr(const std::ostream& os) -> bool {
+    return (&os == &std::cerr) || (&os == &std::clog);
+}
+
+} // namespace detail
+
+namespace terminal {
+
+#if defined(_WIN32)
+// Automatically enables Windows virtual terminal processing unless
+// DECOTERM_NO_AUTO_ENABLE_VT is defined.
+#ifndef DECOTERM_NO_AUTO_ENABLE_VT
+inline bool g_virtual_terminal_mode_enabled = enable_virtual_terminal_mode();
+#endif // DECOTERM_NO_AUTO_ENABLE_VT
+#endif // _WIN32
+
+/// @brief Checks whether stdout is pointed to a terminal.
+[[nodiscard]]
+inline auto is_stdout_tty() -> bool {
+#if defined(_WIN32)
+    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode;
+    return GetConsoleMode(h_stdout, &mode);
+#else // POSIX
+    return isatty(STDOUT_FILENO);
+#endif
+};
+
+/// @brief Check whether stderr is pointed to a terminal.
+[[nodiscard]]
+inline auto is_stderr_tty() -> bool {
+#if defined(_WIN32)
+    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD mode;
+    return GetConsoleMode(h_stderr, &mode);
+#else // POSIX
+    return isatty(STDERR_FILENO);
+#endif
+};
+
+/// @brief Returns the detected color support of teh current terminal.
+[[nodiscard]]
+inline auto color_support() -> ColorMode {
+    static ColorMode s_color_support = detail::get_color_support();
+    return s_color_support;
+}
+
+/// @brief Creates a StyledOstream with TTY-based automatic configuration.
+/// @details Equivalent to `deco::styled_out(os)`, but style output and context
+/// tracking are enabled only when os is detected as stdout or stderr attached
+/// to a terminal.
+[[nodiscard]]
+inline auto styled_out(std::ostream& os) -> StyledOstream {
+    bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
+                  || (detail::is_ostream_stderr(os) && is_stderr_tty());
+    return deco::styled_out(os).enable_style(is_tty).enable_context_tracking(
+        is_tty);
+}
+
+}; // namespace terminal
+
+} // namespace deco
+
+#endif // !DECOTERM_TERMINAL_HPP
+
+
+#ifndef DECOTERM_FORMAT_HPP
+#define DECOTERM_FORMAT_HPP
+
+
+#include <format>
+#include <iterator>
+#include <optional>
+#include <type_traits>
+#include <variant>
+#include <version>
+
+#if defined(__cpp_lib_print) && __cpp_lib_print >= 202403L
+#define DECO_ENABLE_PRINT
+#include <print>
+#endif
+
+namespace deco {
+
+namespace concepts {
+
+#if __cplusplus >= 202302L
+template <typename Arg, typename CharT = char>
+concept formattable = std::formattable<Arg, CharT>;
+#else
+// fallback for C++20. This only checks if `std::formatter<Arg>` exists
+// and has `parse()` and `format()`.
+template <typename Arg, typename CharT = char>
+concept formattable =
+    requires(std::formatter<std::remove_cvref_t<Arg>, CharT> formatter,
+             Arg&& arg,
+             std::basic_format_parse_context<CharT> parse_ctx,
+             std::basic_format_context<char*, CharT> fmt_ctx) {
+        {
+            formatter.parse(parse_ctx)
+        } -> std::same_as<typename decltype(parse_ctx)::iterator>;
+        {
+            formatter.format(std::forward<Arg>(arg), fmt_ctx)
+        } -> std::same_as<typename decltype(fmt_ctx)::iterator>;
+    };
+#endif
+
+} // namespace concepts
+
+namespace detail {
+
+struct StyledFormatContext {
+    constexpr StyledFormatContext(AbsoluteStyle current_style,
+                                  bool style_enabled)
+        : current_style(current_style),
+          style_enabled(style_enabled) {}
+
+    AbsoluteStyle current_style;
+    bool style_enabled;
+};
+
+// StyledRef with style context.
+// This is used instead of StyledRef in StyledFormat.
+template <typename StyledRefT>
+struct FStyledRef {
+    constexpr FStyledRef(StyledRefT styled, StyledFormatContext context)
+        : styled(styled),
+          context(context) {}
+
+    StyledRefT styled;
+    StyledFormatContext context; // NOLINT
+};
+
+// Replace StyledRef<T>& with FStyledRef<T>.
+template <typename Arg>
+constexpr auto process_arg(detail::StyledFormatContext context, Arg&& arg)
+    -> decltype(auto) {
+    if constexpr (concepts::styled_ref<Arg>) {
+        return FStyledRef(arg, context);
+    } else return std::forward<Arg>(arg); // NOLINT
+}
+
+template <typename Arg>
+using processed_arg_t = std::conditional_t<concepts::styled_ref<Arg>,
+                                           FStyledRef<std::remove_cvref_t<Arg>>,
+                                           Arg>;
+
+// this is used with process_arg(), since make_format_args don't take rvalue
+// reference.
+template <typename... Args>
+constexpr auto make_format_args(Args&&... args /*NOLINT*/) {
+    return std::make_format_args(args...);
+}
+
+} // namespace detail
+
+} // namespace deco
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       Formatters                        ║
+// ╚═════════════════════════════════════════════════════════╝
+
+namespace std {
+
+/// @brief formatter for Style types, e.g. `Style` and `AbsoluteStyle`
+template <deco::concepts::style StyleT>
+struct formatter<StyleT> {
+    constexpr auto parse(std::format_parse_context& ctx) const {
+        return ctx.begin();
+    }
+
+    auto format(StyleT style, std::format_context& ctx) const {
+        return style.to_escape(ctx.out());
+    }
+};
+
+/// @brief formatter for `deco::reset`
+template <>
+struct formatter<deco::style_reset_t> {
+    constexpr auto parse(std::format_parse_context& ctx) const {
+        return ctx.begin();
+    }
+
+    auto format(deco::style_reset_t, std::format_context& ctx) const {
+        return deco::abs(deco::null_style).to_escape(ctx.out());
+    }
+};
+
+/// @brief formatter for styled values
+template <deco::concepts::styled_ref StyledRefT>
+    requires deco::concepts::formattable<typename StyledRefT::value_type>
+struct formatter<StyledRefT> {
+    std::formatter<typename StyledRefT::value_type, char> value_formatter;
+
+    bool reset_on_end;
+
+    constexpr formatter(bool reset_on_end = true)
+        : reset_on_end(reset_on_end) {}
+
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return value_formatter.parse(ctx);
+    }
+
+    auto format(const StyledRefT& styled, /*NOLINT*/
+                std::format_context& ctx) const {
+        ctx.advance_to(styled.style().to_escape(ctx.out()));
+        ctx.advance_to(value_formatter.format(styled.value(), ctx));
+        if (reset_on_end)
+            ctx.advance_to(
+                formatter<deco::style_reset_t> {}.format(deco::reset, ctx));
+        return ctx.out();
+    }
+};
+
+// internal formatter
+template <deco::concepts::styled_ref StyledRefT>
+    requires deco::concepts::formattable<typename StyledRefT::value_type>
+struct formatter<deco::detail::FStyledRef<StyledRefT>>
+    : public formatter<StyledRefT> {
+    using formatter<StyledRefT>::value_formatter;
+    using formatter<StyledRefT>::parse;
+
+    constexpr formatter() : formatter<StyledRefT>(false) {}
+
+    auto format(const deco::detail::FStyledRef<StyledRefT>& fstyled, /*NOLINT*/
+                std::format_context& ctx) const {
+        if (fstyled.context.style_enabled)
+            ctx.advance_to(fstyled.styled.style().to_escape(ctx.out()));
+        ctx.advance_to(value_formatter.format(fstyled.styled.value(), ctx));
+        if (fstyled.context.style_enabled)
+            ctx.advance_to(fstyled.context.current_style.to_escape(ctx.out()));
+        return ctx.out();
+    }
+};
+
+}; // namespace std
+
+namespace deco {
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                      StyledFormat                       ║
+// ╚═════════════════════════════════════════════════════════╝
+
+/// @brief Format string type used by StyledFormat::print().
+template <typename... Args>
+using FormatString = std::format_string<detail::processed_arg_t<Args>...>;
+
+/// @brief A stateful writer similar to `StyledOstream`, but with
+/// `std::formatter` support.
+/// @details Format arguments cannot contain Style types, reset, or pop. Use
+/// print(style, ...), styled(), push(), reset(), or pop() instead.
+class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
+    using stream_type = std::variant<std::FILE*, std::ostream*>;
+
+  public:
+    StyledFormat() = default;
+    StyledFormat(StyleState state) : StyleState(std::move(state)) {}
+
+    /* ----- Style operations ----- */
+
+    /// Similar to `styled_os << style`, where `styled_os` is a StyledOstream
+    /// object.
+    auto push(concepts::style auto style) -> StyledFormat& {
+        push_style(style);
+        current_is_pending_ = true;
+        return *this;
+    }
+
+    /// Similar to `styled_os << pop`, where `styled_os` is a StyledOstream
+    /// object.
+    auto pop() -> StyledFormat& {
+        pop_style();
+        current_is_pending_ = true;
+        return *this;
+    }
+
+    /// Similar to `styled_os << reset`, where `styled_os` is a StyledOstream
+    /// object.
+    auto reset() -> StyledFormat& {
+        reset_style();
+        current_is_pending_ = true;
+        return *this;
+    }
+
+    /* ----- format ----- */
+
+    template <std::output_iterator<const char&> OutputIt,
+              concepts::style StyleT,
+              typename... Args>
+    auto format_to(OutputIt out,
+                   StyleT style,
+                   std::format_string<Args...> fmt,
+                   Args&&... args) -> OutputIt {
+        (check_arg<Args>(), ...);
+        out = ensure_context(out);
+        const AbsoluteStyle current =
+            detail::apply_style(current_style(), style);
+
+        if (!style.is_null()) out = output_style(out, style);
+        out = std::vformat_to(
+            out,
+            fmt.get(),
+            detail::make_format_args(process_arg(
+                detail::StyledFormatContext(current, style_enabled()),
+                std::forward<Args>(args))...));
+        if (!style.is_null()) out = output_style(out, current_style());
+        return out;
+    }
+
+    template <std::output_iterator<const char&> OutputIt, typename... Args>
+    auto format_to(OutputIt out,
+                   std::format_string<Args...> fmt,
+                   Args&&... args) -> OutputIt {
+        return format_to(out, null_style, fmt, std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    [[nodiscard]]
+    auto format(concepts::style auto style,
+                std::format_string<Args...> fmt,
+                Args&&... args) -> std::string {
+        std::string buf;
+        format_to(
+            std::back_inserter(buf), style, fmt, std::forward<Args>(args)...);
+        return buf;
+    }
+
+    template <typename... Args>
+    [[nodiscard]]
+    auto format(std::format_string<Args...> fmt, Args&&... args)
+        -> std::string {
+        std::string buf;
+        format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
+        return buf;
+    }
+
+  private:
+    template <typename Arg>
+    static consteval void check_arg() {
+        using arg_type = std::remove_cvref_t<Arg>;
+        if constexpr (concepts::styled_ref<arg_type>)
+            detail::check_styled_ref<Arg>();
+        else
+            static_assert(
+                (!concepts::style<arg_type>
+                 && !std::is_same_v<arg_type, style_reset_t>
+                 && !std::is_same_v<arg_type, style_pop_t>),
+                "deco::StyledFormat: Style, reset, pop are disallowed as "
+                "format arguments. Use print(style, ...), styled(), "
+                "push(), reset(), or pop() instead.");
+    }
+
+    template <std::output_iterator<const char&> OutputIt,
+              concepts::style StyleT>
+    auto output_style(OutputIt out, StyleT style) const -> OutputIt {
+        if (!style_enabled()) return out;
+        return fallback_style(style).to_escape(out);
+    }
+
+    template <std::output_iterator<const char&> OutputIt>
+    auto ensure_context(OutputIt out) -> OutputIt {
+        const auto update = update_context();
+        const AbsoluteStyle current = current_style();
+
+        if (update) out = output_style(out, *update);
+        if (current_is_pending_ && (!update || current != *update))
+            out = output_style(out, current);
+        current_is_pending_ = false;
+        return out;
+    }
+
+    // Whether the current style needs to be emitted before the next output.
+    bool current_is_pending_ = false;
+
+    // ──────────────────────── std::print extensions ────────────────────────
+
+#ifdef DECO_ENABLE_PRINT
+  public:
+    /* ----- print ----- */
+    auto set_stream(FILE* f) -> StyledFormat& {
+        stream_.emplace<FILE*>(f);
+        return *this;
+    }
+
+    auto set_stream(std::ostream& os) -> StyledFormat& {
+        stream_.emplace<std::ostream*>(&os);
+        return *this;
+    }
+
+    /// @brief Prints with a temporary style to the stream.
+    template <concepts::style StyleT, typename... Args>
+    auto print(StyleT style, FormatString<Args...> fmt, Args&&... args)
+        -> StyledFormat& {
+        (check_arg<Args>(), ...);
+        ensure_context();
+        const AbsoluteStyle current =
+            detail::apply_style(current_style(), style);
+
+        if (!style.is_null()) output_style(style);
+        print_stream(
+            fmt,
+            process_arg(detail::StyledFormatContext(current, style_enabled()),
+                        std::forward<Args>(args))...);
+        if (!style.is_null()) output_style(current_style());
+        return *this;
+    }
+
+    template <typename... Args>
+    auto print(FormatString<Args...> fmt, Args&&... args) -> StyledFormat& {
+        print(null_style, fmt, std::forward<Args>(args)...);
+        return *this;
+    }
+
+    // TODO: println
+  private:
+    template <typename... Args>
+    void print_stream(std::format_string<Args...> fmt, Args&&... args) const {
+        if (std::holds_alternative<FILE*>(stream_)) {
+            std::print(
+                std::get<FILE*>(stream_), fmt, std::forward<Args>(args)...);
+        } else if (std::holds_alternative<std::ostream*>(stream_)) {
+            std::print(*std::get<std::ostream*>(stream_),
+                       fmt,
+                       std::forward<Args>(args)...);
+        }
+    }
+
+    void output_style(concepts::style auto style) const {
+        if (!style_enabled()) return;
+        print_stream("{}", fallback_style(style));
+    }
+
+    void ensure_context() {
+        const auto update = update_context();
+        const AbsoluteStyle current = current_style();
+        if (update) output_style(*update);
+        if (current_is_pending_ && (!update || current != *update))
+            output_style(current);
+        current_is_pending_ = false;
+    }
+
+    stream_type stream_ = stream_type(std::in_place_type<FILE*>, stdout);
+
+#endif // DECO_ENABLE_PRINT
+};
+
+#ifdef DECO_ENABLE_PRINT
+
+/// @brief Creates a StyledFormat with context tracking enabled.
+/// @details equivalent to
+/// `StyledFormat().enable_context_tracking().set_stream(f)`
+inline auto styled_fmt(std::FILE* f = stdout) -> StyledFormat {
+    return StyledFormat().enable_context_tracking().set_stream(f);
+}
+
+/// @brief Creates a StyledFormat with context tracking enabled.
+/// @details equivalent to
+/// `StyledFormat().enable_context_tracking().set_stream(os)`
+inline auto styled_fmt(std::ostream& os) -> StyledFormat {
+    return StyledFormat().enable_context_tracking().set_stream(os);
+}
+
+#endif // DECO_ENABLE_PRINT
+
+}; // namespace deco
+
+#ifdef DECO_ENABLE_PRINT
+#undef DECO_ENABLE_PRINT
+#endif
+
+#endif // !DECOTERM_FORMAT_HPP
 

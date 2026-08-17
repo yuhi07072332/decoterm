@@ -20,9 +20,6 @@
 
 namespace deco {
 
-/// @brief Terminal color capability levels.
-enum class ColorSupport { true_color, color256, color16 };
-
 namespace terminal {
 
 inline auto is_stdout_tty() -> bool;
@@ -50,7 +47,7 @@ inline auto enable_virtual_terminal_mode() -> bool {
 
 // Based on https://github.com/termstandard/colors?tab=readme-ov-file
 [[nodiscard]]
-inline auto get_color_support() -> ColorSupport {
+inline auto get_color_support() -> ColorMode {
 #if defined(_WIN32)
     return ColorSupport::true_color;
 #else // POSIX
@@ -59,11 +56,11 @@ inline auto get_color_support() -> ColorSupport {
     std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
     if (contains(env_colorterm, "truecolor")
         || contains(env_colorterm, "24bit"))
-        return ColorSupport::true_color;
+        return ColorMode::true_color;
 
     // TODO:
 
-    return ColorSupport::color16;
+    return ColorMode::color16;
 #endif
 };
 
@@ -115,8 +112,8 @@ inline auto is_stderr_tty() -> bool {
 
 /// @brief Returns the detected color support of teh current terminal.
 [[nodiscard]]
-inline auto color_support() -> ColorSupport {
-    static ColorSupport s_color_support = detail::get_color_support();
+inline auto color_support() -> ColorMode {
+    static ColorMode s_color_support = detail::get_color_support();
     return s_color_support;
 }
 

@@ -90,18 +90,18 @@ namespace detail {
 template <typename, concepts::style>
 struct StyledRef;
 
+template <typename T>
+struct is_styled_ref : std::false_type {};
+
+template <typename T, concepts::style StyleT>
+struct is_styled_ref<detail::StyledRef<T, StyleT>> : std::true_type {};
+
 } // namespace detail
 
 namespace concepts {
 
 template <typename T>
-struct is_styled_ref : std::false_type {};
-
-template <typename T, style StyleT>
-struct is_styled_ref<detail::StyledRef<T, StyleT>> : std::true_type {};
-
-template <typename T>
-concept styled_ref = is_styled_ref<std::remove_cvref_t<T>>::value;
+concept styled_ref = detail::is_styled_ref<std::remove_cvref_t<T>>::value;
 
 } // namespace concepts
 

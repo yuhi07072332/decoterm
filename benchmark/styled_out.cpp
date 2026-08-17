@@ -8,6 +8,7 @@ auto main(int argc, const char** argv) -> int {
     std::ostringstream os;
     StyledOstream styled_os = StyledOstream(os);
     StyledOstream styled_os_ctx = styled_out(os);
+    StyledOstream styled_os_ctx_fallback = styled_out(os).set_color_mode(ColorMode::color16);
 
     StyledFormat sfmt = StyledFormat().set_stream(os);
     StyledFormat sfmt_ctx = styled_fmt(os);
@@ -20,7 +21,11 @@ auto main(int argc, const char** argv) -> int {
                 Entry("ostream Style", [&] { os << fg(blue) << reset; }),
                 Entry("StyledOstream", [&] { styled_os << fg(blue) << reset; }),
                 Entry("StyledOs(w/ context)",
-                      [&] { styled_os_ctx << fg(blue) << reset; })}},
+                      [&] { styled_os_ctx << fg(blue) << reset; }),
+                Entry("StyledOs(w/ c & f)",
+                      [&] { styled_os_ctx_fallback << fg(blue) << reset; })
+            }
+        },
 
         Section {
             "StyledFormat",

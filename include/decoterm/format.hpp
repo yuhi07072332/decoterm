@@ -190,7 +190,7 @@ using FormatString = std::format_string<detail::processed_arg_t<Args>...>;
 /// `std::formatter` support.
 /// @details Format arguments cannot contain Style types, reset, or pop. Use
 /// print(style, ...), styled(), push(), reset(), or pop() instead.
-class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
+class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
     using stream_type = std::variant<std::FILE*, std::ostream*>;
 
   public:
@@ -294,8 +294,8 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
     template <std::output_iterator<const char&> OutputIt,
               concepts::style StyleT>
     auto output_style(OutputIt out, StyleT style) const -> OutputIt {
-        if (style_enabled()) return style.to_escape(out);
-        return out;
+        if (!style_enabled()) return out;
+        return fallback_style(style).to_escape(out);
     }
 
     template <std::output_iterator<const char&> OutputIt>
@@ -368,7 +368,7 @@ class StyledFormat : public StyleState, public StyleStateOption<StyledFormat> {
 
     void output_style(concepts::style auto style) const {
         if (!style_enabled()) return;
-        print_stream("{}", style);
+        print_stream("{}", fallback_style(style));
     }
 
     void ensure_context() {

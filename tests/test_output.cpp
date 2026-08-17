@@ -11,7 +11,7 @@ namespace {
 
 struct TestStyleState
     : public deco::StyleState,
-      public deco::StyleStateOption<TestStyleState> {
+      public deco::StyleStateSetter<TestStyleState> {
     using deco::StyleState::pop_style;
     using deco::StyleState::push_style;
     using deco::StyleState::reset_style;

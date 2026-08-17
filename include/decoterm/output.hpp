@@ -6,6 +6,7 @@
 #ifndef DECOTERM_OUTPUT_HPP
 #define DECOTERM_OUTPUT_HPP
 
+#include "color_info.hpp"
 #include "style.hpp"
 
 #include <array>
@@ -13,8 +14,8 @@
 #include <ostream>
 #include <type_traits>
 #include <utility>
-#include <vector>
 #include <variant>
+#include <vector>
 
 namespace deco {
 
@@ -48,10 +49,12 @@ inline const style_output_context_t* g_style_output_context = nullptr;
 /// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
 /// if the size exceeds N.
 class StyleStack {
+    // OPTIMIZE: using std::variant is a bit slow
     static constexpr std::size_t N = 5;
 
     using stack_storage = std::array<AbsoluteStyle, N>;
     using heap_storage = std::vector<AbsoluteStyle>;
+
   public:
     StyleStack() = default;
 
@@ -69,8 +72,8 @@ class StyleStack {
         if (is_heap()) {
             heap().push_back(style);
             return;
-        } 
-        if (size_== N + 1) {
+        }
+        if (size_ == N + 1) {
             grow();
             heap().push_back(style);
             return;
@@ -99,17 +102,13 @@ class StyleStack {
         return std::get<stack_storage>(storage_);
     }
 
-    auto stack() -> stack_storage& {
-        return std::get<stack_storage>(storage_);
-    }
+    auto stack() -> stack_storage& { return std::get<stack_storage>(storage_); }
 
     auto heap() const -> const heap_storage& {
         return std::get<heap_storage>(storage_);
     }
 
-    auto heap() -> heap_storage& {
-        return std::get<heap_storage>(storage_);
-    }
+    auto heap() -> heap_storage& { return std::get<heap_storage>(storage_); }
 
     void grow() {
         stack_storage tmp_stor = stack();
@@ -122,8 +121,56 @@ class StyleStack {
 
 /* ----- color fallback ----- */
 
-constexpr auto color_fallback_to_16(Color color) -> Color {
-    
+using color_fallback_fn = auto (*)(Color) -> Color;
+
+// TODO: replace this with better algorithm
+constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
+    const uint8_t dr = lhs.r - rhs.r;
+    const uint8_t dg = lhs.g - rhs.g;
+    const uint8_t db = lhs.b - rhs.b;
+    return (2 * (dr * dr)) + (4 * (db * db)) + (3 * (dg * dg));
+}
+
+constexpr auto fallback_to_16(Color color) -> Color {
+    const ColorType type = color.type();
+    if (type == ColorType::null || type == ColorType::default_color)
+        return color;
+
+    RGB rgb; // NOLINT
+    if (type == ColorType::terminal_color) {
+        const uint8_t index = color.data()[0]; 
+        if (index < 16) return color;
+        rgb = color_info[index];
+    } else if (type == ColorType::true_color) {
+        const auto [r, g, b] = color.data();
+        rgb = RGB(r, g, b);
+    }
+
+    int closest = (256 * 256) * 3; // max distance
+    uint8_t closest_idx = 0;
+    for (uint8_t i = 0; i < 16; ++i) {
+        int distance = rgb_distance(rgb, color_info[i]);
+        if (distance < closest) {
+            closest = distance;
+            closest_idx = i;
+        }
+    }
+
+    return {closest_idx};
+}
+
+constexpr auto fallback_to_256(Color color) -> Color {
+    // TODO:
+    return color;
+}
+
+constexpr auto fallback(Style style, color_fallback_fn fallback_fn) -> Style {
+    return {style.emphasis(), fallback_fn(style.fg()), fallback_fn(style.bg())};
+}
+
+constexpr auto fallback(AbsoluteStyle style, color_fallback_fn fallback_fn)
+    -> AbsoluteStyle {
+    return abs(fallback(style.style, fallback_fn));
 }
 
 } // namespace detail
@@ -131,6 +178,9 @@ constexpr auto color_fallback_to_16(Color color) -> Color {
 // ╔═════════════════════════════════════════════════════════╗
 // ║                       StyleState                        ║
 // ╚═════════════════════════════════════════════════════════╝
+
+/// @brief Terminal color capability levels.
+enum class ColorMode : uint8_t { color16 = 0, color256 = 1, true_color = 2 };
 
 /// @brief Represents style output state.
 ///
@@ -167,9 +217,7 @@ class StyleState { // NOLINT
         return *this;
     }
 
-    ~StyleState() {
-        try_clean_context();
-    }
+    ~StyleState() { try_clean_context(); }
 
     [[nodiscard]]
     auto base_style() const -> Style {
@@ -179,6 +227,11 @@ class StyleState { // NOLINT
     [[nodiscard]]
     auto style_enabled() const -> bool {
         return style_enabled_;
+    }
+
+    [[nodiscard]]
+    auto color_mode() const -> ColorMode {
+        return color_mode_;
     }
 
     [[nodiscard]]
@@ -202,8 +255,8 @@ class StyleState { // NOLINT
         stack_.push(abs(current_style().style | style));
     }
 
-    /// @brief Updates the context if context tracking is enabled; otherwise only
-    /// checks whether the base style changed.
+    /// @brief Updates the context if context tracking is enabled; otherwise
+    /// only checks whether the base style changed.
     /// @returns The Style to emit when context or base style changed
     auto update_context() -> std::optional<AbsoluteStyle> {
         if (!context_tracking_enabled_) {
@@ -226,18 +279,31 @@ class StyleState { // NOLINT
 
     void try_clean_context() const {
         if (!context_tracking_enabled_) return;
-        if (detail::g_style_output_context == &context_) 
+        if (detail::g_style_output_context == &context_)
             detail::g_style_output_context = nullptr;
+    }
+
+    template <concepts::style StyleT>
+    auto fallback_style(StyleT style) const -> StyleT {
+        switch (color_mode()) {
+        case ColorMode::color16:
+            return detail::fallback(style, detail::fallback_to_16);
+        case ColorMode::color256:
+            return detail::fallback(style, detail::fallback_to_256);
+        default:
+            return style;
+        }
     }
 
   private:
     template <typename>
-    friend class StyleStateOption;
+    friend class StyleStateSetter;
 
     void copy_from(const StyleState& other) {
         base_style_ = other.base_style_;
         stack_ = other.stack_;
         style_enabled_ = other.style_enabled_;
+        color_mode_ = other.color_mode_;
         context_tracking_enabled_ = other.context_tracking_enabled_;
         base_style_changed_ = other.base_style_changed_;
         context_ = other.context_;
@@ -247,57 +313,65 @@ class StyleState { // NOLINT
         base_style_ = other.base_style_;
         stack_ = std::move(other.stack_);
         style_enabled_ = other.style_enabled_;
+        color_mode_ = other.color_mode_;
         context_tracking_enabled_ = other.context_tracking_enabled_;
         base_style_changed_ = other.base_style_changed_;
         context_ = other.context_;
     }
 
+    // config
     AbsoluteStyle base_style_ = abs(null_style);
-    detail::StyleStack stack_;
-
+    ColorMode color_mode_ = ColorMode::true_color;
     bool style_enabled_ = true;
     bool context_tracking_enabled_ = false;
 
+    // state
     bool base_style_changed_ = true;
     detail::style_output_context_t context_;
+    detail::StyleStack stack_;
 };
 
 /// @brief CRTP class that provides chainable StyleState options
-template <typename Derived>
-class StyleStateOption {
+template <typename Self>
+class StyleStateSetter {
   public:
     /// @brief Enable or disable style output.
-    auto enable_style(bool enable = true) -> Derived& {
+    auto enable_style(bool enable = true) -> Self& {
         state().style_enabled_ = enable;
-        return underlying();
+        return self();
     }
 
     /// @brief Enable or disable context tracking.
-    auto enable_context_tracking(bool enable = true) -> Derived& {
+    auto enable_context_tracking(bool enable = true) -> Self& {
         if (state().context_tracking_enabled_ && !enable) {
             state().try_clean_context();
         }
         state().context_tracking_enabled_ = enable;
-        return underlying();
+        return self();
+    }
+
+    auto set_color_mode(ColorMode color_mode) -> Self& {
+        state().color_mode_ = color_mode;
+        return self();
     }
 
     /// @brief Set the base style for this output state.
-    auto set_base_style(Style base) -> Derived& {
+    auto set_base_style(Style base) -> Self& {
         state().base_style_ = abs(base);
         state().base_style_changed_ = true;
-        return underlying();
+        return self();
     }
 
   private:
-    friend Derived;
+    friend Self;
 
-    StyleStateOption() = default;
+    StyleStateSetter() = default;
 
     auto state() -> StyleState& {
-        return static_cast<StyleState&>(static_cast<Derived&>(*this));
+        return static_cast<StyleState&>(static_cast<Self&>(*this));
     }
 
-    auto underlying() -> Derived& { return static_cast<Derived&>(*this); }
+    auto self() -> Self& { return static_cast<Self&>(*this); }
 };
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -313,7 +387,7 @@ inline constexpr style_pop_t pop;
 /// @warning The passed std::ostream object must outlive this object.
 /// @see `StyleState`
 class StyledOstream : public StyleState,
-                      public StyleStateOption<StyledOstream> {
+                      public StyleStateSetter<StyledOstream> {
   public:
     StyledOstream(std::ostream& os) : ostream_(&os) {}
 
@@ -402,9 +476,9 @@ class StyledOstream : public StyleState,
     friend auto operator<<(StyledOstream& out,
                            std::ostream& (*fn)(std::ostream&))
         -> StyledOstream& {
-        // `std::operator<<(std::ostream& os, std::ostream&(*fn)(std::ostream&))`
-        // returns `fn(os)` instead of `os`, so we should assume that it may
-        // return a different std::ostream&.
+        // `std::operator<<(std::ostream& os,
+        // std::ostream&(*fn)(std::ostream&))` returns `fn(os)` instead of `os`,
+        // so we should assume that it may return a different std::ostream&.
         out.ensure_context();
         out.ostream_ = &(out.ostream() << fn);
         return out;
@@ -422,7 +496,8 @@ class StyledOstream : public StyleState,
     }
 
     void output_style(concepts::style auto style) const {
-        if (style_enabled()) *ostream_ << style;
+        if (!style_enabled()) return;
+        ostream() << fallback_style(style);
     }
 
     std::ostream* ostream_;

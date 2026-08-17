@@ -11,33 +11,33 @@
 using namespace deco;
 
 constexpr std::array<std::string_view, 16> color_names {
-    "Black",
-    "Red",
-    "Green",
-    "Yellow",
-    "Blue",
-    "Magenta",
-    "Cyan",
-    "White",
-    "BlackLight",
-    "RedLight",
-    "GreenLight",
-    "YellowLight",
-    "BlueLight",
-    "MagentaLight",
-    "CyanLight",
-    "WhiteLight",
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+    "bright_black",
+    "bright_red",
+    "bright_green",
+    "bright_yellow",
+    "bright_blue",
+    "bright_magenta",
+    "bright_cyan",
+    "bright_white"
 };
 
 constexpr std::array<std::string_view, 8> style_names {
-    "Bold",
-    "Dim",
-    "Italic",
-    "Underline",
-    "Blink",
-    "Invert",
-    "Strikethrough",
-    "UnderlineDouble",
+    "bold",
+    "dim",
+    "italic",
+    "underline",
+    "blink",
+    "invert",
+    "strikethrough",
+    "underline_double"
 };
 
 void print_color_cell(int color_index, bool is_fg_white) {
@@ -182,4 +182,24 @@ auto main() -> int {
     dout << "disabled: ";
     out.enable_style(false);
     out << fg(blue) << "lorem" << (bold | underline) << "ipsum" << pop << "dolor" << pop << "sit\n";
+
+    dout << styled("\n[Color fallback]\n", style_h2);
+
+    out.enable_style();
+    for (int v = 0; v < 256; v += 16) {
+        for (int h = 0; h < 360; h += 4) {
+            out << color(hsv(h, 255, v), hsv(h, 255, v + 8)) << "▀";
+        }
+        out << reset << '\n';
+    }
+
+    out.set_color_mode(ColorMode::color16);
+    for (int v = 0; v < 256; v += 16) {
+        for (int h = 0; h < 360; h += 4) {
+            out << color(hsv(h, 255, v), hsv(h, 255, v + 8)) << "▀";
+        }
+        out << reset << '\n';
+    }
+
+    
 }
