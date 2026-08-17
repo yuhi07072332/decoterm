@@ -6,6 +6,7 @@ ColumnLimit: 80
 
 AlignOperands: Align
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+BreakAfterReturnType: Automatic
 BreakBeforeBinaryOperators: NonAssignment
 BreakTemplateDeclarations: Leave
 FixNamespaceComments: true
@@ -15,3 +16,4 @@ BinPackArguments: false
 BinPackParameters: OnePerLine
 PackConstructorInitializers: CurrentLine
 PointerAlignment: Left
+PenaltyReturnTypeOnItsOwnLine: 1000

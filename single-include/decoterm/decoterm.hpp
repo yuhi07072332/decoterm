@@ -157,9 +157,10 @@ constexpr auto write_to(OutputIt out, uint8_t value) {
 }
 
 template <std::output_iterator<const char&> OutputIt>
-constexpr auto
-color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
-    -> OutputIt {
+constexpr auto color_to_sgr_params(OutputIt out,
+                                   bool is_bg,
+                                   ColorType type,
+                                   ColorData data) -> OutputIt {
     switch (type) {
     case ColorType::null:
         return out;
@@ -1577,7 +1578,17 @@ class StyledOstream : public StyleState,
 
     /// @brief output operator for IO manipulators
     friend auto operator<<(StyledOstream& out,
-                           std::ios_base& (*fn)(std::ios_base&))
+                           auto (*fn)(std::ios_base&)->std::ios_base&)
+        -> StyledOstream& {
+        out.ensure_context();
+        out.ostream() << fn;
+        return out;
+    }
+
+    /// @brief output operator for IO manipulators
+    friend auto operator<<(
+        StyledOstream& out,
+        auto (*fn)(std::basic_ios<char>&)->std::basic_ios<char>&)
         -> StyledOstream& {
         out.ensure_context();
         out.ostream() << fn;
@@ -1586,16 +1597,7 @@ class StyledOstream : public StyleState,
 
     /// @brief output operator for IO manipulators
     friend auto operator<<(StyledOstream& out,
-                           std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
-        -> StyledOstream& {
-        out.ensure_context();
-        out.ostream() << fn;
-        return out;
-    }
-
-    /// @brief output operator for IO manipulators
-    friend auto operator<<(StyledOstream& out,
-                           std::ostream& (*fn)(std::ostream&))
+                           auto (*fn)(std::ostream&)->std::ostream&)
         -> StyledOstream& {
         // `std::operator<<(std::ostream& os,
         // std::ostream&(*fn)(std::ostream&))` returns `fn(os)` instead of `os`,

@@ -153,9 +153,10 @@ constexpr auto write_to(OutputIt out, uint8_t value) {
 }
 
 template <std::output_iterator<const char&> OutputIt>
-constexpr auto
-color_to_sgr_params(OutputIt out, bool is_bg, ColorType type, ColorData data)
-    -> OutputIt {
+constexpr auto color_to_sgr_params(OutputIt out,
+                                   bool is_bg,
+                                   ColorType type,
+                                   ColorData data) -> OutputIt {
     switch (type) {
     case ColorType::null:
         return out;
