@@ -46,12 +46,13 @@ inline const style_output_context_t* g_style_output_context = nullptr;
 
 /* ----- StyleStack ----- */
 
-/// @brief Represents a small-vector like `AbsoluteStyle` stack.
+/// @brief A stack that can store single or multiple `AbsoluteStyle`.
 /// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
 /// if the size exceeds N.
 class StyleStack {
   public:
     static constexpr std::size_t N = 5;
+    static_assert(N > 1);
 
     StyleStack() = default;
     StyleStack(const StyleStack& other) { copy_from(other); }
@@ -72,6 +73,7 @@ class StyleStack {
     ~StyleStack() = default;
 
     auto base() const -> AbsoluteStyle { return base_; }
+    auto is_single() const -> bool { return is_single_; }
 
     auto top() const -> AbsoluteStyle {
         if (size_) return data_[size_ - 1];
@@ -79,7 +81,13 @@ class StyleStack {
     }
 
     void push(AbsoluteStyle style) {
-        if (size_ == capacity_) grow();
+        if (size_ == capacity_) {
+            grow();
+        } else if (is_single_) {
+            size_ = 1;
+            data_[0] = style;
+            return;
+        }
         data_[size_++] = style; // NOLINT
     }
 
@@ -90,6 +98,16 @@ class StyleStack {
     void clear() { size_ = 0; }
 
     void set_base(AbsoluteStyle base) { base_ = base; }
+
+    void to_single() {
+        if (size_) {
+            local_[0] = top();
+            size_ = 1;
+        }
+        data_ = local_.data();
+    }
+
+    void to_multiple() { is_single_ = false; }
 
   private:
     auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
@@ -108,6 +126,7 @@ class StyleStack {
         size_ = other.size_;
         capacity_ = other.capacity_;
         base_ = other.base_;
+        is_single_ = other.is_single_;
     }
 
     void move_from(StyleStack&& other) noexcept {
@@ -122,6 +141,7 @@ class StyleStack {
         size_ = other.size_;
         capacity_ = other.capacity_;
         base_ = other.base_;
+        is_single_ = other.is_single_;
 
         other.size_ = 0;
         other.capacity_ = N;
@@ -144,6 +164,7 @@ class StyleStack {
     std::size_t capacity_ = N;
 
     AbsoluteStyle base_ = AbsoluteStyle();
+    bool is_single_ = true;
 };
 
 /* ----- color fallback ----- */
@@ -247,30 +268,19 @@ class StyleState { // NOLINT
 
     ~StyleState() { try_clean_context(); }
 
-    [[nodiscard]]
-    auto base_style() const -> Style {
-        return stack_.base().style;
-    }
+    auto base_style() const -> Style { return stack_.base().style; }
 
-    [[nodiscard]]
-    auto style_enabled() const -> bool {
-        return style_enabled_;
-    }
+    auto style_enabled() const -> bool { return style_enabled_; }
 
-    [[nodiscard]]
-    auto color_mode() const -> ColorMode {
-        return color_mode_;
-    }
+    auto nesting_enabled() const -> bool { return !stack_.is_single(); }
 
-    [[nodiscard]]
+    auto color_mode() const -> ColorMode { return color_mode_; }
+
     auto context_tracking_enabled() const -> bool {
         return context_tracking_enabled_;
     }
 
-    [[nodiscard]]
-    auto current_style() const -> AbsoluteStyle {
-        return stack_.top();
-    }
+    auto current_style() const -> AbsoluteStyle { return stack_.top(); }
 
   protected:
     void pop_style() { stack_.pop(); }
@@ -363,6 +373,15 @@ class StyleStateSetter {
     /// @brief Enable or disable style output.
     auto enable_style(bool enable = true) -> Self& {
         state().style_enabled_ = enable;
+        return self();
+    }
+
+    auto enable_nesting(bool enable = true) -> Self& {
+        if (!state().nesting_enabled() && enable) {
+            state().stack_.to_multiple();
+        } else if (state().nesting_enabled() && !enable) {
+            state().stack_.to_single();
+        }
         return self();
     }
 

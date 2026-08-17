@@ -99,13 +99,18 @@ TEST_CASE("StyleState: options") {
     StyledOstream state(std::cout);
 
     CHECK(state.style_enabled());
+    CHECK_FALSE(state.nesting_enabled());
     CHECK_FALSE(state.context_tracking_enabled());
     CHECK(state.base_style() == null_style);
     CHECK(state.current_style().style == null_style);
 
-    state.enable_style(false).enable_context_tracking(true).set_base_style(fg(blue));
+    state.enable_style(false)
+        .enable_nesting()
+        .enable_context_tracking()
+        .set_base_style(fg(blue));
 
     CHECK_FALSE(state.style_enabled());
+    CHECK(state.nesting_enabled());
     CHECK(state.context_tracking_enabled());
     CHECK(state.base_style() == fg(blue));
     CHECK(state.current_style().style == fg(blue));
@@ -132,7 +137,8 @@ TEST_CASE("StyleState: nested style state") {
     using namespace deco;
 
     TestStyleState state;
-    state.set_base_style(fg(blue));
+    state.set_base_style(fg(blue))
+        .enable_nesting();
 
     CHECK(state.current_style().style == fg(blue));
 
@@ -166,6 +172,7 @@ TEST_CASE("StyleState: StyleStack grows to heap") {
     using namespace deco;
 
     TestStyleState state;
+    state.enable_nesting();
 
     for (int i = 0; i < 5; ++i) {
         state.push_style(fg(i));
@@ -183,6 +190,7 @@ TEST_CASE("StyleState: StyleStack grows more than once") {
     using namespace deco;
 
     TestStyleState state;
+    state.enable_nesting();
 
     for (int i = 0; i < 12; ++i) {
         state.push_style(fg(i));
@@ -199,7 +207,8 @@ TEST_CASE("StyleState: move preserves local StyleStack") {
     using namespace deco;
 
     TestStyleState source;
-    source.set_base_style(fg(blue));
+    source.set_base_style(fg(blue)).enable_nesting();
+
     source.push_style(bold);
     source.push_style(italic);
 
@@ -208,7 +217,6 @@ TEST_CASE("StyleState: move preserves local StyleStack") {
     CHECK(moved.current_style().style == (fg(blue) | bold | italic));
 
     source.push_style(fg(red));
-    std::cerr << "line: "<< __LINE__ << '\n';
     CHECK(source.current_style().style == fg(red));
 }
 
@@ -216,7 +224,8 @@ TEST_CASE("StyleState: move preserves heap StyleStack") {
     using namespace deco;
 
     TestStyleState source;
-    source.set_base_style(fg(blue));
+    source.set_base_style(fg(blue))
+        .enable_nesting();
     for (int i = 0; i < 6; ++i) {
         source.push_style(fg(i));
     }
@@ -251,6 +260,7 @@ TEST_CASE("StyleState: copy assigns heap StyleStack") {
     using namespace deco;
 
     TestStyleState source;
+    source.enable_nesting();
     for (int i = 0; i < 6; ++i) {
         source.push_style(fg(i));
     }
@@ -355,7 +365,7 @@ TEST_CASE("StyledOstream: restores nested styles") {
 
     std::ostringstream os;
     StyledOstream styled_os =
-        styled_out(os).set_base_style(fg(blue));
+        styled_out(os).set_base_style(fg(blue)).enable_nesting();
 
     styled_os << bold << "bold" << fg(red) << "red bold" << pop << "blue bold"
               << pop << "blue";

@@ -206,7 +206,7 @@ TEST_CASE("format: StyledFormat: style nesting") {
     using namespace deco;
 
     StyledFormat sfmt =
-        StyledFormat().set_base_style(fg(white));
+        StyledFormat().set_base_style(fg(white)).enable_nesting();
     std::string out;
 
     sfmt.format_to(std::back_inserter(out), "{}", "base");

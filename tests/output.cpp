@@ -157,6 +157,8 @@ auto main() -> int {
     out << abs(null_style) << "\n\n" 
         << style_h2 << "[Style nesting]\n\n" << reset;
 
+    out.enable_nesting();
+
     out << "base style "
         << (italic | fg(bright_red)) << "{ italic | fg(bright_red) "
         << (underline | color(bright_yellow, default_color)) << "{ underline | color(bright_yellow, default_color) }"

@@ -37,8 +37,8 @@ auto main() -> int {
     // StyledOstream: ostream wrapper with style output states.
     StyledOstream sout = styled_out(std::cout)
         .set_base_style(bg(rgb(32, 32, 32)))
-        //Enable style output only when stdout is a TTY.
-        .enable_style(terminal::is_stdout_tty());
+        .enable_style(terminal::is_stdout_tty())
+        .enable_nesting();
 
     // Style nesting
     sout << "base style "
