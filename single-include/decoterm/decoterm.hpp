@@ -1167,7 +1167,6 @@ class StyleStack {
 
     ~StyleStack() = default;
 
-
     [[nodiscard]]
     auto top() const -> std::optional<AbsoluteStyle> {
         if (size_) return data_[size_ - 1];
@@ -1189,41 +1188,44 @@ class StyleStack {
     auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
 
     void copy_from(const StyleStack& other) {
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        if (!other.is_heap()) {
+        if (other.is_heap()) {
+            heap_ = std::make_unique<AbsoluteStyle[]>(other.capacity_);
+            std::memcpy(heap_.get(),
+                        other.heap_.get(),
+                        sizeof(AbsoluteStyle) * other.size_);
+            data_ = heap_.get();
+        } else {
             local_ = other.local_;
             data_ = local_.data();
-            return;
         }
-        heap_ = std::make_unique_for_overwrite<AbsoluteStyle[]>(capacity_);
-        std::memcpy(heap_.get(),
-                    other.heap_.get(),
-                    sizeof(AbsoluteStyle) * other.size_);
-        data_ = heap_.get();
+        size_ = other.size_;
+        capacity_ = other.capacity_;
     }
 
     void move_from(StyleStack&& other) noexcept {
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        other.size_ = 0;
-        other.capacity_ = N;
-        other.data_ = nullptr;
-
-        if (!other.is_heap()) {
+        if (other.is_heap()) {
+            heap_ = std::move(other.heap_);
+            data_ = heap_.get();
+        } else {
             local_ = other.local_;
             data_ = local_.data();
-            return;
         }
-        heap_ = std::move(other.heap_);
-        data_ = heap_.get();
+
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+
+        other.size_ = 0;
+        other.capacity_ = N;
+        other.data_ = other.local_.data();
     }
 
     void grow() {
-        capacity_ *= 2;
-        heap_ = std::make_unique_for_overwrite<AbsoluteStyle[]>(capacity_);
-        std::memcpy(heap_.get(), data_, sizeof(AbsoluteStyle) * size_);
+        auto new_heap =
+            std::make_unique<AbsoluteStyle[]>(capacity_ * 2);
+        std::memcpy(new_heap.get(), data_, sizeof(AbsoluteStyle) * size_);
+        heap_ = std::move(new_heap);
         data_ = heap_.get();
+        capacity_ *= 2;
     }
 
     std::array<AbsoluteStyle, N> local_;

@@ -200,6 +200,4 @@ auto main() -> int {
         }
         out << reset << '\n';
     }
-
-    
 }

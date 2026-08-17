@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -21,6 +22,9 @@ struct TestStyleState
 
     TestStyleState(const StyleState& other)
         : StyleState(other) {}
+
+    TestStyleState(StyleState&& other)
+        : StyleState(std::move(other)) {}
 };
 
 
@@ -173,6 +177,92 @@ TEST_CASE("StyleState: StyleStack grows to heap") {
         state.pop_style();
         CHECK(state.current_style().style == fg(i));
     }
+}
+
+TEST_CASE("StyleState: StyleStack grows more than once") {
+    using namespace deco;
+
+    TestStyleState state;
+
+    for (int i = 0; i < 12; ++i) {
+        state.push_style(fg(i));
+        CHECK(state.current_style().style == fg(i));
+    }
+
+    for (int i = 10; i >= 0; --i) {
+        state.pop_style();
+        CHECK(state.current_style().style == fg(i));
+    }
+}
+
+TEST_CASE("StyleState: move preserves local StyleStack") {
+    using namespace deco;
+
+    TestStyleState source;
+    source.set_base_style(fg(blue));
+    source.push_style(bold);
+    source.push_style(italic);
+
+    TestStyleState moved(std::move(source));
+
+    CHECK(moved.current_style().style == (fg(blue) | bold | italic));
+
+    source.push_style(fg(red));
+    std::cerr << "line: "<< __LINE__ << '\n';
+    CHECK(source.current_style().style == fg(red));
+}
+
+TEST_CASE("StyleState: move preserves heap StyleStack") {
+    using namespace deco;
+
+    TestStyleState source;
+    source.set_base_style(fg(blue));
+    for (int i = 0; i < 6; ++i) {
+        source.push_style(fg(i));
+    }
+
+    TestStyleState moved(std::move(source));
+
+    CHECK(moved.current_style().style == fg(5));
+
+    source.push_style(fg(red));
+    CHECK(source.current_style().style == fg(red));
+}
+
+TEST_CASE("StyleState: copy assigns local StyleStack") {
+    using namespace deco;
+
+    TestStyleState source;
+    source.set_base_style(fg(blue));
+    source.push_style(bold);
+
+    TestStyleState target;
+    target.set_base_style(fg(red));
+    target = source;
+
+    CHECK(target.current_style().style == (fg(blue) | bold));
+
+    target.push_style(italic);
+    CHECK(target.current_style().style == (fg(blue) | bold | italic));
+    CHECK(source.current_style().style == (fg(blue) | bold));
+}
+
+TEST_CASE("StyleState: copy assigns heap StyleStack") {
+    using namespace deco;
+
+    TestStyleState source;
+    for (int i = 0; i < 6; ++i) {
+        source.push_style(fg(i));
+    }
+
+    TestStyleState target;
+    target = source;
+
+    CHECK(target.current_style().style == fg(5));
+
+    target.push_style(italic);
+    CHECK(target.current_style().style == (fg(5) | italic));
+    CHECK(source.current_style().style == fg(5));
 }
 
 TEST_CASE("StyledOstream: write plain values") {
