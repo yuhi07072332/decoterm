@@ -754,6 +754,7 @@ class StyleStack {
             size_ = 1;
         }
         data_ = local_.data();
+        is_single_ = true;
     }
 
     void to_multiple() { is_single_ = false; }

@@ -116,7 +116,9 @@ enum class ColorMode : uint8_t { color16 = 0, color256 = 1, true_color = 2 };
 /// @see `g_style_output_context`, `StyledOstream`, `StyledFormat`
 class StyleState { // NOLINT
   public:
-    StyleState() = default;
+    StyleState() {
+        stack_.to_single();
+    }
 
     StyleState(const StyleState& other) {
         if (!other.context_tracking_enabled_) try_clean_context();
