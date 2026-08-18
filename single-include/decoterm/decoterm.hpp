@@ -288,7 +288,7 @@ struct Color {
     ///     /* ... */
     /// }
     /// ```
-    constexpr auto data() const -> detail::ColorData { return data_; }
+    constexpr auto data() const -> const detail::ColorData& { return data_; }
 
     [[nodiscard]]
     auto to_escape(bool is_bg) const -> std::string {

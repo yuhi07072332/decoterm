@@ -18,12 +18,12 @@ auto main(int argc, const char** argv) -> int {
             "StyledOstream",
             Entry("ostream raw escape code", [&] { os << "\x1b[34m\x1b[m"; }),
             EntryCompare {
-                Entry("ostream Style", [&] { os << fg(rgb(32, 64, 128)) << reset; }),
-                Entry("StyledOstream", [&] { styled_os << fg(rgb(32, 64, 128)) << reset; }),
+                Entry("ostream Style", [&] { os << fg(blue) << reset; }),
+                Entry("StyledOstream", [&] { styled_os << fg(blue) << reset; }),
                 Entry("StyledOs(w/ context)",
-                      [&] { styled_os_ctx << fg(rgb(32, 64, 128)) << reset; }),
+                      [&] { styled_os_ctx << fg(blue) << reset; }),
                 Entry("StyledOs(w/ c & f)",
-                      [&] { styled_os_ctx_fallback << fg(rgb(32, 64, 128)) << reset; })
+                      [&] { styled_os_ctx_fallback << fg(blue) << reset; })
             }
         },
 
