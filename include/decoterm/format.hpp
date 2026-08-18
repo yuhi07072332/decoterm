@@ -76,13 +76,13 @@ struct FStyledRef {
 template <typename Arg>
 constexpr auto process_arg(detail::StyledFormatContext context, Arg&& arg)
     -> decltype(auto) {
-    if constexpr (concepts::styled_ref<Arg>) {
+    if constexpr (concepts::styled<Arg>) {
         return FStyledRef(arg, context);
     } else return std::forward<Arg>(arg); // NOLINT
 }
 
 template <typename Arg>
-using processed_arg_t = std::conditional_t<concepts::styled_ref<Arg>,
+using processed_arg_t = std::conditional_t<concepts::styled<Arg>,
                                            FStyledRef<std::remove_cvref_t<Arg>>,
                                            Arg>;
 
@@ -279,7 +279,7 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
     template <typename Arg>
     static consteval void check_arg() {
         using arg_type = std::remove_cvref_t<Arg>;
-        if constexpr (concepts::styled_ref<arg_type>)
+        if constexpr (concepts::styled<arg_type>)
             detail::check_styled_ref<Arg>();
         else
             static_assert(

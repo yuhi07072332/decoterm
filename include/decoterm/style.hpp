@@ -34,9 +34,11 @@
 #include <iterator>
 #include <memory>
 #include <ostream>
+#include <pstl/glue_algorithm_defs.h>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <version>
 
@@ -87,16 +89,16 @@ concept ostream_outputable = requires(std::ostream& os, const T& value) {
 
 } // namespace concepts
 
-template <typename, concepts::style>
-struct StyledRef;
+template <concepts::style, typename...>
+struct Styled;
 
 namespace detail {
 
 template <typename T>
-struct is_styled_ref : std::false_type {};
+struct is_styled : std::false_type {};
 
-template <typename T, concepts::style StyleT>
-struct is_styled_ref<StyledRef<T, StyleT>> : std::true_type {};
+template <concepts::style StyleT, typename... Ts>
+struct is_styled<Styled<StyleT, Ts...>> : std::true_type {};
 
 } // namespace detail
 
@@ -104,7 +106,7 @@ namespace concepts {
 
 // Whether 'remove_cvref_t<T>' is a StyledRef.
 template <typename T>
-concept styled_ref = detail::is_styled_ref<std::remove_cvref_t<T>>::value;
+concept styled = detail::is_styled<std::remove_cvref_t<T>>::value;
 
 } // namespace concepts
 
@@ -196,13 +198,6 @@ constexpr auto color_to_sgr_params(OutputIt out,
 }
 
 /* ----- StyledRef ----- */
-
-template <concepts::styled_ref StyledRefT>
-consteval void check_styled_ref() {
-    static_assert(!std::is_lvalue_reference_v<StyledRefT>,
-                  "deco::detail::StyledRef: Cannot pass StyledRef as an lvalue "
-                  "reference.");
-}
 
 } // namespace detail
 
@@ -690,6 +685,15 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::underline_doub
 
 namespace detail {
 
+template <concepts::style StyleT>
+constexpr auto apply_style(AbsoluteStyle current, StyleT style)
+    -> AbsoluteStyle {
+    using style_type = std::remove_cvref_t<StyleT>;
+    if constexpr (std::is_same_v<style_type, Style>)
+        return abs(current.style | style);
+    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
+}
+
 /* ----- StyleStack ----- */
 
 /// @brief A stack that can store single or multiple `AbsoluteStyle`.
@@ -699,37 +703,39 @@ namespace detail {
 /// changes first element.
 template <std::size_t N = 5>
 class StyleStack {
-  public:
     static_assert(N > 1);
 
+  public:
     // multiple by default
-    StyleStack() = default;
-    StyleStack(const StyleStack& other) { copy_from(other); }
-    StyleStack(StyleStack&& other) noexcept { move_from(std::move(other)); }
+    constexpr StyleStack() = default;
+    constexpr StyleStack(const StyleStack& other) { copy_from(other); }
+    constexpr StyleStack(StyleStack&& other) noexcept {
+        move_from(std::move(other));
+    }
 
-    auto operator=(const StyleStack& other) -> StyleStack& {
+    constexpr auto operator=(const StyleStack& other) -> StyleStack& {
         if (this == &other) return *this;
         copy_from(other);
         return *this;
     }
 
-    auto operator=(StyleStack&& other) noexcept -> StyleStack& {
+    constexpr auto operator=(StyleStack&& other) noexcept -> StyleStack& {
         if (this == &other) return *this;
         move_from(std::move(other));
         return *this;
     }
 
-    ~StyleStack() = default;
+    constexpr ~StyleStack() = default;
 
-    auto base() const -> AbsoluteStyle { return base_; }
-    auto is_single() const -> bool { return is_single_; }
+    constexpr auto base() const -> AbsoluteStyle { return base_; }
+    constexpr auto is_single() const -> bool { return is_single_; }
 
-    auto top() const -> AbsoluteStyle {
+    constexpr auto top() const -> AbsoluteStyle {
         if (size_) return data_[size_ - 1];
         return base_;
     }
 
-    void push(AbsoluteStyle style) {
+    constexpr void push(AbsoluteStyle style) {
         if (size_ == capacity_) {
             grow();
         } else if (is_single_) {
@@ -740,15 +746,15 @@ class StyleStack {
         data_[size_++] = style; // NOLINT
     }
 
-    void pop() {
+    constexpr void pop() {
         if (size_) size_--;
     }
 
-    void clear() { size_ = 0; }
+    constexpr void clear() { size_ = 0; }
 
-    void set_base(AbsoluteStyle base) { base_ = base; }
+    constexpr void set_base(AbsoluteStyle base) { base_ = base; }
 
-    void to_single() {
+    constexpr void to_single() {
         if (size_) {
             local_[0] = top();
             size_ = 1;
@@ -757,14 +763,17 @@ class StyleStack {
         is_single_ = true;
     }
 
-    void to_multiple() { is_single_ = false; }
+    constexpr void to_multiple() { is_single_ = false; }
 
   private:
-    auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
+    constexpr auto is_heap() const noexcept -> bool {
+        return data_ != local_.data();
+    }
 
-    void copy_from(const StyleStack& other) {
+    constexpr void copy_from(const StyleStack& other) {
         if (other.is_heap()) {
-            heap_ = std::make_unique<AbsoluteStyle[]>(other.capacity_);
+            heap_ = std::make_unique_for_overwrite<AbsoluteStyle[]>(
+                other.capacity_);
             std::memcpy(heap_.get(),
                         other.heap_.get(),
                         sizeof(AbsoluteStyle) * other.size_);
@@ -779,7 +788,7 @@ class StyleStack {
         is_single_ = other.is_single_;
     }
 
-    void move_from(StyleStack&& other) noexcept {
+    constexpr void move_from(StyleStack&& other) noexcept {
         if (other.is_heap()) {
             heap_ = std::move(other.heap_);
             data_ = heap_.get();
@@ -798,8 +807,9 @@ class StyleStack {
         other.data_ = other.local_.data();
     }
 
-    void grow() {
-        auto new_heap = std::make_unique<AbsoluteStyle[]>(capacity_ * 2);
+    constexpr void grow() {
+        auto new_heap =
+            std::make_unique_for_overwrite<AbsoluteStyle[]>(capacity_ * 2);
         std::memcpy(new_heap.get(), data_, sizeof(AbsoluteStyle) * size_);
         heap_ = std::move(new_heap);
         data_ = heap_.get();
@@ -817,50 +827,71 @@ class StyleStack {
     bool is_single_ = false;
 };
 
-} // namespace detail
+template <typename T>
+struct ConstRef {
+    constexpr ConstRef(const T& ref) : ref(ref) {}
 
-template <typename T, concepts::style StyleT>
-struct StyledRef {
-    using value_type = T;
+    constexpr auto get() const -> const T& { return ref; }
+    constexpr operator const T&() const { return ref; }
 
-    constexpr StyledRef(const T& value, StyleT style)
-        : value_(value),
-          style_(style) {}
-
-    constexpr auto value() const -> const T& { return value_; }
-    constexpr auto style() const -> StyleT { return style_; }
-
-  private:
-    const T& value_; // NOLINT
-    StyleT style_;
+    const T& ref; // NOLINT
 };
 
-/// @brief Wraps a value with a style for ostream and format output.
-/// @details The `detail::StyledRef` has **reference semantics** and is intended
-/// to be used only as a temporary.
-///
-/// Example:
-/// ```cpp
-/// std::cout << styled(32, bold);  // OK
-///
-/// auto styled_int = styled(64, italic);
-/// std::cout << styled_int;  // Bad: styled_int holds a dangling reference
-/// ```
-template <typename T, concepts::style StyleT>
-constexpr auto styled(const T& value, StyleT style)
-    -> StyledRef<std::remove_cvref_t<T>, StyleT> {
-    return StyledRef(value, style);
+template <typename T>
+struct StyledValue {
+    constexpr StyledValue(AbsoluteStyle style, T value)
+        : style(style),
+          value(std::move(value)) {}
+
+    AbsoluteStyle style;
+    T value;
+};
+
+template <typename T>
+StyledValue(AbsoluteStyle style, T& value)
+    -> StyledValue<detail::ConstRef<const std::remove_cvref_t<std::decay_t<T>>>>;
+
+template <typename T>
+    requires(!std::is_lvalue_reference_v<T>)
+StyledValue(AbsoluteStyle style, T&& value)
+    -> StyledValue<std::remove_cvref_t<T>>;
+
+template <typename T>
+constexpr auto make_styled_child(detail::StyleStack<5>& stack, T&& value) {
+    if constexpr (concepts::styled<T>) {
+        stack.push(apply_style(stack.top(), value.style()));
+        return std::forward<T>(value);
+    } else {
+        return StyledValue(stack.top(), std::forward<T>(value));
+    }
 }
 
-/// @brief output operator for StyledRef
-template <concepts::styled_ref StyledRefT>
-    requires concepts::ostream_outputable<typename StyledRefT::value_type>
-inline auto operator<<(std::ostream& os, StyledRefT&& styled) // NOLINT
-    -> std::ostream& {
-    detail::check_styled_ref<StyledRefT>();
-    os << styled.style() << styled.value() << reset;
-    return os;
+} // namespace detail
+
+template <concepts::style StyleT, typename... Ts>
+struct Styled {
+    static_assert(sizeof...(Ts) >= 1, "Styled must contains at least 1 value");
+
+    constexpr Styled(StyleT style, Ts... values)
+        : style_(style),
+          values_(std::move(values)...) {}
+
+    constexpr auto style() const -> StyleT { return style_; }
+    constexpr auto values() const -> std::tuple<Ts...> { return values_; }
+
+  private:
+    StyleT style_;
+    std::tuple<Ts...> values_;
+};
+
+template <concepts::style StyleT, typename... Ts>
+constexpr auto styled(StyleT style, Ts&&... value) {
+    detail::StyleStack<5> stack;
+    return Styled(style,
+                  detail::make_styled_child(stack, std::forward<Ts>(value))...);
 }
+
+
 
 } // namespace deco
 

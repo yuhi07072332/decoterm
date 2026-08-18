@@ -20,14 +20,6 @@ namespace deco {
 
 namespace detail {
 
-template <concepts::style StyleT>
-constexpr auto apply_style(AbsoluteStyle current, StyleT style)
-    -> AbsoluteStyle {
-    using style_type = std::remove_cvref_t<StyleT>;
-    if constexpr (std::is_same_v<style_type, Style>)
-        return abs(current.style | style);
-    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
-}
 
 /* ----- global style output context ----- */
 
@@ -323,7 +315,7 @@ class StyledOstream : public StyleState,
     /// @throws `std::logic_error` if `operator<<(std::ostream&, T&&)` returns a
     /// different ostream object.
     template <concepts::ostream_outputable T>
-        requires(!concepts::style<T> && !concepts::styled_ref<T>)
+        requires(!concepts::style<T> && !concepts::styled<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         out.ensure_context();
 
@@ -364,7 +356,7 @@ class StyledOstream : public StyleState,
     }
 
     /// @brief output operator for styled values
-    template <concepts::styled_ref StyledRefT>
+    template <concepts::styled StyledRefT>
     friend auto operator<<(StyledOstream& out, StyledRefT&& styled) // NOLINT
         -> StyledOstream& {
         detail::check_styled_ref<StyledRefT>();
