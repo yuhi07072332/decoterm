@@ -32,6 +32,8 @@
 #include <cassert>
 #include <charconv>
 #include <cmath>
+#include <cstring>
+#include <memory>
 #include <concepts>
 #include <cstdint>
 #include <iterator>
@@ -89,21 +91,22 @@ concept ostream_outputable = requires(std::ostream& os, const T& value) {
 
 } // namespace concepts
 
-namespace detail {
-
 template <typename, concepts::style>
 struct StyledRef;
+
+namespace detail {
 
 template <typename T>
 struct is_styled_ref : std::false_type {};
 
 template <typename T, concepts::style StyleT>
-struct is_styled_ref<detail::StyledRef<T, StyleT>> : std::true_type {};
+struct is_styled_ref<StyledRef<T, StyleT>> : std::true_type {};
 
 } // namespace detail
 
 namespace concepts {
 
+// Whether 'remove_cvref_t<T>' is a StyledRef.
 template <typename T>
 concept styled_ref = detail::is_styled_ref<std::remove_cvref_t<T>>::value;
 
@@ -198,21 +201,6 @@ constexpr auto color_to_sgr_params(OutputIt out,
 
 /* ----- StyledRef ----- */
 
-template <typename T, concepts::style StyleT>
-struct StyledRef {
-    using value_type = T;
-
-    constexpr StyledRef(const T& value, StyleT style)
-        : value_(value),
-          style_(style) {}
-
-    constexpr auto value() const -> const T& { return value_; }
-    constexpr auto style() const -> StyleT { return style_; }
-
-  private:
-    const T& value_; // NOLINT
-    StyleT style_;
-};
 
 template <concepts::styled_ref StyledRefT>
 consteval void check_styled_ref() {
@@ -220,6 +208,7 @@ consteval void check_styled_ref() {
                   "deco::detail::StyledRef: Cannot pass StyledRef as an lvalue "
                   "reference.");
 }
+
 
 } // namespace detail
 
@@ -705,6 +694,149 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::underline_doub
 // ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+namespace detail {
+
+/* ----- StyleStack ----- */
+
+/// @brief A stack that can store single or multiple `AbsoluteStyle`.
+/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
+/// if the size exceeds N.
+class StyleStack {
+  public:
+    static constexpr std::size_t N = 5;
+    static_assert(N > 1);
+
+    StyleStack() = default;
+    StyleStack(const StyleStack& other) { copy_from(other); }
+    StyleStack(StyleStack&& other) noexcept { move_from(std::move(other)); }
+
+    auto operator=(const StyleStack& other) -> StyleStack& {
+        if (this == &other) return *this;
+        copy_from(other);
+        return *this;
+    }
+
+    auto operator=(StyleStack&& other) noexcept -> StyleStack& {
+        if (this == &other) return *this;
+        move_from(std::move(other));
+        return *this;
+    }
+
+    ~StyleStack() = default;
+
+    auto base() const -> AbsoluteStyle { return base_; }
+    auto is_single() const -> bool { return is_single_; }
+
+    auto top() const -> AbsoluteStyle {
+        if (size_) return data_[size_ - 1];
+        return base_;
+    }
+
+    void push(AbsoluteStyle style) {
+        if (size_ == capacity_) {
+            grow();
+        } else if (is_single_) {
+            size_ = 1;
+            data_[0] = style;
+            return;
+        }
+        data_[size_++] = style; // NOLINT
+    }
+
+    void pop() {
+        if (size_) size_--;
+    }
+
+    void clear() { size_ = 0; }
+
+    void set_base(AbsoluteStyle base) { base_ = base; }
+
+    void to_single() {
+        if (size_) {
+            local_[0] = top();
+            size_ = 1;
+        }
+        data_ = local_.data();
+    }
+
+    void to_multiple() { is_single_ = false; }
+
+  private:
+    auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
+
+    void copy_from(const StyleStack& other) {
+        if (other.is_heap()) {
+            heap_ = std::make_unique<AbsoluteStyle[]>(other.capacity_);
+            std::memcpy(heap_.get(),
+                        other.heap_.get(),
+                        sizeof(AbsoluteStyle) * other.size_);
+            data_ = heap_.get();
+        } else {
+            local_ = other.local_;
+            data_ = local_.data();
+        }
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+        base_ = other.base_;
+        is_single_ = other.is_single_;
+    }
+
+    void move_from(StyleStack&& other) noexcept {
+        if (other.is_heap()) {
+            heap_ = std::move(other.heap_);
+            data_ = heap_.get();
+        } else {
+            local_ = other.local_;
+            data_ = local_.data();
+        }
+
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+        base_ = other.base_;
+        is_single_ = other.is_single_;
+
+        other.size_ = 0;
+        other.capacity_ = N;
+        other.data_ = other.local_.data();
+    }
+
+    void grow() {
+        auto new_heap = std::make_unique<AbsoluteStyle[]>(capacity_ * 2);
+        std::memcpy(new_heap.get(), data_, sizeof(AbsoluteStyle) * size_);
+        heap_ = std::move(new_heap);
+        data_ = heap_.get();
+        capacity_ *= 2;
+    }
+
+    std::array<AbsoluteStyle, N> local_;
+    std::unique_ptr<AbsoluteStyle[]> heap_;
+
+    AbsoluteStyle* data_ = local_.data();
+    std::size_t size_ = 0;
+    std::size_t capacity_ = N;
+
+    AbsoluteStyle base_ = AbsoluteStyle();
+    bool is_single_ = true;
+};
+
+}
+
+template <typename T, concepts::style StyleT>
+struct StyledRef {
+    using value_type = T;
+
+    constexpr StyledRef(const T& value, StyleT style)
+        : value_(value),
+          style_(style) {}
+
+    constexpr auto value() const -> const T& { return value_; }
+    constexpr auto style() const -> StyleT { return style_; }
+
+  private:
+    const T& value_; // NOLINT
+    StyleT style_;
+};
+
 /// @brief Wraps a value with a style for ostream and format output.
 /// @details The `detail::StyledRef` has **reference semantics** and is intended
 /// to be used only as a temporary.
@@ -718,8 +850,8 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::underline_doub
 /// ```
 template <typename T, concepts::style StyleT>
 constexpr auto styled(const T& value, StyleT style)
-    -> detail::StyledRef<std::remove_cvref_t<T>, StyleT> {
-    return detail::StyledRef(value, style);
+    -> StyledRef<std::remove_cvref_t<T>, StyleT> {
+    return StyledRef(value, style);
 }
 
 /// @brief output operator for StyledRef
@@ -1107,9 +1239,7 @@ inline constexpr std::array<RGB, 256> color_info {
 
 
 #include <array>
-#include <cstring>
 #include <iostream>
-#include <memory>
 #include <optional>
 #include <ostream>
 #include <type_traits>
@@ -1141,128 +1271,6 @@ inline const style_output_context_t* g_style_output_context = nullptr;
 
 // NOLINTEND
 
-/* ----- StyleStack ----- */
-
-/// @brief A stack that can store single or multiple `AbsoluteStyle`.
-/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
-/// if the size exceeds N.
-class StyleStack {
-  public:
-    static constexpr std::size_t N = 5;
-    static_assert(N > 1);
-
-    StyleStack() = default;
-    StyleStack(const StyleStack& other) { copy_from(other); }
-    StyleStack(StyleStack&& other) noexcept { move_from(std::move(other)); }
-
-    auto operator=(const StyleStack& other) -> StyleStack& {
-        if (this == &other) return *this;
-        copy_from(other);
-        return *this;
-    }
-
-    auto operator=(StyleStack&& other) noexcept -> StyleStack& {
-        if (this == &other) return *this;
-        move_from(std::move(other));
-        return *this;
-    }
-
-    ~StyleStack() = default;
-
-    auto base() const -> AbsoluteStyle { return base_; }
-    auto is_single() const -> bool { return is_single_; }
-
-    auto top() const -> AbsoluteStyle {
-        if (size_) return data_[size_ - 1];
-        return base_;
-    }
-
-    void push(AbsoluteStyle style) {
-        if (size_ == capacity_) {
-            grow();
-        } else if (is_single_) {
-            size_ = 1;
-            data_[0] = style;
-            return;
-        }
-        data_[size_++] = style; // NOLINT
-    }
-
-    void pop() {
-        if (size_) size_--;
-    }
-
-    void clear() { size_ = 0; }
-
-    void set_base(AbsoluteStyle base) { base_ = base; }
-
-    void to_single() {
-        if (size_) {
-            local_[0] = top();
-            size_ = 1;
-        }
-        data_ = local_.data();
-    }
-
-    void to_multiple() { is_single_ = false; }
-
-  private:
-    auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
-
-    void copy_from(const StyleStack& other) {
-        if (other.is_heap()) {
-            heap_ = std::make_unique<AbsoluteStyle[]>(other.capacity_);
-            std::memcpy(heap_.get(),
-                        other.heap_.get(),
-                        sizeof(AbsoluteStyle) * other.size_);
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        base_ = other.base_;
-        is_single_ = other.is_single_;
-    }
-
-    void move_from(StyleStack&& other) noexcept {
-        if (other.is_heap()) {
-            heap_ = std::move(other.heap_);
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
-
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        base_ = other.base_;
-        is_single_ = other.is_single_;
-
-        other.size_ = 0;
-        other.capacity_ = N;
-        other.data_ = other.local_.data();
-    }
-
-    void grow() {
-        auto new_heap = std::make_unique<AbsoluteStyle[]>(capacity_ * 2);
-        std::memcpy(new_heap.get(), data_, sizeof(AbsoluteStyle) * size_);
-        heap_ = std::move(new_heap);
-        data_ = heap_.get();
-        capacity_ *= 2;
-    }
-
-    std::array<AbsoluteStyle, N> local_;
-    std::unique_ptr<AbsoluteStyle[]> heap_;
-
-    AbsoluteStyle* data_ = local_.data();
-    std::size_t size_ = 0;
-    std::size_t capacity_ = N;
-
-    AbsoluteStyle base_ = AbsoluteStyle();
-    bool is_single_ = true;
-};
 
 /* ----- color fallback ----- */
 

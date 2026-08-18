@@ -10,9 +10,7 @@
 #include "style.hpp"
 
 #include <array>
-#include <cstring>
 #include <iostream>
-#include <memory>
 #include <optional>
 #include <ostream>
 #include <type_traits>
@@ -44,128 +42,6 @@ inline const style_output_context_t* g_style_output_context = nullptr;
 
 // NOLINTEND
 
-/* ----- StyleStack ----- */
-
-/// @brief A stack that can store single or multiple `AbsoluteStyle`.
-/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
-/// if the size exceeds N.
-class StyleStack {
-  public:
-    static constexpr std::size_t N = 5;
-    static_assert(N > 1);
-
-    StyleStack() = default;
-    StyleStack(const StyleStack& other) { copy_from(other); }
-    StyleStack(StyleStack&& other) noexcept { move_from(std::move(other)); }
-
-    auto operator=(const StyleStack& other) -> StyleStack& {
-        if (this == &other) return *this;
-        copy_from(other);
-        return *this;
-    }
-
-    auto operator=(StyleStack&& other) noexcept -> StyleStack& {
-        if (this == &other) return *this;
-        move_from(std::move(other));
-        return *this;
-    }
-
-    ~StyleStack() = default;
-
-    auto base() const -> AbsoluteStyle { return base_; }
-    auto is_single() const -> bool { return is_single_; }
-
-    auto top() const -> AbsoluteStyle {
-        if (size_) return data_[size_ - 1];
-        return base_;
-    }
-
-    void push(AbsoluteStyle style) {
-        if (size_ == capacity_) {
-            grow();
-        } else if (is_single_) {
-            size_ = 1;
-            data_[0] = style;
-            return;
-        }
-        data_[size_++] = style; // NOLINT
-    }
-
-    void pop() {
-        if (size_) size_--;
-    }
-
-    void clear() { size_ = 0; }
-
-    void set_base(AbsoluteStyle base) { base_ = base; }
-
-    void to_single() {
-        if (size_) {
-            local_[0] = top();
-            size_ = 1;
-        }
-        data_ = local_.data();
-    }
-
-    void to_multiple() { is_single_ = false; }
-
-  private:
-    auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
-
-    void copy_from(const StyleStack& other) {
-        if (other.is_heap()) {
-            heap_ = std::make_unique<AbsoluteStyle[]>(other.capacity_);
-            std::memcpy(heap_.get(),
-                        other.heap_.get(),
-                        sizeof(AbsoluteStyle) * other.size_);
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        base_ = other.base_;
-        is_single_ = other.is_single_;
-    }
-
-    void move_from(StyleStack&& other) noexcept {
-        if (other.is_heap()) {
-            heap_ = std::move(other.heap_);
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
-
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        base_ = other.base_;
-        is_single_ = other.is_single_;
-
-        other.size_ = 0;
-        other.capacity_ = N;
-        other.data_ = other.local_.data();
-    }
-
-    void grow() {
-        auto new_heap = std::make_unique<AbsoluteStyle[]>(capacity_ * 2);
-        std::memcpy(new_heap.get(), data_, sizeof(AbsoluteStyle) * size_);
-        heap_ = std::move(new_heap);
-        data_ = heap_.get();
-        capacity_ *= 2;
-    }
-
-    std::array<AbsoluteStyle, N> local_;
-    std::unique_ptr<AbsoluteStyle[]> heap_;
-
-    AbsoluteStyle* data_ = local_.data();
-    std::size_t size_ = 0;
-    std::size_t capacity_ = N;
-
-    AbsoluteStyle base_ = AbsoluteStyle();
-    bool is_single_ = true;
-};
 
 /* ----- color fallback ----- */
 
@@ -363,7 +239,7 @@ class StyleState { // NOLINT
     // state
     bool base_style_changed_ = true;
     detail::style_output_context_t context_;
-    detail::StyleStack stack_;
+    detail::StyleStack<5> stack_;
 };
 
 /// @brief CRTP class that provides chainable StyleState options
