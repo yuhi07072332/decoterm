@@ -1,14 +1,5 @@
 #include "style.hpp"
-
-template <typename...Ts>
-struct Tree{};
-
-
-template <typename T>
-struct is_tree: std::false_type {};
-
-template <typename...Ts>
-struct is_tree<Tree<Ts...>>: std::true_type {};
+#include <iostream>
 
 
 auto main() -> int {
@@ -17,22 +8,53 @@ auto main() -> int {
     const int ci = 32;
     float f = 3.14;
     int array[5] = { 1, 2, 3, 4, 5};
+    int* pi = &i;
+    const int* cpi = &i;
 
-    auto l = detail::StyledValue(abs(bold), i);
-    auto cl = detail::StyledValue(abs(bold), ci);
-    decltype(auto) ls = l.value.get();
-    decltype(auto) cls = cl.value.get();
-    auto sl = detail::StyledValue(abs(bold), "helloworld");
-    decltype(auto) sls = sl.value.get();
-    auto al = detail::StyledValue(abs(bold), array);
-    decltype(auto) als = al.value.get();
+    auto const_lambda = [&i]{
+        i = 16;
+    };
 
-    auto r = detail::StyledValue(abs(bold), 64);
-    auto cr = detail::StyledValue(abs(bold), std::move(ci));
+    auto mutable_lambda = [=] mutable {
+        i++;
+    };
+
+    // lvalue reference
+    auto l = detail::make_styled_child(i);
+    decltype(auto) lv = l.get();
+    auto cl = detail::make_styled_child(ci);
+    decltype(auto) clv = cl.get();
+
+    // pointer
+    auto p = detail::make_styled_child(pi);
+    auto cp = detail::make_styled_child(cpi);
+    auto sp = detail::make_styled_child("helloworld");
+    auto ap = detail::make_styled_child(array);
+    auto fp = detail::make_styled_child(main);
+
+    // rvalue
+    auto r = detail::make_styled_child(64);
+    auto cr = detail::make_styled_child(std::move(ci));
+
+    // other
+    auto lc_lambda = detail::make_styled_child(const_lambda);
+    auto rc_lambda = detail::make_styled_child([&]{ i++; });
 
 
-    auto tree = Tree<int, double, Tree<float, int>, int>{};
-
-    auto st = styled(bold, 31, i, styled(italic, f, "aaa"), ci);
-    constexpr auto cest = styled(bold, 31, 16.5, "aaaa", styled(italic, "aa"))
+    auto st = styled(fg(blue), 31, i, styled(italic | fg(cyan), f, "aaa"), ci);
+    std::cout << st << '\n';
+    std::cout << styled(
+        bold,
+        "one",
+        styled(
+            fg(green) | italic,
+            "two",
+            styled(
+                fg(cyan) | underline,
+                "three"
+            ),
+            "two"
+        ),
+        "one"
+    );
 }

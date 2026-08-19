@@ -34,12 +34,12 @@
 #include <iterator>
 #include <memory>
 #include <ostream>
-#include <pstl/glue_algorithm_defs.h>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <version>
 
 #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
@@ -89,7 +89,8 @@ concept ostream_outputable = requires(std::ostream& os, const T& value) {
 
 } // namespace concepts
 
-template <concepts::style, typename...>
+template <concepts::style StyleT, typename... Ts>
+    requires(!concepts::style<Ts> && ...)
 struct Styled;
 
 namespace detail {
@@ -100,17 +101,10 @@ struct is_styled : std::false_type {};
 template <concepts::style StyleT, typename... Ts>
 struct is_styled<Styled<StyleT, Ts...>> : std::true_type {};
 
-} // namespace detail
-
-namespace concepts {
-
-// Whether 'remove_cvref_t<T>' is a StyledRef.
 template <typename T>
 concept styled = detail::is_styled<std::remove_cvref_t<T>>::value;
 
-} // namespace concepts
-
-namespace detail {
+// Whether 'remove_cvref_t<T>' is a StyledRef.
 
 using ColorData = std::array<uint8_t, 3>;
 
@@ -834,41 +828,67 @@ struct ConstRef {
     constexpr auto get() const -> const T& { return ref; }
     constexpr operator const T&() const { return ref; }
 
+  private:
     const T& ref; // NOLINT
 };
 
 template <typename T>
-struct StyledValue {
-    constexpr StyledValue(AbsoluteStyle style, T value)
-        : style(style),
-          value(std::move(value)) {}
-
-    AbsoluteStyle style;
-    T value;
+struct unwrap_constref {
+    using type = T;
 };
 
 template <typename T>
-StyledValue(AbsoluteStyle style, T& value)
-    -> StyledValue<detail::ConstRef<const std::remove_cvref_t<std::decay_t<T>>>>;
+struct unwrap_constref<ConstRef<T>> {
+    using type = const T&;
+};
+
+template <typename T>
+constexpr auto make_styled_child(const T& value) -> detail::ConstRef<T> {
+    return detail::ConstRef<T>(value);
+}
 
 template <typename T>
     requires(!std::is_lvalue_reference_v<T>)
-StyledValue(AbsoluteStyle style, T&& value)
-    -> StyledValue<std::remove_cvref_t<T>>;
+constexpr auto make_styled_child(T&& value) -> std::remove_cvref_t<T> {
+    return std::forward<T>(value);
+}
 
 template <typename T>
-constexpr auto make_styled_child(detail::StyleStack<5>& stack, T&& value) {
-    if constexpr (concepts::styled<T>) {
-        stack.push(apply_style(stack.top(), value.style()));
-        return std::forward<T>(value);
-    } else {
-        return StyledValue(stack.top(), std::forward<T>(value));
-    }
+constexpr auto make_styled_child(T* value) -> const T* {
+    return value;
+}
+
+template <detail::styled Styled>
+constexpr auto make_styled_child(Styled& styled) -> Styled& {
+    return styled;
+}
+
+/// @param current_style The style reset to after the styled emitted.
+template <typename OutputFn, concepts::style StyleT, typename... Ts>
+constexpr void emit_styled(AbsoluteStyle current_style,
+                           const OutputFn& output_fn /*NOLINT*/,
+                           const Styled<StyleT, Ts...>& styled) {
+    AbsoluteStyle applied_style =
+        detail::apply_style(current_style, styled.style());
+    auto emit_one = [&, applied_style]<typename P>(const P& value) {
+        if constexpr (detail::styled<P>) {
+            emit_styled(applied_style, output_fn, value);
+        } else {
+            output_fn(static_cast<detail::unwrap_constref<P>::type>(value));
+        }
+    };
+
+    if (applied_style != current_style) output_fn(applied_style);
+    std::apply(
+        [&]<typename... Ps>(const Ps&... values) { (emit_one(values), ...); },
+        styled.values());
+    output_fn(current_style);
 }
 
 } // namespace detail
 
 template <concepts::style StyleT, typename... Ts>
+    requires(!concepts::style<Ts> && ...)
 struct Styled {
     static_assert(sizeof...(Ts) >= 1, "Styled must contains at least 1 value");
 
@@ -877,7 +897,9 @@ struct Styled {
           values_(std::move(values)...) {}
 
     constexpr auto style() const -> StyleT { return style_; }
-    constexpr auto values() const -> std::tuple<Ts...> { return values_; }
+    constexpr auto values() const -> const std::tuple<Ts...>& {
+        return values_;
+    }
 
   private:
     StyleT style_;
@@ -885,13 +907,18 @@ struct Styled {
 };
 
 template <concepts::style StyleT, typename... Ts>
+    requires(!concepts::style<Ts> && ...)
 constexpr auto styled(StyleT style, Ts&&... value) {
-    detail::StyleStack<5> stack;
-    return Styled(style,
-                  detail::make_styled_child(stack, std::forward<Ts>(value))...);
+    return Styled(style, detail::make_styled_child(std::forward<Ts>(value))...);
 }
 
-
+template <concepts::style StyleT, typename... Ts>
+inline auto operator<<(std::ostream& os, const Styled<StyleT, Ts...>& styled)
+    -> std::ostream& {
+    detail::emit_styled(
+        abs(null_style), [&](const auto& value) { os << value; }, styled);
+    return os;
+}
 
 } // namespace deco
 
