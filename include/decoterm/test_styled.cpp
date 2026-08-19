@@ -56,5 +56,7 @@ auto main() -> int {
             "two"
         ),
         "one"
-    );
+    ) << '\n';
+
+    std::cout << styled(fg(yellow), "aaa") << "bbb\n";
 }
