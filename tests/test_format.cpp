@@ -16,10 +16,10 @@ TEST_CASE("format: formatters") {
     CHECK(std::format("{}text{}", bold, reset)
           == bold.to_escape() + std::string("text")
                  + abs(null_style).to_escape());
-    CHECK(std::format("{}", styled(std::string("text"), fg(red)))
+    CHECK(std::format("{}", styled(fg(red), std::string("text")))
           == fg(red).to_escape() + std::string("text")
                  + abs(null_style).to_escape());
-    CHECK(std::format("{:04}", styled(42, bold))
+    CHECK(std::format("{:04}", styled(bold, 42))
           == bold.to_escape() + std::string("0042")
                  + abs(null_style).to_escape());
 }
@@ -69,7 +69,7 @@ TEST_CASE("format: StyledFormat: format() with StyledRef") {
 
     StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
 
-    CHECK(sfmt.format("base{}base", styled(std::string("bold"), bold))
+    CHECK(sfmt.format("base{}base", styled(bold, std::string("bold")))
           == abs(fg(white)).to_escape() + std::string("base")
                  + bold.to_escape() + std::string("bold")
                  + abs(fg(white)).to_escape() + std::string("base"));
@@ -81,7 +81,7 @@ TEST_CASE("format: StyledFormat: StyledRef restores call style") {
     StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
 
     CHECK(
-        sfmt.format(fg(red), "before{}after", styled(std::string("bold"), bold))
+        sfmt.format(fg(red), "before{}after", styled(bold, std::string("bold")))
         == abs(fg(white)).to_escape() + fg(red).to_escape()
                + std::string("before") + bold.to_escape() + std::string("bold")
                + abs(fg(red)).to_escape() + std::string("after")
@@ -96,7 +96,7 @@ TEST_CASE("format: StyledFormat: StyledRef restores absolute call style") {
 
     CHECK(sfmt.format(abs(fg(red)),
                       "before{}after",
-                      styled(std::string("italic"), italic))
+                      styled(italic, std::string("italic")))
           == abs(base).to_escape() + abs(fg(red)).to_escape()
                  + std::string("before") + italic.to_escape()
                  + std::string("italic") + abs(fg(red)).to_escape()
@@ -109,15 +109,15 @@ TEST_CASE("format: StyledFormat: disabled style with StyledRef") {
     StyledFormat sfmt;
     sfmt.enable_style(false);
 
-    CHECK(sfmt.format(fg(red), "A{}B", styled(std::string("x"), bold))
+    CHECK(sfmt.format(fg(red), "A{}B", styled(bold, std::string("x")))
           == "AxB");
 }
 
-TEST_CASE("format: StyledFormat: print()") {
+TEST_CASE("format: StyledPrint: print()") {
     using namespace deco;
 
     std::ostringstream os;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+    StyledPrint sfmt = StyledPrint().set_base_style(fg(white));
     sfmt.set_stream(os);
 
     sfmt.print("{} {}", "value", 42).print(" {}", "next");
@@ -126,7 +126,7 @@ TEST_CASE("format: StyledFormat: print()") {
           == abs(fg(white)).to_escape() + std::string("value 42 next"));
 }
 
-TEST_CASE("format: StyledFormat: print() with style") {
+TEST_CASE("format: StyledPrint: print() with style") {
     using namespace deco;
 
     std::ostringstream os;
@@ -148,7 +148,7 @@ TEST_CASE("format: StyledFormat: print() with StyledRef") {
     StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
     sfmt.set_stream(os);
 
-    sfmt.print("base{}base", styled(std::string("bold"), bold));
+    sfmt.print("base{}base", styled(bold, std::string("bold")));
 
     CHECK(os.str()
           == abs(fg(white)).to_escape() + std::string("base")
@@ -166,7 +166,7 @@ TEST_CASE("format: StyledFormat: print StyledRef context") {
 
     sfmt.print(abs(fg(red)),
                "before{}after",
-               styled(std::string("italic"), italic));
+               styled(italic, std::string("italic")));
 
     CHECK(os.str()
           == abs(base).to_escape() + abs(fg(red)).to_escape()
@@ -182,7 +182,7 @@ TEST_CASE("format: StyledFormat: print disabled style with StyledRef") {
     StyledFormat sfmt;
     sfmt.enable_style(false).set_stream(os);
 
-    sfmt.print(fg(red), "A{}B", styled(std::string("x"), bold));
+    sfmt.print(fg(red), "A{}B", styled(bold, std::string("x")));
 
     CHECK(os.str() == "AxB");
 }
