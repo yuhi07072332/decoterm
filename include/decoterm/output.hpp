@@ -14,6 +14,7 @@
 #include <optional>
 #include <ostream>
 #include <type_traits>
+#include <memory>
 #include <utility>
 
 namespace deco {
@@ -489,14 +490,18 @@ class StyledOstream : public StyleState,
     }
 
     /// @brief output operator for styled values
-    template <detail::styled StyledRefT>
-    friend auto operator<<(StyledOstream& out, StyledRefT&& styled) // NOLINT
+    template <concepts::style StyleT, typename... Ts>
+    friend auto operator<<(StyledOstream& out, const Styled<StyleT, Ts...>& styled) // NOLINT
         -> StyledOstream& {
         out.ensure_context();
 
-        out.output_style(styled.style());
-        out.ostream() << styled.value();
-        out.ostream() << out.current_style();
+        detail::emit_styled(
+            out.current_style(),
+            [&](const auto& value){ out.ostream() << value; },
+            [&](concepts::style auto style){ out.output_style(style); },
+            styled
+        );
+
         return out;
     }
 

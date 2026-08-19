@@ -127,28 +127,27 @@ struct formatter<deco::style_reset_t> {
     }
 };
 
-/// @brief formatter for styled values
-template <deco::concepts::styled_ref StyledRefT>
-    requires deco::concepts::formattable<typename StyledRefT::value_type>
-struct formatter<StyledRefT> {
-    std::formatter<typename StyledRefT::value_type, char> value_formatter;
-
-    bool reset_on_end;
-
-    constexpr formatter(bool reset_on_end = true)
-        : reset_on_end(reset_on_end) {}
+template <deco::concepts::style StyleT, typename T>
+    requires (!deco::detail::styled<T>)
+struct formatter<deco::Styled<StyleT, T>> {
+    std::formatter<T, char> value_formatter;
+    constexpr formatter() = default;
 
     constexpr auto parse(std::format_parse_context& ctx) {
         return value_formatter.parse(ctx);
     }
 
-    auto format(const StyledRefT& styled, /*NOLINT*/
+    auto format(const deco::Styled<StyleT, T>& styled, /*NOLINT*/
                 std::format_context& ctx) const {
-        ctx.advance_to(styled.style().to_escape(ctx.out()));
-        ctx.advance_to(value_formatter.format(styled.value(), ctx));
-        if (reset_on_end)
-            ctx.advance_to(
-                formatter<deco::style_reset_t> {}.format(deco::reset, ctx));
+        using namespace deco;
+        ctx.advance_to(detail::emit_styled(
+            abs(null_style),
+            [&ctx, this](const T& value) { ctx.advance_to(value_formatter.format(value, ctx)); },
+            [&ctx]<concepts::style StyleType>(StyleType style) { 
+                ctx.advance_to(formatter<StyleType>{}.format(style, ctx));
+            },
+            styled
+        ));
         return ctx.out();
     }
 };
@@ -279,16 +278,13 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
     template <typename Arg>
     static consteval void check_arg() {
         using arg_type = std::remove_cvref_t<Arg>;
-        if constexpr (concepts::styled<arg_type>)
-            detail::check_styled_ref<Arg>();
-        else
-            static_assert(
-                (!concepts::style<arg_type>
-                 && !std::is_same_v<arg_type, style_reset_t>
-                 && !std::is_same_v<arg_type, style_pop_t>),
-                "deco::StyledFormat: Style, reset, pop are disallowed as "
-                "format arguments. Use print(style, ...), styled(), "
-                "push(), reset(), or pop() instead.");
+        static_assert(
+        (!concepts::style<arg_type>
+        && !std::is_same_v<arg_type, style_reset_t>
+        && !std::is_same_v<arg_type, style_pop_t>),
+        "deco::StyledFormat: Style, reset, pop are disallowed as "
+        "format arguments. Use print(style, ...), styled(), "
+        "push(), reset(), or pop() instead.");
     }
 
     template <std::output_iterator<const char&> OutputIt,

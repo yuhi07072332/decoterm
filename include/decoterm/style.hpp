@@ -32,7 +32,6 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
-#include <memory>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -730,38 +729,51 @@ constexpr auto make_styled_child(Styled& styled) -> Styled& {
     return styled;
 }
 
-template <typename OutputFn, concepts::style StyleT, typename... Ts>
+template <typename OutputFn,
+          typename StyleOutputFn,
+          concepts::style StyleT,
+          typename... Ts>
 constexpr void emit_styled_children(AbsoluteStyle current_style,
-                           const OutputFn& output_fn /*NOLINT*/,
-                           const Styled<StyleT, Ts...>& styled) {
+                                    const OutputFn& output_fn,
+                                    const StyleOutputFn& style_output_fn,
+                                    const Styled<StyleT, Ts...>& styled) {
     AbsoluteStyle applied_style =
         detail::apply_style(current_style, styled.style());
     auto emit_one = [&, applied_style]<typename P>(const P& value) {
         if constexpr (detail::styled<P>) {
-            emit_styled_children(applied_style, output_fn, value);
+            emit_styled_children(
+                applied_style, output_fn, style_output_fn, value);
         } else {
             output_fn(static_cast<detail::unwrap_constref<P>::type>(value));
         }
     };
 
-    if (applied_style != current_style) output_fn(applied_style);
+    if (applied_style != current_style) style_output_fn(applied_style);
     std::apply(
         [&]<typename... Ps>(const Ps&... values) { (emit_one(values), ...); },
         styled.values());
-    if (applied_style != current_style) output_fn(current_style);
+    if (applied_style != current_style) style_output_fn(current_style);
 }
 
-/// @param current_style The style reset to after the styled emitted.
-template <typename OutputFn, concepts::style StyleT, typename T, typename... Ts>
+/// @param current_style The style to reset after the styled emitted.
+/// @tparam OutputFn invocable by `output_fn(const T&)`
+/// @tparam StyleOutputFn invocable by `style_output_fn(StyleT)`
+template <typename OutputFn,
+          typename StyleOutputFn,
+          concepts::style StyleT,
+          typename T,
+          typename... Ts>
 constexpr void emit_styled(AbsoluteStyle current_style,
-                           const OutputFn& output_fn /*NOLINT*/,
+                           const OutputFn& output_fn,
+                           const StyleOutputFn& style_output_fn,
                            const Styled<StyleT, T, Ts...>& styled) {
     if constexpr (sizeof...(Ts) == 0 && (!detail::styled<T>)) {
-        output_fn(styled.style());
-        output_fn(std::get<0>(styled.values()));
-        if (!styled.style().is_null()) output_fn(current_style);
+        style_output_fn(styled.style());
+        output_fn(static_cast<unwrap_constref<T>::type>(
+            std::get<0>(styled.values())));
+        if (!styled.style().is_null()) style_output_fn(current_style);
     } else {
-        emit_styled_children(current_style, output_fn, styled);
+        emit_styled_children(current_style, output_fn, style_output_fn, styled);
     }
 }
 
@@ -796,7 +808,10 @@ template <concepts::style StyleT, typename... Ts>
 inline auto operator<<(std::ostream& os, const Styled<StyleT, Ts...>& styled)
     -> std::ostream& {
     detail::emit_styled(
-        abs(null_style), [&](const auto& value) { os << value; }, styled);
+        abs(null_style),
+        [&](const auto& value) { os << value; },
+        [&](concepts::style auto style) { os << style; },
+        styled);
     return os;
 }
 
