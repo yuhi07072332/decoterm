@@ -1,4 +1,5 @@
 #include "style.hpp"
+#include "format.hpp"
 #include <iostream>
 
 
@@ -59,4 +60,17 @@ auto main() -> int {
     ) << '\n';
 
     std::cout << styled(fg(yellow), "aaa") << "bbb\n";
+    std::cout << "and one more for the fans\n";
+
+    std::println("{}", styled(bold, 65535));
+    std::println("{}", styled(bold, detail::ConstRef(i)));
+    std::println("{}", st);
+
+    StyledFormat sfmt = styled_fmt();
+    sfmt.push(bg(colors::purple));
+    sfmt.print("{}\n", st)
+        .print("asfdksdf");
+
+    static_assert(std::is_default_constructible_v<detail::StyledFormatContext>);
+    static_assert(std::is_default_constructible_v<std::formatter<Styled<Style, Styled<Style, int>>>>);
 }

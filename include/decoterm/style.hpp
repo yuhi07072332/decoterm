@@ -756,7 +756,8 @@ constexpr void emit_styled_children(AbsoluteStyle current_style,
 }
 
 /// @param current_style The style to reset after the styled emitted.
-/// @tparam OutputFn invocable by `output_fn(const T&)`
+/// @tparam OutputFn invocable by `output_fn(const T&)`, where T is unwrapped
+/// from `ConstRef`.
 /// @tparam StyleOutputFn invocable by `style_output_fn(StyleT)`
 template <typename OutputFn,
           typename StyleOutputFn,
@@ -800,8 +801,9 @@ struct Styled {
 
 template <concepts::style StyleT, typename... Ts>
     requires(!concepts::style<Ts> && ...)
-constexpr auto styled(StyleT style, Ts&&... value) {
-    return Styled(style, detail::make_styled_child(std::forward<Ts>(value))...);
+constexpr auto styled(StyleT style, Ts&&... values) {
+    return Styled(style,
+                  detail::make_styled_child(std::forward<Ts>(values))...);
 }
 
 template <concepts::style StyleT, typename... Ts>

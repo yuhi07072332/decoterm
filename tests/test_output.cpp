@@ -404,7 +404,7 @@ TEST_CASE("StyledOstream: context tracking") {
 
     out1 << "a" << "b";
     out2 << "c";
-    out1 << "d" << styled("e", bold) << "f";
+    out1 << "d" << styled(bold, "e") << "f";
 
     CHECK(os1.str()
           == abs(fg(blue)).to_escape() + std::string("ab")
