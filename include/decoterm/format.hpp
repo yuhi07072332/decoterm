@@ -88,6 +88,17 @@ constexpr auto make_format_args(Args&&... args /*NOLINT*/) {
     return std::make_format_args(args...);
 }
 
+template <typename Arg>
+static consteval void check_arg() {
+    using arg_type = std::remove_cvref_t<Arg>;
+    static_assert((!concepts::style<arg_type>
+    && !std::is_same_v<arg_type, style_reset_t>
+    && !std::is_same_v<arg_type, style_pop_t>),
+    "deco::StyledFormat: Style, reset, pop are disallowed as "
+    "format arguments. Use print(style, ...), styled(), "
+    "push(), reset(), or pop() instead.");
+}
+
 } // namespace detail
 
 } // namespace deco
@@ -148,7 +159,7 @@ struct formatter<deco::Styled<StyleT, T>> {
     auto format(const deco::Styled<StyleT, T>& styled, /*NOLINT*/
                 std::format_context& ctx) const {
         using namespace deco;
-        detail::emit_styled(
+        detail::apply_styled(
             context.current_style,
             [&ctx, this](const T& value) {
                 ctx.advance_to(value_formatter.format(value, ctx));
@@ -182,7 +193,7 @@ struct formatter<deco::Styled<StyleT, Ts...>> {
     auto format(const deco::Styled<StyleT, Ts...>& styled, /*NOLINT*/
                 std::format_context& ctx) const {
         using namespace deco;
-        detail::emit_styled(
+        detail::apply_styled(
             context.current_style,
             [&ctx, this]<typename P>(const P& value) {
                 using value_type = std::remove_cvref_t<
@@ -277,7 +288,7 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
                    StyleT style,
                    std::format_string<Args...> fmt,
                    Args&&... args) -> OutputIt {
-        (check_arg<Args>(), ...);
+        (detail::check_arg<Args>(), ...);
         out = ensure_context(out);
         const AbsoluteStyle current =
             detail::apply_style(current_style(), style);
@@ -321,17 +332,6 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
     }
 
   private:
-    template <typename Arg>
-    static consteval void check_arg() {
-        using arg_type = std::remove_cvref_t<Arg>;
-        static_assert((!concepts::style<arg_type>
-                       && !std::is_same_v<arg_type, style_reset_t>
-                       && !std::is_same_v<arg_type, style_pop_t>),
-                      "deco::StyledFormat: Style, reset, pop are disallowed as "
-                      "format arguments. Use print(style, ...), styled(), "
-                      "push(), reset(), or pop() instead.");
-    }
-
     template <std::output_iterator<const char&> OutputIt,
               concepts::style StyleT>
     auto output_style(OutputIt out, StyleT style) const -> OutputIt {
@@ -380,7 +380,7 @@ class StyledPrint : public StyleState,
     template <concepts::style StyleT, typename... Args>
     auto print(StyleT style, FormatString<Args...> fmt, Args&&... args)
         -> StyledPrint& {
-        (check_arg<Args>(), ...);
+        (detail::check_arg<Args>(), ...);
         ensure_context();
         const AbsoluteStyle current =
             detail::apply_style(current_style(), style);

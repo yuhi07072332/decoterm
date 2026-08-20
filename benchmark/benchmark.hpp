@@ -171,7 +171,7 @@ struct Section {
     }
 
     void print() {
-        auto sfmt = deco::styled_fmt();
+        auto sfmt = deco::styled_print();
         sfmt.print(deco::bold | deco::fg(deco::bright_yellow),
                    "SECTION{}: {}",
                    number_ ? std::format("[{}]", *number_) : "",

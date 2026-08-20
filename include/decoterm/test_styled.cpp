@@ -21,25 +21,34 @@ auto main() -> int {
     };
 
     // lvalue reference
-    auto l = detail::make_styled_child(i);
+    auto l = detail::store_styled_value(i);
     decltype(auto) lv = l.get();
-    auto cl = detail::make_styled_child(ci);
+    auto cl = detail::store_styled_value(ci);
     decltype(auto) clv = cl.get();
 
     // pointer
-    auto p = detail::make_styled_child(pi);
-    auto cp = detail::make_styled_child(cpi);
-    auto sp = detail::make_styled_child("helloworld");
-    auto ap = detail::make_styled_child(array);
-    auto fp = detail::make_styled_child(main);
+    auto rp = detail::store_styled_value(&i);
+    auto p = detail::store_styled_value(pi);
+    auto cp = detail::store_styled_value(cpi);
+
+    // array / function
+    auto sp = detail::store_styled_value("helloworld");
+    auto ap = detail::store_styled_value(array);
+    auto fp = detail::store_styled_value(main);
 
     // rvalue
-    auto r = detail::make_styled_child(64);
-    auto cr = detail::make_styled_child(std::move(ci));
+    auto r = detail::store_styled_value(64);
+    auto cr = detail::store_styled_value(std::move(ci));
 
     // other
-    auto lc_lambda = detail::make_styled_child(const_lambda);
-    auto rc_lambda = detail::make_styled_child([&]{ i++; });
+    auto lc_lambda = detail::store_styled_value(const_lambda);
+    auto rc_lambda = detail::store_styled_value([&]{ i++; });
+
+    auto cref = detail::ConstRef(i);
+
+    decltype(auto) unwrap1 = detail::unwrap(i);
+    decltype(auto) unwrap2 = detail::unwrap(ci);
+    decltype(auto) unwrap3 = detail::unwrap(cref);
 
 
     auto st = styled(fg(blue), 31, i, styled(italic | fg(cyan), f, "aaa"), ci);
@@ -59,6 +68,14 @@ auto main() -> int {
         "one"
     ) << '\n';
 
+    auto sts = fg(blue)(
+        31, i,
+        (italic | fg(cyan))(f, "aaa"),
+        ci
+    );
+
+    auto st2 = (fg(blue) | italic)("hello");
+
     std::cout << styled(fg(yellow), "aaa") << "bbb\n";
     std::cout << "and one more for the fans\n";
 
@@ -66,10 +83,7 @@ auto main() -> int {
     std::println("{}", styled(bold, detail::ConstRef(i)));
     std::println("{}", st);
 
-    StyledFormat sfmt = styled_fmt();
-    sfmt.push(bg(colors::purple));
-    sfmt.print("{}\n", st)
-        .print("asfdksdf");
+    std::cout << "hello" << bold("world!");
 
     static_assert(std::is_default_constructible_v<detail::StyledFormatContext>);
     static_assert(std::is_default_constructible_v<std::formatter<Styled<Style, Styled<Style, int>>>>);

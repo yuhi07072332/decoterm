@@ -11,7 +11,7 @@ auto main(int argc, const char** argv) -> int {
     StyledOstream styled_os_ctx_fallback = styled_out(os).set_color_mode(ColorMode::color16);
 
     StyledFormat sfmt = StyledFormat().set_stream(os);
-    StyledFormat sfmt_ctx = styled_fmt(os);
+    StyledFormat sfmt_ctx = styled_print(os);
 
     Benchmark benchmark {
         Section {

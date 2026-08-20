@@ -94,16 +94,24 @@ struct Styled;
 
 namespace detail {
 
-template <typename T>
-struct is_styled : std::false_type {};
+template <typename OutputFn,
+          typename StyleOutputFn,
+          concepts::style StyleT,
+          typename... Ts>
+constexpr void apply_styled_values(AbsoluteStyle current_style,
+                                    const OutputFn& output_fn,
+                                    const StyleOutputFn& style_output_fn,
+                                    const Styled<StyleT, Ts...>& styled);
 
-template <concepts::style StyleT, typename... Ts>
-struct is_styled<Styled<StyleT, Ts...>> : std::true_type {};
-
-template <typename T>
-concept styled = detail::is_styled<std::remove_cvref_t<T>>::value;
-
-// Whether 'remove_cvref_t<T>' is a StyledRef.
+template <typename OutputFn,
+          typename StyleOutputFn,
+          concepts::style StyleT,
+          typename T,
+          typename... Ts>
+constexpr void apply_styled(AbsoluteStyle current_style,
+                           const OutputFn& output_fn,
+                           const StyleOutputFn& style_output_fn,
+                           const Styled<StyleT, T, Ts...>& styled);
 
 using ColorData = std::array<uint8_t, 3>;
 
@@ -190,7 +198,64 @@ constexpr auto color_to_sgr_params(OutputIt out,
     return out;
 }
 
-/* ----- StyledRef ----- */
+template <typename T>
+struct is_styled : std::false_type {};
+
+template <concepts::style StyleT, typename... Ts>
+struct is_styled<Styled<StyleT, Ts...>> : std::true_type {};
+
+template <typename T>
+concept styled = detail::is_styled<std::remove_cvref_t<T>>::value;
+
+template <typename T>
+struct ConstRef {
+    constexpr ConstRef(const T& ref) : ref(&ref) {}
+    constexpr ConstRef(T&&) = delete;
+
+    constexpr auto get() const -> const T& { return *ref; }
+    constexpr operator const T&() const { return *ref; }
+
+  private:
+    const T* ref;
+};
+
+template <typename T>
+struct unwrap_constref {
+    using type = T;
+};
+
+template <typename T>
+struct unwrap_constref<ConstRef<T>> {
+    using type = const T&;
+};
+
+template <typename T>
+constexpr auto unwrap(T& value) -> unwrap_constref<T>::type& {
+    return value;
+}
+
+template <typename T>
+constexpr auto store_styled_value(const T& value) -> detail::ConstRef<T> {
+    return detail::ConstRef<T>(value);
+}
+
+template <typename T>
+    requires(!std::is_lvalue_reference_v<T>)
+constexpr auto store_styled_value(T&& value) -> std::remove_cvref_t<T> {
+    return std::forward<T>(value);
+}
+
+template <typename T, std::size_t N>
+constexpr auto store_styled_value(T (&arr)[N]) -> std::decay_t<T (&)[N]> {
+    return arr;
+}
+
+template <typename Ret, typename... Args>
+constexpr auto store_styled_value(auto(f)(Args...)->Ret)
+    -> std::decay_t<auto(Args...)->Ret> {
+    return f;
+}
+
 
 } // namespace detail
 
@@ -202,7 +267,7 @@ constexpr auto color_to_sgr_params(OutputIt out,
 /// @details A `Color` is similar to a tagged union with 4 color types.
 /// It stores a `ColorType` and a `uint8_t[3]` containing the data.
 ///
-/// The meaning of each type:
+/// Color types:
 /// * `null` => A null color. It emits no ANSI escape sequence.
 ///
 /// * `default_color` => The terminal's default color.
@@ -544,6 +609,10 @@ struct Style {
             .append("]");
     }
 
+    /// @brief Equivalent to `styled(*this, values...)`
+    template <typename... Ts>
+    constexpr auto operator()(Ts&&... values) const;
+
   private:
     constexpr auto fg_type() const -> ColorType {
         return static_cast<ColorType>((color_types_ >> 4) & 0x0F);
@@ -676,110 +745,6 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::underline_doub
 // ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-namespace detail {
-
-template <concepts::style StyleT>
-constexpr auto apply_style(AbsoluteStyle current, StyleT style)
-    -> AbsoluteStyle {
-    using style_type = std::remove_cvref_t<StyleT>;
-    if constexpr (std::is_same_v<style_type, Style>)
-        return abs(current.style | style);
-    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
-}
-
-template <typename T>
-struct ConstRef {
-    constexpr ConstRef(const T& ref) : ref(ref) {}
-
-    constexpr auto get() const -> const T& { return ref; }
-    constexpr operator const T&() const { return ref; }
-
-  private:
-    const T& ref; // NOLINT
-};
-
-template <typename T>
-struct unwrap_constref {
-    using type = T;
-};
-
-template <typename T>
-struct unwrap_constref<ConstRef<T>> {
-    using type = const T&;
-};
-
-template <typename T>
-constexpr auto make_styled_child(const T& value) -> detail::ConstRef<T> {
-    return detail::ConstRef<T>(value);
-}
-
-template <typename T>
-    requires(!std::is_lvalue_reference_v<T>)
-constexpr auto make_styled_child(T&& value) -> std::remove_cvref_t<T> {
-    return std::forward<T>(value);
-}
-
-template <typename T>
-constexpr auto make_styled_child(T* value) -> const T* {
-    return value;
-}
-
-template <detail::styled Styled>
-constexpr auto make_styled_child(Styled& styled) -> Styled& {
-    return styled;
-}
-
-template <typename OutputFn,
-          typename StyleOutputFn,
-          concepts::style StyleT,
-          typename... Ts>
-constexpr void emit_styled_children(AbsoluteStyle current_style,
-                                    const OutputFn& output_fn,
-                                    const StyleOutputFn& style_output_fn,
-                                    const Styled<StyleT, Ts...>& styled) {
-    AbsoluteStyle applied_style =
-        detail::apply_style(current_style, styled.style());
-    auto emit_one = [&, applied_style]<typename P>(const P& value) {
-        if constexpr (detail::styled<P>) {
-            emit_styled_children(
-                applied_style, output_fn, style_output_fn, value);
-        } else {
-            output_fn(static_cast<detail::unwrap_constref<P>::type>(value));
-        }
-    };
-
-    if (applied_style != current_style) style_output_fn(applied_style);
-    std::apply(
-        [&]<typename... Ps>(const Ps&... values) { (emit_one(values), ...); },
-        styled.values());
-    if (applied_style != current_style) style_output_fn(current_style);
-}
-
-/// @param current_style The style to reset after the styled emitted.
-/// @tparam OutputFn invocable by `output_fn(const T&)`, where T is unwrapped
-/// from `ConstRef`.
-/// @tparam StyleOutputFn invocable by `style_output_fn(StyleT)`
-template <typename OutputFn,
-          typename StyleOutputFn,
-          concepts::style StyleT,
-          typename T,
-          typename... Ts>
-constexpr void emit_styled(AbsoluteStyle current_style,
-                           const OutputFn& output_fn,
-                           const StyleOutputFn& style_output_fn,
-                           const Styled<StyleT, T, Ts...>& styled) {
-    if constexpr (sizeof...(Ts) == 0 && (!detail::styled<T>)) {
-        style_output_fn(styled.style());
-        output_fn(static_cast<unwrap_constref<T>::type>(
-            std::get<0>(styled.values())));
-        if (!styled.style().is_null()) style_output_fn(current_style);
-    } else {
-        emit_styled_children(current_style, output_fn, style_output_fn, styled);
-    }
-}
-
-} // namespace detail
-
 template <concepts::style StyleT, typename... Ts>
     requires(!concepts::style<Ts> && ...)
 struct Styled {
@@ -802,19 +767,86 @@ struct Styled {
 template <concepts::style StyleT, typename... Ts>
     requires(!concepts::style<Ts> && ...)
 constexpr auto styled(StyleT style, Ts&&... values) {
-    return Styled(style,
-                  detail::make_styled_child(std::forward<Ts>(values))...);
+    return Styled(style, detail::store_styled_value(std::forward<Ts>(values))...);
 }
 
 template <concepts::style StyleT, typename... Ts>
 inline auto operator<<(std::ostream& os, const Styled<StyleT, Ts...>& styled)
     -> std::ostream& {
-    detail::emit_styled(
+    detail::apply_styled(
         abs(null_style),
         [&](const auto& value) { os << value; },
         [&](concepts::style auto style) { os << style; },
         styled);
     return os;
+}
+
+// ─────────────────────────── IMPLEMENTATIONS ───────────────────────────
+
+namespace detail {
+
+template <concepts::style StyleT>
+constexpr auto apply_style(AbsoluteStyle current, StyleT style)
+    -> AbsoluteStyle {
+    using style_type = std::remove_cvref_t<StyleT>;
+    if constexpr (std::is_same_v<style_type, Style>)
+        return abs(current.style | style);
+    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
+}
+
+template <typename OutputFn,
+          typename StyleOutputFn,
+          concepts::style StyleT,
+          typename... Ts>
+constexpr void apply_styled_values(AbsoluteStyle current_style,
+                                    const OutputFn& output_fn,
+                                    const StyleOutputFn& style_output_fn,
+                                    const Styled<StyleT, Ts...>& styled) {
+    AbsoluteStyle new_style =
+        detail::apply_style(current_style, styled.style());
+    auto emit_one = [&, new_style]<typename P>(const P& value) {
+        if constexpr (detail::styled<P>) {
+            apply_styled_values(
+                new_style, output_fn, style_output_fn, value);
+        } else {
+            output_fn(unwrap(value));
+        }
+    };
+
+    if (new_style != current_style) style_output_fn(new_style);
+    std::apply(
+        [&]<typename... Ps>(const Ps&... values) { (emit_one(values), ...); },
+        styled.values());
+    if (new_style != current_style) style_output_fn(current_style);
+}
+
+/// @param current_style The style to reset after the styled emitted.
+/// @tparam OutputFn invocable by `output_fn(const T&)`, where T is unwrapped
+/// from `ConstRef`.
+/// @tparam StyleOutputFn invocable by `style_output_fn(StyleT)`
+template <typename OutputFn,
+          typename StyleOutputFn,
+          concepts::style StyleT,
+          typename T,
+          typename... Ts>
+constexpr void apply_styled(AbsoluteStyle current_style,
+                           const OutputFn& output_fn,
+                           const StyleOutputFn& style_output_fn,
+                           const Styled<StyleT, T, Ts...>& styled) {
+    if constexpr (sizeof...(Ts) == 0 && (!detail::styled<T>)) {
+        style_output_fn(styled.style());
+        output_fn(unwrap(std::get<0>(styled.values())));
+        if (!styled.style().is_null()) style_output_fn(current_style);
+    } else {
+        apply_styled_values(current_style, output_fn, style_output_fn, styled);
+    }
+}
+
+} // namespace detail
+
+template <typename... Ts>
+constexpr auto Style::operator()(Ts&&... values) const {
+    return styled(*this, std::forward<Ts>(values)...);
 }
 
 } // namespace deco
