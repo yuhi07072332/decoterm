@@ -230,8 +230,13 @@ struct unwrap_constref<ConstRef<T>> {
 };
 
 template <typename T>
-constexpr auto unwrap(T& value) -> unwrap_constref<T>::type& {
+constexpr auto unwrap_stored(T& value) -> T& {
     return value;
+}
+
+template <typename T>
+constexpr auto unwrap_stored(ConstRef<T> ref) -> const T& {
+    return ref;
 }
 
 template <typename T>
@@ -816,7 +821,7 @@ constexpr void apply_styled_values(AbsoluteStyle current_style,
             apply_styled_values(
                 new_style, output_fn, style_output_fn, value);
         } else {
-            output_fn(unwrap(value));
+            output_fn(unwrap_stored(value));
         }
     };
 
@@ -841,9 +846,12 @@ constexpr void apply_styled(AbsoluteStyle current_style,
                            const StyleOutputFn& style_output_fn,
                            const Styled<StyleT, T, Ts...>& styled) {
     if constexpr (sizeof...(Ts) == 0 && (!detail::styled<T>)) {
-        style_output_fn(styled.style());
-        output_fn(unwrap(std::get<0>(styled.values())));
-        if (!styled.style().is_null()) style_output_fn(current_style);
+        AbsoluteStyle new_style =
+            detail::apply_style(current_style, styled.style());
+
+        if (new_style != current_style) style_output_fn(new_style);
+        output_fn(unwrap_stored(std::get<0>(styled.values())));
+        if (new_style != current_style) style_output_fn(current_style);
     } else {
         apply_styled_values(current_style, output_fn, style_output_fn, styled);
     }

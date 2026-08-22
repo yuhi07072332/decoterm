@@ -5,10 +5,13 @@
 
 #include <array>
 #include <cstdint>
+#include <iostream>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <string_view>
-#include <iostream>
+#include <tuple>
+#include <type_traits>
 
 // NOLINTBEGIN
 
@@ -21,7 +24,6 @@ auto sgr(std::string_view params) -> std::string {
     result += 'm';
     return result;
 }
-
 
 TEST_CASE("Color construct" * test_suite("Color")) {
     SUBCASE("from index") {
@@ -312,12 +314,13 @@ std::ostream& operator<<(std::ostream& os, const CustomClass& cc) {
     return os;
 }
 
-TEST_CASE("Styled stores multiple values" * test_suite("Styled")) {
-    SUBCASE("styled() stores rvalue") {
-        // 虽说static_assert没必要写进TEST_CASE甚至是SUBCASE里，但是个人
-        // 比较偏向于用TEST_CASE和SUBCASE来进行分类，而不单单是为了利用SUBCASE
-        // 来减少初始化，因此直接在这里写了。当然如果你有更好的写法可以修改。
+auto styled_test_function(int value) -> int { return value + 1; }
 
+TEST_CASE("Styled stores multiple values" * test_suite("Styled")) {
+    std::ostringstream os;
+    std::ostringstream expected;
+
+    SUBCASE("styled() stores rvalue") {
         int i = 42;
         const int ci = 84;
 
@@ -341,29 +344,82 @@ TEST_CASE("Styled stores multiple values" * test_suite("Styled")) {
                                             CustomClass>>);
 
         SUBCASE("output") {
-            //outputs using operator<<
-            // 可能用stringstream去比较？
+            os << styled;
+            expected << abs(bold) << 13 << 4.5 << 42 << 84 << &i << &ci
+                     << CustomClass(42) << reset;
+
+            CHECK(os.str() == expected.str());
         }
     }
 
     SUBCASE("styled() borrows lvalue by using ConstRef") {
+        int i = 42;
+        std::string str = "before";
+        CustomClass cc(7);
+
+        auto styled = deco::styled(italic, i, str, cc);
+
+        static_assert(std::is_same_v<decltype(styled),
+                                     Styled<Style,
+                                            detail::ConstRef<int>,
+                                            detail::ConstRef<std::string>,
+                                            detail::ConstRef<CustomClass>>>);
+
+        i = 84;
+        str = "after";
+        cc.increment();
+
         SUBCASE("output") {
+            os << styled;
+            expected << abs(italic) << 84 << "after" << 8 << reset;
         }
     }
 
     SUBCASE("styled() decays array and functions") {
-        // string literals, normal arrays, functions...
+        char arr[] = "array";
+        int nums[] = {1, 2, 3};
+
+        auto styled =
+            deco::styled(underline, "literal", arr, nums, styled_test_function);
+
+        static_assert(std::is_same_v<
+                      decltype(styled),
+                      Styled<Style, const char*, char*, int*, int (*)(int)>>);
+
         SUBCASE("output") {
+            os << styled;
+            expected << abs(underline) << "literal" << arr << nums
+                     << styled_test_function << reset;
         }
     }
 
     SUBCASE("nested Styled") {
+        auto styled = deco::styled(
+            fg(blue), "outer", deco::styled(bold, "inner"), "tail");
+
         SUBCASE("output") {
+            os << styled;
+            expected << abs(fg(blue)) << "outer" << abs(fg(blue) | bold)
+                     << "inner" << abs(fg(blue)) << "tail" << reset;
         }
     }
+
+    CHECK(os.str() == expected.str());
 }
 
-TEST_CASE("construct Styled by functional Style") {
+TEST_CASE("Styled can be constructed by calling Style" * test_suite("Styled")) {
+    auto styled = bold("text");
+
+    static_assert(std::is_same_v<decltype(styled), Styled<Style, const char*>>);
+
+    std::ostringstream os;
+    std::ostringstream expected;
+
+    os << styled;
+    expected << abs(bold) << "text" << reset;
+
+    CHECK(styled.style() == bold);
+    CHECK(os.str() == expected.str());
 }
 
 // NOLINTEND
