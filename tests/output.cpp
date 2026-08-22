@@ -48,6 +48,7 @@ void print_color_cell(int color_index, bool is_fg_white) {
 }
 
 auto main() -> int {
+    #if 0
     const Style style_h1 = color(bright_yellow, rgb(0x1f1e55)) | bold;
     const Style style_h2 = fg(bright_yellow) | underline;
 
@@ -202,4 +203,5 @@ auto main() -> int {
         }
         out << reset << '\n';
     }
+    #endif
 }

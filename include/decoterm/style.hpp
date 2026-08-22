@@ -339,18 +339,16 @@ struct Color {
     auto debug_string() const -> std::string {
         switch (type_) {
         case ColorType::null:
-            return "[null color]";
+            return "[null_color]";
         case ColorType::default_color:
-            return "[Default]";
+            return "[default_color]";
         case ColorType::terminal_color: {
-            std::string debug("[type=TerminalColor");
-            return debug.append(", index=")
+            return std::string("[terminal_color: ")
                 .append(std::to_string(data_[0]))
                 .append("]");
         }
         case ColorType::true_color: {
-            std::string debug("[type=TrueColor");
-            return debug.append(", rgb=")
+            return std::string("[true_color: ")
                 .append(std::to_string(data_[0]))
                 .append(", ")
                 .append(std::to_string(data_[1]))
@@ -359,6 +357,8 @@ struct Color {
                 .append("]");
         }
         }
+        assert(false);
+        return "";
     }
 
   private:
@@ -478,7 +478,7 @@ struct Style {
     };
 
     static constexpr std::size_t MAX_ESCAPE_SEQ_SIZE =
-        ((Color::MAX_ESCAPE_SEQ_SIZE - 3 + 1) * 2) + 14 + 3;
+        ((Color::MAX_ESCAPE_SEQ_SIZE - 3 + 1) * 2) + 16 + 3;
 
     // clang-format on
 
@@ -597,10 +597,12 @@ struct Style {
     auto debug_string() const -> std::string {
         std::string debug = "[flags=";
         std::array<char, 8> buf {};
-        for (std::size_t i = 0; i < buf.size(); ++i) {
-            uint8_t bit = 1 << (buf.size() - i - 1);
-            buf[i] = (emphasis_ & bit) ? '1' : '0';
+
+        for (int i = 0; i < 8; i++) {
+            if ((emphasis_ >> (7 - i)) & 1) buf[i] = '1';
+            else buf[i] = '0';
         }
+
         return debug.append(buf.data(), 8)
             .append(", fg=")
             .append(fg().debug_string())
@@ -686,6 +688,11 @@ struct AbsoluteStyle {
         std::string esc;
         to_escape(std::back_inserter(esc));
         return esc;
+    }
+
+    [[nodiscard]]
+    auto debug_string() const -> std::string {
+        return std::string("[absolute:") + style.debug_string() + "]";
     }
 };
 
