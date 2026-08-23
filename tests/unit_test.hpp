@@ -9,7 +9,9 @@
 namespace {
 inline std::string printable_csi(const std::string& esc) {
     assert(esc.starts_with("\x1b["));
-    return "CSI" + esc.substr(2);
+    return (deco::bold | deco::fg(deco::cyan)).to_escape() 
+    + ("CSI") + deco::abs(deco::null_style).to_escape()
+    + esc.substr(2);
 }
 
 }
