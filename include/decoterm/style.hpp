@@ -99,9 +99,9 @@ template <typename OutputFn,
           concepts::style StyleT,
           typename... Ts>
 constexpr void apply_styled_values(AbsoluteStyle current_style,
-                                    const OutputFn& output_fn,
-                                    const StyleOutputFn& style_output_fn,
-                                    const Styled<StyleT, Ts...>& styled);
+                                   const OutputFn& output_fn,
+                                   const StyleOutputFn& style_output_fn,
+                                   const Styled<StyleT, Ts...>& styled);
 
 template <typename OutputFn,
           typename StyleOutputFn,
@@ -109,9 +109,9 @@ template <typename OutputFn,
           typename T,
           typename... Ts>
 constexpr void apply_styled(AbsoluteStyle current_style,
-                           const OutputFn& output_fn,
-                           const StyleOutputFn& style_output_fn,
-                           const Styled<StyleT, T, Ts...>& styled);
+                            const OutputFn& output_fn,
+                            const StyleOutputFn& style_output_fn,
+                            const Styled<StyleT, T, Ts...>& styled);
 
 using ColorData = std::array<uint8_t, 3>;
 
@@ -261,7 +261,6 @@ constexpr auto store_styled_value(auto(f)(Args...)->Ret)
     return f;
 }
 
-
 } // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -311,7 +310,7 @@ struct Color {
     constexpr auto operator!=(const Color&) const -> bool = default;
 
     /// equivalent to `!is_null()`
-    constexpr explicit operator bool() const { return !is_null(); }
+    constexpr explicit operator bool() const { return !this->is_null(); }
 
     /// Whether this Color's type is `ColorType::null`
     constexpr auto is_null() const -> bool { return type_ == ColorType::null; }
@@ -532,16 +531,16 @@ struct Style {
     constexpr auto operator!=(const Style&) const -> bool = default;
 
     /// @brief equivalent to !is_null()
-    constexpr explicit operator bool() const { return !is_null(); }
+    constexpr explicit operator bool() const { return !this->is_null(); }
 
     // ----- observe -----
 
     constexpr auto emphasis() const -> uint8_t { return emphasis_; }
-    constexpr auto fg() const -> Color { return {fg_type(), fg_data_}; }
-    constexpr auto bg() const -> Color { return {bg_type(), bg_data_}; }
+    constexpr auto fg() const -> Color { return {this->fg_type(), fg_data_}; }
+    constexpr auto bg() const -> Color { return {this->bg_type(), bg_data_}; }
 
     constexpr auto is_null() const -> bool {
-        return emphasis_ == none && fg_null() && bg_null();
+        return emphasis_ == none && this->fg_null() && this->bg_null();
     }
 
     // ----- output -----
@@ -551,16 +550,16 @@ struct Style {
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
         using namespace detail;
-        if (is_null()) return out;
+        if (this->is_null()) return out;
         bool needs_separate = false;
 
-        if (!fg_null()) {
-            out = detail::color_to_sgr_params(out, false, fg_type(), fg_data_);
+        if (!this->fg_null()) {
+            out = color_to_sgr_params(out, false, this->fg_type(), fg_data_);
             needs_separate = true;
         }
-        if (!bg_null()) {
+        if (!this->bg_null()) {
             if (needs_separate) *out++ = ';';
-            out = detail::color_to_sgr_params(out, true, bg_type(), bg_data_);
+            out = color_to_sgr_params(out, true, this->bg_type(), bg_data_);
             needs_separate = true;
         }
 
@@ -582,10 +581,10 @@ struct Style {
     /// @brief Writes ANSI escape sequence to the output iterator.
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
-        if (is_null()) return out;
+        if (this->is_null()) return out;
 
         out = detail::write_to(out, "\x1b[");
-        out = to_sgr_params(out);
+        out = this->to_sgr_params(out);
         *out++ = 'm';
         return out;
     }
@@ -594,7 +593,7 @@ struct Style {
     [[nodiscard]]
     auto to_escape() const -> std::string {
         std::string esc;
-        to_escape(std::back_inserter(esc));
+        this->to_escape(std::back_inserter(esc));
         return esc;
     }
 
@@ -610,9 +609,9 @@ struct Style {
 
         return debug.append(buf.data(), 8)
             .append(", fg=")
-            .append(fg().debug_string())
+            .append(this->fg().debug_string())
             .append(", bg=")
-            .append(bg().debug_string())
+            .append(this->bg().debug_string())
             .append("]");
     }
 
@@ -640,10 +639,10 @@ struct Style {
     }
 
     constexpr auto fg_null() const -> bool {
-        return fg_type() == ColorType::null;
+        return this->fg_type() == ColorType::null;
     }
     constexpr auto bg_null() const -> bool {
-        return bg_type() == ColorType::null;
+        return this->bg_type() == ColorType::null;
     }
 
     detail::ColorData fg_data_ = {0, 0, 0};
@@ -691,7 +690,7 @@ struct AbsoluteStyle {
     [[nodiscard]]
     auto to_escape() const -> std::string {
         std::string esc;
-        to_escape(std::back_inserter(esc));
+        this->to_escape(std::back_inserter(esc));
         return esc;
     }
 
@@ -779,7 +778,8 @@ struct Styled {
 template <concepts::style StyleT, typename... Ts>
     requires(!concepts::style<Ts> && ...)
 constexpr auto styled(StyleT style, Ts&&... values) {
-    return Styled(style, detail::store_styled_value(std::forward<Ts>(values))...);
+    return Styled(style,
+                  detail::store_styled_value(std::forward<Ts>(values))...);
 }
 
 template <concepts::style StyleT, typename... Ts>
@@ -811,15 +811,14 @@ template <typename OutputFn,
           concepts::style StyleT,
           typename... Ts>
 constexpr void apply_styled_values(AbsoluteStyle current_style,
-                                    const OutputFn& output_fn,
-                                    const StyleOutputFn& style_output_fn,
-                                    const Styled<StyleT, Ts...>& styled) {
+                                   const OutputFn& output_fn,
+                                   const StyleOutputFn& style_output_fn,
+                                   const Styled<StyleT, Ts...>& styled) {
     AbsoluteStyle new_style =
         detail::apply_style(current_style, styled.style());
     auto emit_one = [&, new_style]<typename P>(const P& value) {
         if constexpr (detail::styled<P>) {
-            apply_styled_values(
-                new_style, output_fn, style_output_fn, value);
+            apply_styled_values(new_style, output_fn, style_output_fn, value);
         } else {
             output_fn(unwrap_stored(value));
         }
@@ -842,9 +841,9 @@ template <typename OutputFn,
           typename T,
           typename... Ts>
 constexpr void apply_styled(AbsoluteStyle current_style,
-                           const OutputFn& output_fn,
-                           const StyleOutputFn& style_output_fn,
-                           const Styled<StyleT, T, Ts...>& styled) {
+                            const OutputFn& output_fn,
+                            const StyleOutputFn& style_output_fn,
+                            const Styled<StyleT, T, Ts...>& styled) {
     if constexpr (sizeof...(Ts) == 0 && (!detail::styled<T>)) {
         AbsoluteStyle new_style =
             detail::apply_style(current_style, styled.style());

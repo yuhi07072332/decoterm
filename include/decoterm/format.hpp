@@ -92,11 +92,11 @@ template <typename Arg>
 static consteval void check_arg() {
     using arg_type = std::remove_cvref_t<Arg>;
     static_assert((!concepts::style<arg_type>
-    && !std::is_same_v<arg_type, style_reset_t>
-    && !std::is_same_v<arg_type, style_pop_t>),
-    "deco::StyledFormat: Style, reset, pop are disallowed as "
-    "format arguments. Use print(style, ...), styled(), "
-    "push(), reset(), or pop() instead.");
+                   && !std::is_same_v<arg_type, style_reset_t>
+                   && !std::is_same_v<arg_type, style_pop_t>),
+                  "deco::StyledFormat: Style, reset, pop are disallowed as "
+                  "format arguments. Use print(style, ...), styled(), "
+                  "push(), reset(), or pop() instead.");
 }
 
 } // namespace detail
@@ -262,19 +262,19 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
     /* ----- Style operations ----- */
 
     auto push(concepts::style auto style) -> StyledFormat& {
-        push_style(style);
+        this->push_style(style);
         current_is_pending_ = true;
         return *this;
     }
 
     auto pop() -> StyledFormat& {
-        pop_style();
+        this->pop_style();
         current_is_pending_ = true;
         return *this;
     }
 
     auto reset() -> StyledFormat& {
-        reset_style();
+        this->reset_style();
         current_is_pending_ = true;
         return *this;
     }
@@ -289,18 +289,19 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
                    std::format_string<Args...> fmt,
                    Args&&... args) -> OutputIt {
         (detail::check_arg<Args>(), ...);
-        out = ensure_context(out);
+        out = this->ensure_context(out);
         const AbsoluteStyle current =
-            detail::apply_style(current_style(), style);
+            detail::apply_style(this->current_style(), style);
 
-        if (!style.is_null()) out = output_style(out, style);
+        if (!style.is_null()) out = this->output_style(out, style);
         out = std::vformat_to(
             out,
             fmt.get(),
             detail::make_format_args(process_arg(
-                detail::StyledFormatContext(current, style_enabled()),
+                detail::StyledFormatContext(current, this->style_enabled()),
                 std::forward<Args>(args))...));
-        if (!style.is_null()) out = output_style(out, current_style());
+        if (!style.is_null())
+            out = this->output_style(out, this->current_style());
         return out;
     }
 
@@ -308,7 +309,8 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
     auto format_to(OutputIt out,
                    std::format_string<Args...> fmt,
                    Args&&... args) -> OutputIt {
-        return format_to(out, null_style, fmt, std::forward<Args>(args)...);
+        return this->format_to(
+            out, null_style, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
@@ -317,7 +319,7 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
                 std::format_string<Args...> fmt,
                 Args&&... args) -> std::string {
         std::string buf;
-        format_to(
+        this->format_to(
             std::back_inserter(buf), style, fmt, std::forward<Args>(args)...);
         return buf;
     }
@@ -327,7 +329,8 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
     auto format(std::format_string<Args...> fmt, Args&&... args)
         -> std::string {
         std::string buf;
-        format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
+        this->format_to(
+            std::back_inserter(buf), fmt, std::forward<Args>(args)...);
         return buf;
     }
 
@@ -335,18 +338,18 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
     template <std::output_iterator<const char&> OutputIt,
               concepts::style StyleT>
     auto output_style(OutputIt out, StyleT style) const -> OutputIt {
-        if (!style_enabled()) return out;
-        return fallback_style(style).to_escape(out);
+        if (!this->style_enabled()) return out;
+        return this->fallback_style(style).to_escape(out);
     }
 
     template <std::output_iterator<const char&> OutputIt>
     auto ensure_context(OutputIt out) -> OutputIt {
-        const auto update = update_context();
-        const AbsoluteStyle current = current_style();
+        const auto update = this->update_context();
+        const AbsoluteStyle current = this->current_style();
 
-        if (update) out = output_style(out, *update);
+        if (update) out = this->output_style(out, *update);
         if (current_is_pending_ && (!update || current != *update))
-            out = output_style(out, current);
+            out = this->output_style(out, current);
         current_is_pending_ = false;
         return out;
     }
@@ -359,9 +362,9 @@ class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
 
 #ifdef DECO_ENABLE_PRINT
 
-class StyledPrint : public StyleState,
-                    public StyleStateSetter<StyledPrint> {
+class StyledPrint : public StyleState, public StyleStateSetter<StyledPrint> {
     using stream_type = std::variant<std::FILE*, std::ostream*>;
+
   public:
     StyledPrint() = default;
     StyledPrint(StyleState state) : StyleState(std::move(state)) {}
@@ -381,22 +384,22 @@ class StyledPrint : public StyleState,
     auto print(StyleT style, FormatString<Args...> fmt, Args&&... args)
         -> StyledPrint& {
         (detail::check_arg<Args>(), ...);
-        ensure_context();
+        this->ensure_context();
         const AbsoluteStyle current =
-            detail::apply_style(current_style(), style);
+            detail::apply_style(this->current_style(), style);
 
-        if (!style.is_null()) output_style(style);
-        print_stream(
-            fmt,
-            process_arg(detail::StyledFormatContext(current, style_enabled()),
-                        std::forward<Args>(args))...);
-        if (!style.is_null()) output_style(current_style());
+        if (!style.is_null()) this->output_style(style);
+        this->print_stream(fmt,
+                           process_arg(detail::StyledFormatContext(
+                                           current, this->style_enabled()),
+                                       std::forward<Args>(args))...);
+        if (!style.is_null()) this->output_style(this->current_style());
         return *this;
     }
 
     template <typename... Args>
     auto print(FormatString<Args...> fmt, Args&&... args) -> StyledPrint& {
-        print(null_style, fmt, std::forward<Args>(args)...);
+        this->print(null_style, fmt, std::forward<Args>(args)...);
         return *this;
     }
 
@@ -415,16 +418,16 @@ class StyledPrint : public StyleState,
     }
 
     void output_style(concepts::style auto style) const {
-        if (!style_enabled()) return;
-        print_stream("{}", fallback_style(style));
+        if (!this->style_enabled()) return;
+        this->print_stream("{}", this->fallback_style(style));
     }
 
     void ensure_context() {
-        const auto update = update_context();
-        const AbsoluteStyle current = current_style();
-        if (update) output_style(*update);
+        const auto update = this->update_context();
+        const AbsoluteStyle current = this->current_style();
+        if (update) this->output_style(*update);
         if (current_is_pending_ && (!update || current != *update))
-            output_style(current);
+            this->output_style(current);
         current_is_pending_ = false;
     }
 
