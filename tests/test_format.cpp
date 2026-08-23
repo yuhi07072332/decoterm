@@ -1,4 +1,6 @@
 #include <decoterm/format.hpp>
+
+#include "unit_test.hpp"
 #include <doctest.h>
 
 #include <format>
@@ -7,228 +9,167 @@
 #include <string>
 #include <version>
 
-
 // NOLINTBEGIN
 
-TEST_CASE("format: formatters") {
-    using namespace deco;
+using namespace deco;
+using doctest::test_suite;
 
-    CHECK(std::format("{}text{}", bold, reset)
-          == bold.to_escape() + std::string("text")
-                 + abs(null_style).to_escape());
-    CHECK(std::format("{}", styled(fg(red), std::string("text")))
-          == fg(red).to_escape() + std::string("text")
-                 + abs(null_style).to_escape());
-    CHECK(std::format("{:04}", styled(bold, 42))
-          == bold.to_escape() + std::string("0042")
-                 + abs(null_style).to_escape());
+TEST_CASE("formatter" * test_suite("formatter")) {
+    std::string result;
+    std::ostringstream expected;
+
+    SUBCASE("Style") {
+        result = std::format("{}text", bold | fg(yellow));
+        expected << (bold | fg(yellow)) << "text";
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("AbsoluteStyle") {
+        result = std::format("{}text", abs(bold | fg(yellow)));
+        expected << abs(bold | fg(yellow)) << "text";
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("reset") {
+        result = std::format("{}text{}", bold, reset);
+        expected << bold << "text" << reset;
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("simple Styled") {
+        result = std::format("{:04}", styled(bold, 42));
+        expected << abs(bold) << "0042" << reset;
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("complex Styled") {
+        result =
+            std::format("{}", styled(fg(blue), "outer", bold("inner"), "tail"));
+        expected << abs(fg(blue)) << "outer" << abs(fg(blue) | bold) << "inner"
+                 << abs(fg(blue)) << "tail" << reset;
+        CHECK(result == expected.str());
+    }
+
 }
 
-TEST_CASE("format: StyledFormat: format_to()") {
-    using namespace deco;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+TEST_CASE("StyledFormat formats values" * test_suite("StyledFormat")) {
+    std::string result;
+    std::ostringstream expected;
+    StyledFormat fmt;
+    fmt.set_base_style(fg(blue));
 
-    std::string out;
+    SUBCASE("format_to") {
+        fmt.format_to(std::back_inserter(result), "{} {}", "text", 42);
+        expected << abs(fg(blue)) << "text " << 42;
+        CHECK(result == expected.str());
+    }
 
-    sfmt.format_to(std::back_inserter(out), "{} {}", "value", 42);
-    sfmt.format_to(std::back_inserter(out), " {}", "next");
+    SUBCASE("format_to with style specified") {
+        fmt.format_to(std::back_inserter(result), bold, "{}", "bold");
+        fmt.format_to(std::back_inserter(result), "{}", "base");
 
-    CHECK(out
-          == abs(fg(white)).to_escape() + std::string("value 42 next"));
+        expected << abs(fg(blue)) << bold << "bold" << abs(fg(blue)) << "base";
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("format") {
+        result = fmt.format(italic, "{}", "italic");
+
+        expected << abs(fg(blue)) << italic << "italic" << abs(fg(blue));
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("nested style state") {
+        fmt.enable_nesting();
+
+        fmt.format_to(std::back_inserter(result), "{}", "base");
+        fmt.push(bold).format_to(std::back_inserter(result), "{}", "bold");
+        fmt.push(italic).format_to(
+            std::back_inserter(result), fg(red), "{}", "red");
+        fmt.pop().format_to(std::back_inserter(result), "{}", "bold2");
+        fmt.reset().format_to(std::back_inserter(result), "{}", "base2");
+
+        const Style bold_blue = fg(blue) | bold;
+        const Style italic_bold_blue = fg(blue) | bold | italic;
+
+        expected << abs(fg(blue)) << "base" << abs(bold_blue) << "bold"
+                 << abs(italic_bold_blue) << fg(red) << "red"
+                 << abs(italic_bold_blue) << abs(bold_blue) << "bold2"
+                 << abs(fg(blue)) << "base2";
+        CHECK(result == expected.str());
+    }
+
 }
 
-TEST_CASE("format: StyledFormat: format_to() with style") {
-    using namespace deco;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+TEST_CASE("StyledFormat writes Styled" * test_suite("StyledFormat")) {
+    std::string result;
+    std::ostringstream expected;
+    StyledFormat fmt;
+    fmt.set_base_style(fg(blue));
 
-    std::string out;
+    SUBCASE("simple") {
+        result = fmt.format(fg(red), "before{}after", italic("italic"));
 
-    sfmt.format_to(std::back_inserter(out), bold, "{}", "bold");
-    sfmt.format_to(std::back_inserter(out), "{}", "base");
+        expected << abs(fg(blue)) << fg(red) << "before" << abs(fg(red) | italic) << "italic"
+                 << abs(fg(red)) << "after" << abs(fg(blue));
+        CHECK(result == expected.str());
+    }
 
-    CHECK(out
-          == abs(fg(white)).to_escape() + bold.to_escape()
-                 + std::string("bold") + abs(fg(white)).to_escape()
-                 + std::string("base"));
+    SUBCASE("complex") {
+        auto styled = bold("lorem", 42, italic("ipsum"), "dolor");
+
+        result = fmt.format("{}sit", styled);
+
+        expected << abs(fg(blue)) << abs(fg(blue) | bold) << "lorem" << 42
+                 << abs(fg(blue) | bold | italic) << "ipsum"
+                 << abs(fg(blue) | bold) << "dolor" << abs(fg(blue)) << "sit";
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("style disabled") {
+        fmt.enable_style(false);
+
+        result = fmt.format(fg(red), "A{}B", bold("x"));
+
+        expected << "AxB";
+        CHECK(result == expected.str());
+    }
 }
 
-TEST_CASE("format: StyledFormat: format()") {
-    using namespace deco;
-
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-
-    CHECK(sfmt.format("{}", "base")
-          == abs(fg(white)).to_escape() + std::string("base"));
-    CHECK(sfmt.format(italic, "{}", "italic")
-          == italic.to_escape() + std::string("italic")
-                 + abs(fg(white)).to_escape());
-}
-
-TEST_CASE("format: StyledFormat: format() with StyledRef") {
-    using namespace deco;
-
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-
-    CHECK(sfmt.format("base{}base", styled(bold, std::string("bold")))
-          == abs(fg(white)).to_escape() + std::string("base")
-                 + bold.to_escape() + std::string("bold")
-                 + abs(fg(white)).to_escape() + std::string("base"));
-}
-
-TEST_CASE("format: StyledFormat: StyledRef restores call style") {
-    using namespace deco;
-
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-
-    CHECK(
-        sfmt.format(fg(red), "before{}after", styled(bold, std::string("bold")))
-        == abs(fg(white)).to_escape() + fg(red).to_escape()
-               + std::string("before") + bold.to_escape() + std::string("bold")
-               + abs(fg(red)).to_escape() + std::string("after")
-               + abs(fg(white)).to_escape());
-}
-
-TEST_CASE("format: StyledFormat: StyledRef restores absolute call style") {
-    using namespace deco;
-
-    const Style base = fg(white) | bold;
-    StyledFormat sfmt = StyledFormat().set_base_style(base);
-
-    CHECK(sfmt.format(abs(fg(red)),
-                      "before{}after",
-                      styled(italic, std::string("italic")))
-          == abs(base).to_escape() + abs(fg(red)).to_escape()
-                 + std::string("before") + italic.to_escape()
-                 + std::string("italic") + abs(fg(red)).to_escape()
-                 + std::string("after") + abs(base).to_escape());
-}
-
-TEST_CASE("format: StyledFormat: disabled style with StyledRef") {
-    using namespace deco;
-
-    StyledFormat sfmt;
-    sfmt.enable_style(false);
-
-    CHECK(sfmt.format(fg(red), "A{}B", styled(bold, std::string("x")))
-          == "AxB");
-}
-
+// TODO: 
 # if 0
 
-TEST_CASE("format: StyledPrint: print()" * doctest::may_fail()) {
-    using namespace deco;
-
+TEST_CASE("StyledPrint" * test_suite("StyledPrint")) {
     std::ostringstream os;
-    StyledPrint sfmt = StyledPrint().set_base_style(fg(white));
-    sfmt.set_stream(os);
+    std::ostringstream expected;
+    StyledPrint out;
+    out.set_stream(os).set_base_style(fg(blue));
 
-    sfmt.print("{} {}", "value", 42).print(" {}", "next");
+    SUBCASE("plain values") {
+        out.print("{} {}", "text", 42).print(" {}", "next");
+        expected << abs(fg(blue)) << "text 42 next";
+    }
 
-    CHECK(os.str()
-          == abs(fg(white)).to_escape() + std::string("value 42 next"));
+    SUBCASE("with style specified") {
+        out.print(bold, "{}", "bold").print("{}", "base");
+        expected << abs(fg(blue)) << bold << "bold" << abs(fg(blue)) << "base";
+    }
+
+    SUBCASE("writes Styled") {
+        out.print(fg(red), "before{}after", italic("italic"));
+        expected << abs(fg(blue)) << fg(red) << "before" << italic << "italic"
+                 << abs(fg(red)) << "after" << abs(fg(blue));
+    }
+
+    SUBCASE("style disabled") {
+        out.enable_style(false);
+        out.print(fg(red), "A{}B", bold("x"));
+        expected << "AxB";
+    }
+
+    CHECK(os.str() == expected.str());
 }
 
-TEST_CASE("format: StyledPrint: print() with style") {
-    using namespace deco;
-
-    std::ostringstream os;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-    sfmt.set_stream(os);
-
-    sfmt.print(bold, "{}", "bold").print("{}", "base");
-
-    CHECK(os.str()
-          == abs(fg(white)).to_escape() + bold.to_escape()
-                 + std::string("bold") + abs(fg(white)).to_escape()
-                 + std::string("base"));
-}
-
-TEST_CASE("format: StyledFormat: print() with StyledRef") {
-    using namespace deco;
-
-    std::ostringstream os;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-    sfmt.set_stream(os);
-
-    sfmt.print("base{}base", styled(bold, std::string("bold")));
-
-    CHECK(os.str()
-          == abs(fg(white)).to_escape() + std::string("base")
-                 + bold.to_escape() + std::string("bold")
-                 + abs(fg(white)).to_escape() + std::string("base"));
-}
-
-TEST_CASE("format: StyledFormat: print StyledRef context") {
-    using namespace deco;
-
-    const Style base = fg(white) | bold;
-    std::ostringstream os;
-    StyledFormat sfmt = StyledFormat().set_base_style(base);
-    sfmt.set_stream(os);
-
-    sfmt.print(abs(fg(red)),
-               "before{}after",
-               styled(italic, std::string("italic")));
-
-    CHECK(os.str()
-          == abs(base).to_escape() + abs(fg(red)).to_escape()
-                 + std::string("before") + italic.to_escape()
-                 + std::string("italic") + abs(fg(red)).to_escape()
-                 + std::string("after") + abs(base).to_escape());
-}
-
-TEST_CASE("format: StyledFormat: print disabled style with StyledRef") {
-    using namespace deco;
-
-    std::ostringstream os;
-    StyledFormat sfmt;
-    sfmt.enable_style(false).set_stream(os);
-
-    sfmt.print(fg(red), "A{}B", styled(bold, std::string("x")));
-
-    CHECK(os.str() == "AxB");
-}
-
-TEST_CASE("format: StyledFormat: set stream(std::ostream)") {
-    using namespace deco;
-
-    std::ostringstream os1;
-    std::ostringstream os2;
-    StyledFormat sfmt;
-    sfmt.enable_style(false);
-
-    sfmt.set_stream(os1).print("{}", "one");
-    sfmt.set_stream(os2).print("{}", "two");
-
-    CHECK(os1.str() == "one");
-    CHECK(os2.str() == "two");
-}
-
-TEST_CASE("format: StyledFormat: style nesting") {
-    using namespace deco;
-
-    StyledFormat sfmt =
-        StyledFormat().set_base_style(fg(white)).enable_nesting();
-    std::string out;
-
-    sfmt.format_to(std::back_inserter(out), "{}", "base");
-    sfmt.push(bold).format_to(std::back_inserter(out), "{}", "bold");
-    sfmt.push(italic).format_to(std::back_inserter(out), fg(red), "{}", "red");
-    sfmt.pop().format_to(std::back_inserter(out), "{}", "bold2");
-    sfmt.reset().format_to(std::back_inserter(out), "{}", "base2");
-
-    const Style bold_white = fg(white) | bold;
-    const Style italic_bold_white = fg(white) | bold | italic;
-
-    CHECK(out
-          == abs(fg(white)).to_escape() + std::string("base")
-                 + abs(bold_white).to_escape() + std::string("bold")
-                 + abs(italic_bold_white).to_escape() + fg(red).to_escape()
-                 + std::string("red") + abs(italic_bold_white).to_escape()
-                 + abs(bold_white).to_escape() + std::string("bold2")
-                 + abs(fg(white)).to_escape() + std::string("base2"));
-}
-
-#endif
+# endif
 
 // NOLINTEND

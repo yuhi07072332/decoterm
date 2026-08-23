@@ -10,8 +10,8 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <tuple>
 #include <type_traits>
+#include <iomanip>
 
 // NOLINTBEGIN
 
@@ -354,14 +354,18 @@ TEST_CASE("Styled stores multiple values" * test_suite("Styled")) {
 
     SUBCASE("styled() borrows lvalue by using ConstRef") {
         int i = 42;
+        int ci = 84;
+        int* pi = &ci;
         std::string str = "before";
         CustomClass cc(7);
 
-        auto styled = deco::styled(italic, i, str, cc);
+        auto styled = deco::styled(italic, i, ci, pi, str, cc);
 
         static_assert(std::is_same_v<decltype(styled),
                                      Styled<Style,
                                             detail::ConstRef<int>,
+                                            detail::ConstRef<int>,
+                                            detail::ConstRef<int*>,
                                             detail::ConstRef<std::string>,
                                             detail::ConstRef<CustomClass>>>);
 
@@ -371,7 +375,7 @@ TEST_CASE("Styled stores multiple values" * test_suite("Styled")) {
 
         SUBCASE("output") {
             os << styled;
-            expected << abs(italic) << 84 << "after" << 8 << reset;
+            expected << abs(italic) << 84 << 84 << pi << "after" << 8 << reset;
         }
     }
 
@@ -391,6 +395,12 @@ TEST_CASE("Styled stores multiple values" * test_suite("Styled")) {
             expected << abs(underline) << "literal" << arr << nums
                      << styled_test_function << reset;
         }
+    }
+
+    SUBCASE("iomanipulators") {
+        auto styled_for_os = styled(dim, std::setprecision(4), 1.5);
+        os << styled_for_os;
+        expected << abs(dim) << std::setprecision(4) << 1.5 << reset;
     }
 
     SUBCASE("nested Styled") {
