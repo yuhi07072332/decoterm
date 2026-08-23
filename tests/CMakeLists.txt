@@ -1,6 +1,6 @@
 # unit test
 add_executable(decoterm_test
-    test_color.cpp
+    main.cpp
     test_style.cpp
     test_output.cpp
     test_format.cpp
