@@ -19,9 +19,9 @@ auto main() -> int {
     const Style warning_style = bold | fg(rgb(0xfff2b2));
 
     // Similar to fmt::styled() from fmtlib
-    std::cout << styled("warning: ", warning_style)
+    std::cout << warning_style("warning: ")
               << "Unused variable 'x'"
-              << styled("[-Wunused-variable]", warning_style)
+              << warning_style("[-Wunused-variable]")
               << '\n';
 
     // HSV usage
@@ -50,11 +50,4 @@ auto main() -> int {
          << pop << "base style";
 
     std::cout << '\n';
-
-    // StyledFormat: Basically the same as StyledOstream, but uses format‑based output APIs.
-    StyledFormat sfmt = styled_print();
-    sfmt.print(fg(colors::aquamarine1), 
-               "{} and {} support\n",
-               styled("std::format", italic),
-               styled("std::print", italic));
 }
