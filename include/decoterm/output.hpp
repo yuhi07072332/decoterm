@@ -114,9 +114,8 @@ class StyleStack {
         if (other.is_heap()) {
             heap_ = std::make_unique_for_overwrite<AbsoluteStyle[]>(
                 other.capacity_);
-            std::memcpy(heap_.get(),
-                        other.heap_.get(),
-                        sizeof(AbsoluteStyle) * other.size_);
+            for (std::size_t i = 0; i < other.size_; ++i)
+                heap_[i] = other.heap_[i];
             data_ = heap_.get();
         } else {
             local_ = other.local_;
@@ -150,7 +149,8 @@ class StyleStack {
     constexpr void grow() {
         auto new_heap =
             std::make_unique_for_overwrite<AbsoluteStyle[]>(capacity_ * 2);
-        std::memcpy(new_heap.get(), data_, sizeof(AbsoluteStyle) * size_);
+        for (std::size_t i = 0; i < size_; ++i)
+            new_heap[i] = data_[i];
         heap_ = std::move(new_heap);
         data_ = heap_.get();
         capacity_ *= 2;
@@ -457,7 +457,7 @@ class StyledOstream : public StyleState,
         return out;
     }
 
-    /// @brief output operator for Style types
+    /// @brief output operator for style types
     template <concepts::style StyleT>
     friend auto operator<<(StyledOstream& out, StyleT style) -> StyledOstream& {
         out.ensure_context();

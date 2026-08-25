@@ -109,7 +109,7 @@ static consteval void check_arg() {
 
 namespace std {
 
-/// @brief formatter for Style types, e.g. `Style` and `AbsoluteStyle`
+/// @brief formatter for style types
 template <deco::concepts::style StyleT>
 struct formatter<StyleT> {
     constexpr auto parse(std::format_parse_context& ctx) const {

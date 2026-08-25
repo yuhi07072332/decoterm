@@ -30,7 +30,6 @@
 #include <cmath>
 #include <concepts>
 #include <cstdint>
-#include <cstring>
 #include <iterator>
 #include <ostream>
 #include <stdexcept>
@@ -719,7 +718,7 @@ constexpr auto bg(Color bg) -> Style {
     return {Style::Emphasis::none, null_color, bg};
 }
 
-/// @brief output operator for Style types e.g. Style, AbsoluteStyle
+/// @brief output operator for style types
 template <concepts::style StyleT>
 inline auto operator<<(std::ostream& os, StyleT style) -> std::ostream& {
     std::array<char, StyleT::MAX_ESCAPE_SEQ_SIZE> buf = {0};
