@@ -34,6 +34,10 @@ auto main() -> int {
     auto out = deco::StyledOstream(std::cout);
 
     out.set_base_style(deco::bg(deco::rgb(32, 32, 32)))
-       .enable_style(deco::terminal::is_stdout_tty())
-       .enable_nesting(true);
+       .enable_style(false);
+
+    out << deco::fg(deco::colors::medium_turquoise) << "style disabled!\n";
+
+    out.enable_style(true);
+    out << "style enabled!\n";
 }
