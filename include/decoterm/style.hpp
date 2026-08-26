@@ -96,15 +96,6 @@ namespace detail {
 template <typename OutputFn,
           typename StyleOutputFn,
           concepts::style StyleT,
-          typename... Ts>
-constexpr void apply_styled_values(AbsoluteStyle current_style,
-                                   const OutputFn& output_fn,
-                                   const StyleOutputFn& style_output_fn,
-                                   const Styled<StyleT, Ts...>& styled);
-
-template <typename OutputFn,
-          typename StyleOutputFn,
-          concepts::style StyleT,
           typename T,
           typename... Ts>
 constexpr void apply_styled(AbsoluteStyle current_style,

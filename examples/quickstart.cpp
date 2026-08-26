@@ -1,53 +1,39 @@
 #include <decoterm/decoterm.hpp>
 
 #include <iostream>
-#include <string_view>
 
 // clang-format off
 
 auto main() -> int {
-    using namespace deco;
+    // combine `Style`s with `|`
 
-    // -- 1. Basic Style Output
+    const deco::Style error_style = 
+        deco::bold | deco::invert | deco::fg(deco::bright_red);
+    const deco::Style expected_style = 
+        deco::bold | deco::fg(deco::rgb(238, 212, 159));
 
-    std::cout << bold << "Hello ,"
-              << (italic | fg(bright_green)) << "world!"
-              << reset      // reset to default style
+    // use `Style`s like I/O manipulators
+
+    std::cout << error_style << "assertion failed " << deco::reset
+              << "at ";
+
+    // use `Style`s as a function to decorate values
+
+    // -- same as `std::cout << deco::italic << "main.cpp" << deco::reset`
+    std::cout << deco::italic("main.cpp");
+
+    // -- this can also store multiple values.
+    std::cout << ":" << deco::bold(116) << ":   "
+              << expected_style("expected ", deco::underline(3.14))
+              << ", "
+              << fg(deco::bright_magenta)("got ", deco::underline(2.71))
               << "\n\n";
 
-    // Style composition
-    const Style warning_style = bold | fg(rgb(0xfff2b2));
-
-    // Similar to fmt::styled() from fmtlib
-    std::cout << warning_style("warning: ")
-              << "Unused variable 'x'"
-              << warning_style("[-Wunused-variable]")
-              << '\n';
-
-    // HSV usage
-    std::string_view text = "rainbowwwww~~~~";
-    for (std::size_t i = 0, len = text.size(); i < len; ++i) 
-        std::cout << fg(hsv(i * (360 / len), 120, 255))
-                  << text[i];
-
-    std::cout << '\n';
-
-    // -- 2. Advanced stateful output
-
     // StyledOstream: ostream wrapper with style output states.
-    StyledOstream sout = styled_out(std::cout)
-        .set_base_style(bg(rgb(32, 32, 32)))
-        .enable_style(terminal::is_stdout_tty())
-        .enable_nesting();
 
-    // Style nesting
-    sout << "base style "
-             << fg(bright_blue) << "{ blue "
-                 << italic << "{ italic blue "
-                     << fg(bright_red) << "{ italic red } "
-                 << pop << "italic blue } "
-             << pop << "blue } "
-         << pop << "base style";
+    auto out = deco::StyledOstream(std::cout);
 
-    std::cout << '\n';
+    out.set_base_style(deco::bg(deco::rgb(32, 32, 32)))
+       .enable_style(deco::terminal::is_stdout_tty())
+       .enable_nesting(true);
 }

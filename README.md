@@ -9,37 +9,41 @@ See the full example: [quickstart.cpp](examples/quickstart.cpp)
 ```cpp
 // -- 1. Basic Style Output
 
-std::cout << bold << "Hello ,"
-          << fg(bright_green) << "world!"
-          << reset << "\n\n";
+// combine `Style`s with `|`
 
-// Style composition
-const Style warning_style = bold | fg(rgb(0xfff2b2));
+const deco::Style error_style = 
+    deco::bold | deco::invert | deco::fg(deco::bright_red);
+const deco::Style expected_style = 
+    deco::bold | deco::fg(deco::rgb(238, 212, 159));
 
-// Similar to fmt::styled() from fmtlib
-std::cout << styled("warning: ", warning_style)
-          << "Unused variable 'x'"
-          << styled("[-Wunused-variable]", warning_style)
-          << '\n';
+// use `Style`s like I/O manipulators
 
-// -- 2. Advanced stateful output
+std::cout << error_style << "assertion failed " << deco::reset
+    << "at ";
+
+// use `Style`s as a function to decorate values
+
+// -- same as `std::cout << deco::italic << "main.cpp" << deco::reset`
+std::cout << deco::italic("main.cpp");
+
+// -- this can also store multiple values.
+std::cout << ":" << deco::bold(116) << ":   "
+    << expected_style("expected ", deco::underline(3.14))
+    << ", "
+    << fg(deco::bright_magenta)("got ", deco::underline(2.71))
+    << "\n\n";
 
 // StyledOstream: ostream wrapper with style output states.
-StyledOstream sout = styled_out(std::cout)
-    .set_base_style(bg(rgb(32, 32, 32)))
-    //Enable style output only when stdout is a TTY.
-    .enable_style(terminal::is_stdout_tty())
-    .enable_nesting();
 
-// Style nesting
-sout << "base style "
-          << fg(bright_blue) << "{ blue "
-              << italic << "{ italic blue "
-                  << fg(bright_red) << "{ italic red } "
-              << pop << "italic blue } "
-          << pop << "blue } "
-     << pop << "base style";
+auto out = deco::StyledOstream(std::cout);
 
+out.set_base_style(deco::bg(deco::rgb(32, 32, 32)))
+   .enable_style(false)
+
+out << deco::fg(deco::colors::medium_turquoise) << "style disabled!\n";
+
+out.enable_style(true);
+out << "style enabled!\n";
 ```
 
 ## Features
