@@ -98,7 +98,7 @@ template <typename OutputFn,
           concepts::style StyleT,
           typename T,
           typename... Ts>
-constexpr void apply_styled(AbsoluteStyle current_style,
+constexpr void write_styled(AbsoluteStyle current_style,
                             const OutputFn& output_fn,
                             const StyleOutputFn& style_output_fn,
                             const Styled<StyleT, T, Ts...>& styled);
@@ -605,10 +605,6 @@ struct Style {
             .append("]");
     }
 
-    /// @brief Equivalent to `styled(*this, values...)`
-    template <typename... Ts>
-    constexpr auto operator()(Ts&&... values) const;
-
   private:
     constexpr auto fg_type() const -> ColorType {
         return static_cast<ColorType>((color_types_ >> 4) & 0x0F);
@@ -772,18 +768,22 @@ constexpr auto styled(StyleT style, Ts&&... values) {
                   detail::store_styled_value(std::forward<Ts>(values))...);
 }
 
+/// @brief Equivalent to `styled(style, value)`.
+template <concepts::style StyleT, typename T>
+inline auto operator%(StyleT style, T&& value) {
+    return styled(style, std::forward<T>(value));
+}
+
 template <concepts::style StyleT, typename... Ts>
 inline auto operator<<(std::ostream& os, const Styled<StyleT, Ts...>& styled)
     -> std::ostream& {
-    detail::apply_styled(
+    detail::write_styled(
         abs(null_style),
         [&](const auto& value) { os << value; },
         [&](concepts::style auto style) { os << style; },
         styled);
     return os;
 }
-
-// ─────────────────────────── IMPLEMENTATIONS ───────────────────────────
 
 namespace detail {
 
@@ -800,7 +800,7 @@ template <typename OutputFn,
           typename StyleOutputFn,
           concepts::style StyleT,
           typename... Ts>
-constexpr void apply_styled_values(AbsoluteStyle current_style,
+constexpr void write_styled_values(AbsoluteStyle current_style,
                                    const OutputFn& output_fn,
                                    const StyleOutputFn& style_output_fn,
                                    const Styled<StyleT, Ts...>& styled) {
@@ -808,7 +808,7 @@ constexpr void apply_styled_values(AbsoluteStyle current_style,
         detail::apply_style(current_style, styled.style());
     auto emit_one = [&, new_style]<typename P>(const P& value) {
         if constexpr (detail::styled<P>) {
-            apply_styled_values(new_style, output_fn, style_output_fn, value);
+            write_styled_values(new_style, output_fn, style_output_fn, value);
         } else {
             output_fn(unwrap_stored(value));
         }
@@ -830,7 +830,7 @@ template <typename OutputFn,
           concepts::style StyleT,
           typename T,
           typename... Ts>
-constexpr void apply_styled(AbsoluteStyle current_style,
+constexpr void write_styled(AbsoluteStyle current_style,
                             const OutputFn& output_fn,
                             const StyleOutputFn& style_output_fn,
                             const Styled<StyleT, T, Ts...>& styled) {
@@ -842,16 +842,11 @@ constexpr void apply_styled(AbsoluteStyle current_style,
         output_fn(unwrap_stored(std::get<0>(styled.values())));
         if (new_style != current_style) style_output_fn(current_style);
     } else {
-        apply_styled_values(current_style, output_fn, style_output_fn, styled);
+        write_styled_values(current_style, output_fn, style_output_fn, styled);
     }
 }
 
 } // namespace detail
-
-template <typename... Ts>
-constexpr auto Style::operator()(Ts&&... values) const {
-    return styled(*this, std::forward<Ts>(values)...);
-}
 
 } // namespace deco
 

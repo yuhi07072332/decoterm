@@ -159,7 +159,7 @@ struct formatter<deco::Styled<StyleT, T>> {
     auto format(const deco::Styled<StyleT, T>& styled, /*NOLINT*/
                 std::format_context& ctx) const {
         using namespace deco;
-        detail::apply_styled(
+        detail::write_styled(
             context.current_style,
             [&ctx, this](const T& value) {
                 ctx.advance_to(value_formatter.format(value, ctx));
@@ -193,7 +193,7 @@ struct formatter<deco::Styled<StyleT, Ts...>> {
     auto format(const deco::Styled<StyleT, Ts...>& styled, /*NOLINT*/
                 std::format_context& ctx) const {
         using namespace deco;
-        detail::apply_styled(
+        detail::write_styled(
             context.current_style,
             [&ctx, this]<typename P>(const P& value) {
                 using value_type = std::remove_cvref_t<

@@ -23,7 +23,7 @@ struct TestStyleState : public deco::StyleState,
 
     TestStyleState(const StyleState& other) : StyleState(other) {}
 
-    TestStyleState(StyleState&& other) : StyleState(std::move(other)) {}
+    TestStyleState(StyleState&& other) : StyleState(std::forward<StyleState>(other)) {}
 };
 
 struct return_different_ostream_t {};
@@ -382,8 +382,8 @@ TEST_CASE("StyledOstream writes Styled" * test_suite("StyledOstream")) {
     const Style base = fg(blue);
     auto out = styled_out(os).set_base_style(base);
 
-    auto styled = bold("lorem", 42, italic("ipsum"), "dolor");
-    out << styled << "sit";
+    auto styled_values = styled(bold, "lorem", 42, italic % "ipsum", "dolor");
+    out << styled_values << "sit";
     expected << abs(base) << abs(base | bold) << "lorem" << 42
              << abs(base | bold | italic) << "ipsum" << abs(base | bold) << "dolor"
              << abs(base) << "sit";

@@ -44,7 +44,7 @@ TEST_CASE("formatter" * test_suite("formatter")) {
 
     SUBCASE("complex Styled") {
         result =
-            std::format("{}", styled(fg(blue), "outer", bold("inner"), "tail"));
+            std::format("{}", styled(fg(blue), "outer", bold % "inner", "tail"));
         expected << abs(fg(blue)) << "outer" << abs(fg(blue) | bold) << "inner"
                  << abs(fg(blue)) << "tail" << reset;
         CHECK(result == expected.str());
@@ -108,7 +108,7 @@ TEST_CASE("StyledFormat writes Styled" * test_suite("StyledFormat")) {
     fmt.set_base_style(fg(blue));
 
     SUBCASE("simple") {
-        result = fmt.format(fg(red), "before{}after", italic("italic"));
+        result = fmt.format(fg(red), "before{}after", italic % "italic");
 
         expected << abs(fg(blue)) << fg(red) << "before" << abs(fg(red) | italic) << "italic"
                  << abs(fg(red)) << "after" << abs(fg(blue));
@@ -116,9 +116,9 @@ TEST_CASE("StyledFormat writes Styled" * test_suite("StyledFormat")) {
     }
 
     SUBCASE("complex") {
-        auto styled = bold("lorem", 42, italic("ipsum"), "dolor");
+        auto styled_value = styled(bold, "lorem", 42, italic % "ipsum", "dolor");
 
-        result = fmt.format("{}sit", styled);
+        result = fmt.format("{}sit", styled_value);
 
         expected << abs(fg(blue)) << abs(fg(blue) | bold) << "lorem" << 42
                  << abs(fg(blue) | bold | italic) << "ipsum"
@@ -129,7 +129,7 @@ TEST_CASE("StyledFormat writes Styled" * test_suite("StyledFormat")) {
     SUBCASE("style disabled") {
         fmt.enable_style(false);
 
-        result = fmt.format(fg(red), "A{}B", bold("x"));
+        result = fmt.format(fg(red), "A{}B", bold % "x");
 
         expected << "AxB";
         CHECK(result == expected.str());

@@ -418,7 +418,7 @@ TEST_CASE("Styled stores multiple values" * test_suite("Styled")) {
 }
 
 TEST_CASE("Styled can be constructed by calling Style" * test_suite("Styled")) {
-    auto styled = bold("text");
+    auto styled = bold % "text";
 
     static_assert(std::is_same_v<decltype(styled), Styled<Style, const char*>>);
 

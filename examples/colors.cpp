@@ -36,24 +36,24 @@ auto main() -> int {
     constexpr Style h1 = color(black, bright_green) | bold;
     constexpr Style h2 = underline | bold;
 
-    std::cout << h1("Terminal Colors") << "\n\n";
+    std::cout << h1 % "Terminal Colors" << "\n\n";
 
-    std::cout << h2("ANSI 16 colors:\n") << '\n';
+    std::cout << h2 % "ANSI 16 colors:\n" << '\n';
 
     for (int i = 0; i < 8; ++i) {
         const Color fg_color = i == 0 ? white : black;
         std::println("[{:0>2}]{:15}{:15}   [{:0>2}]{:15}{:15}",
                      i,
-                     fg(i)(color_names[i]),
-                     color(fg_color, i)(color_names[i]),
+                     fg(i) % color_names[i],
+                     color(fg_color, i) % color_names[i],
                      i + 8,
-                     fg(i + 8)(color_names[i + 8]),
-                     color(fg_color, i + 8)(color_names[i + 8]));
+                     fg(i + 8) % color_names[i + 8],
+                     color(fg_color, i + 8) % color_names[i + 8]);
     }
 
-    std::cout << '\n' << h2("XTerm 256 colors:\n") << '\n';
+    std::cout << '\n' << h2 % "XTerm 256 colors:\n" << '\n';
 
-    std::cout << bold("6 x 6 x 6 color cube [16, 231]:\n");
+    std::cout << bold % "6 x 6 x 6 color cube [16, 231]:\n";
 
     for (int i = 0; i < 2; ++i) {
         for (int row = 0; row < 6; ++row) {
@@ -69,12 +69,12 @@ auto main() -> int {
         std::println();
     }
 
-    std::cout << bold("greyscale [232, 255]:\n");
+    std::cout << bold % "greyscale [232, 255]:\n";
     for (int i = 232; i <= 255; ++i) {
         print_color_cell(i, i <= 243);
     }
 
-    std::cout << "\n\n" << h1("True color") << "\n\n";
+    std::cout << "\n\n" << h1 % "True color" << "\n\n";
 
     std::cout << "R: ";
     for (int i = 0; i < 255; i += 3)
