@@ -1,7 +1,7 @@
 set(EXAMPLE_SRCS
     quickstart.cpp
-    colors.cpp
-    style.cpp
+    demo-colors.cpp
+    demo-styles.cpp
 )
 
 foreach(source IN LISTS EXAMPLE_SRCS)

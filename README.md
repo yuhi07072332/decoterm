@@ -7,52 +7,22 @@ A simple header-only C++20 library for decorating terminal output.
 See the full example: [quickstart.cpp](examples/quickstart.cpp)
 
 ```cpp
-// -- 1. Basic Style Output
-
 // combine `Style`s with `|`
-
-const deco::Style error_style = 
+const deco::Style error =
     deco::bold | deco::invert | deco::fg(deco::bright_red);
-const deco::Style expected_style = 
-    deco::bold | deco::fg(deco::rgb(238, 212, 159));
 
-// use `Style`s like I/O manipulators
+std::cout << error << "assertion failed " << deco::reset << "\nat ";
 
-std::cout << error_style << "assertion failed " << deco::reset
-    << "at ";
-
-// use `Style`s as a function to decorate values
-
-// -- same as `std::cout << deco::italic << "main.cpp" << deco::reset`
-std::cout << deco::italic("main.cpp");
-
-// -- this can also store multiple values.
-std::cout << ":" << deco::bold(116) << ":   "
-    << expected_style("expected ", deco::underline(3.14))
-    << ", "
-    << fg(deco::bright_magenta)("got ", deco::underline(2.71))
-    << "\n\n";
-
-// StyledOstream: ostream wrapper with style output states.
-
-auto out = deco::StyledOstream(std::cout);
-
-out.set_base_style(deco::bg(deco::rgb(32, 32, 32)))
-   .enable_style(false)
-
-out << deco::fg(deco::colors::medium_turquoise) << "style disabled!\n";
-
-out.enable_style(true);
-out << "style enabled!\n";
+// same as `std::cout << deco::italic << "main.cpp" << deco::reset`
+std::cout << deco::italic % "main.cpp";
 ```
 
 ## Features
 
 - Cross-platform support for Windows, Linux, macOS and other platforms
-- Simple API inspired by [{fmt}](https://github.com/fmtlib/fmt)
+- Simple API syntax
 - Powerful output state management
 - `std::format`, `std::print`(C++23) support
-- Performance comparable to raw ANSI escape code output
 
 ## Getting Started
 
