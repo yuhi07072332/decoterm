@@ -36,7 +36,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <version>
@@ -93,6 +92,20 @@ template <concepts::style StyleT, typename... Ts>
 struct Styled;
 
 namespace detail {
+
+// Whether remove_cvref_t<StyleT> is a Style or an AbsoluteStyle.
+// The requires expression describes the common interface of both types.
+template <typename S>
+concept style = (std::is_same_v<std::remove_cvref_t<S>, Style>
+                 || std::is_same_v<std::remove_cvref_t<S>, AbsoluteStyle>)
+                && requires(const std::remove_cvref_t<S>& style,
+                            const std::remove_cvref_t<S>& other_style,
+                            char* out) {
+                       { style.is_null() } -> std::same_as<bool>;
+                       { style == other_style } -> std::same_as<bool>;
+                       { style != other_style } -> std::same_as<bool>;
+                       { style.to_escape(out) } -> std::same_as<char*>;
+                   };
 
 template <typename OutputFn,
           typename StyleOutputFn,
@@ -191,8 +204,7 @@ constexpr auto color_to_sgr_params(OutputIt out,
 
 template <typename T>
 struct ValueOrRef {
-    explicit constexpr ValueOrRef(T value) 
-        : value(std::move(value)) {}
+    explicit constexpr ValueOrRef(T value) : value(std::move(value)) {}
 
     constexpr auto get() -> T& { return value; }
 
@@ -201,8 +213,7 @@ struct ValueOrRef {
 
 template <typename T>
 struct ValueOrRef<T&> {
-    explicit constexpr ValueOrRef(T& ref) 
-        : ptr(std::addressof(ref)) {}
+    explicit constexpr ValueOrRef(T& ref) : ptr(std::addressof(ref)) {}
 
     constexpr auto get() -> T& { return *ptr; }
 
@@ -211,7 +222,7 @@ struct ValueOrRef<T&> {
 
 // this guide is exclusively for non-lvalues
 template <typename T>
-    requires (!std::is_lvalue_reference_v<T>)
+    requires(!std::is_lvalue_reference_v<T>)
 ValueOrRef(T&& value) -> ValueOrRef<std::remove_cvref_t<T>>;
 
 template <typename T>
@@ -219,75 +230,24 @@ ValueOrRef(T& ref) -> ValueOrRef<T&>;
 
 // decay function
 template <typename Ret, typename... Args>
-ValueOrRef(Ret (Args...)) -> ValueOrRef<std::decay_t<Ret (Args...)>>;
+ValueOrRef(Ret(Args...)) -> ValueOrRef<std::decay_t<Ret(Args...)>>;
 
 template <typename T>
 using value_or_ref_t = decltype(ValueOrRef(std::declval<T>()));
 
+template <style StyleT, typename T>
+struct Styled {
+    constexpr Styled(ValueOrRef<T> value, StyleT style)
+        : value_(std::move(value)),
+          style_(style) {}
 
-template <typename T>
-struct is_styled : std::false_type {};
-
-template <concepts::style StyleT, typename... Ts>
-struct is_styled<Styled<StyleT, Ts...>> : std::true_type {};
-
-template <typename T>
-concept styled = detail::is_styled<std::remove_cvref_t<T>>::value;
-
-template <typename T>
-struct ConstRef {
-    constexpr ConstRef(const T& ref) : ref(&ref) {}
-    constexpr ConstRef(T&&) = delete;
-
-    constexpr auto get() const -> const T& { return *ref; }
-    constexpr operator const T&() const { return *ref; }
+    constexpr auto value() -> T& { return value_.get(); }
+    constexpr auto style() -> StyleT { return style_; }
 
   private:
-    const T* ref;
+    ValueOrRef<T> value_;
+    StyleT style_;
 };
-
-template <typename T>
-struct unwrap_constref {
-    using type = T;
-};
-
-template <typename T>
-struct unwrap_constref<ConstRef<T>> {
-    using type = const T&;
-};
-
-template <typename T>
-constexpr auto unwrap_stored(T& value) -> T& {
-    return value;
-}
-
-template <typename T>
-constexpr auto unwrap_stored(ConstRef<T> ref) -> const T& {
-    return ref;
-}
-
-template <typename T>
-constexpr auto store_styled_value(const T& value) -> detail::ConstRef<T> {
-    return detail::ConstRef<T>(value);
-}
-
-template <typename T>
-    requires(!std::is_lvalue_reference_v<T>)
-constexpr auto store_styled_value(T&& value) -> std::remove_cvref_t<T> {
-    return std::forward<T>(value);
-}
-
-template <typename T, std::size_t N>
-constexpr auto store_styled_value(T (&arr)[N]) -> std::decay_t<T (&)[N]> {
-    return arr;
-}
-
-template <typename Ret, typename... Args>
-constexpr auto store_styled_value(auto(f)(Args...)->Ret)
-    -> std::decay_t<auto(Args...)->Ret> {
-    return f;
-}
-
 
 } // namespace detail
 
@@ -780,48 +740,43 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::underline_doub
 // ║                         Styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-template <concepts::style StyleT, typename... Ts>
-    requires(!concepts::style<Ts> && ...)
-struct Styled {
-    static_assert(sizeof...(Ts) >= 1, "Styled must contains at least 1 value");
-
-    constexpr Styled(StyleT style, Ts... values)
-        : style_(style),
-          values_(std::move(values)...) {}
-
-    constexpr auto style() const -> StyleT { return style_; }
-    constexpr auto values() const -> const std::tuple<Ts...>& {
-        return values_;
-    }
-
-  private:
-    StyleT style_;
-    std::tuple<Ts...> values_;
-};
-
-template <concepts::style StyleT, typename... Ts>
-    requires(!concepts::style<Ts> && ...)
-constexpr auto styled(StyleT style, Ts&&... values) {
-    return Styled(style,
-                  detail::store_styled_value(std::forward<Ts>(values))...);
+/// @brief Creates a styled wrapper of a value.
+/// @details `std::cout << styled(s, v)` is equivalent to 
+/// `std::cout << s << v << deco::reset;`.
+///
+/// @return An implementation-defined object that associates `value` with
+/// `style`. Lvalues are stored by reference; rvalues are stored by value.
+template <typename T>
+constexpr auto styled(T&& value, Style style) {
+    return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), style);
 }
 
-/// @brief Equivalent to `styled(style, value)`.
-template <concepts::style StyleT, typename T>
-inline auto operator%(StyleT style, T&& value) {
-    return styled(style, std::forward<T>(value));
+/// @brief `AbsoluteStyle` version of `styled()`
+template <typename T>
+constexpr auto styled(T&& value, AbsoluteStyle abstyle) {
+    return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), abstyle);
 }
 
-template <concepts::style StyleT, typename... Ts>
-inline auto operator<<(std::ostream& os, const Styled<StyleT, Ts...>& styled)
-    -> std::ostream& {
-    detail::write_styled(
-        abs(null_style),
-        [&](const auto& value) { os << value; },
-        [&](concepts::style auto style) { os << style; },
-        styled);
-    return os;
+/// @brief shorthand for `styled(value, style)`
+template <typename T>
+constexpr auto operator|(Style style, T&& value) {
+    return styled(std::forward<T>(value), style);
 }
+
+/// @brief shorthand for `styled(value, abstyle)`
+template <typename T>
+constexpr auto operator|(AbsoluteStyle abstyle, T&& value) {
+    return styled(std::forward<T>(value), abstyle);
+}
+
+/// @brief output operator for `styled()`
+template <detail::style StyleT, typename T>
+inline auto operator<<(std::ostream& os,
+                       const detail::Styled<StyleT, T>& styled) {
+    os << styled.style() << styled.value() << reset;
+}
+
+#if 0
 
 namespace detail {
 
@@ -843,7 +798,7 @@ constexpr void write_styled_values(AbsoluteStyle current_style,
                                    const StyleOutputFn& style_output_fn,
                                    const Styled<StyleT, Ts...>& styled) {
     AbsoluteStyle new_style =
-        detail::apply_style(current_style, styled.style());
+        detail::apply_style(current_style, styled.style_());
     auto emit_one = [&, new_style]<typename P>(const P& value) {
         if constexpr (detail::styled<P>) {
             write_styled_values(new_style, output_fn, style_output_fn, value);
@@ -885,6 +840,8 @@ constexpr void write_styled(AbsoluteStyle current_style,
 }
 
 } // namespace detail
+
+#endif
 
 } // namespace deco
 

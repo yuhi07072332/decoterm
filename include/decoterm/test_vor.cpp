@@ -58,5 +58,4 @@ auto main() -> int {
     std::cout << vorrs.get() << '\n';
 
     handle_iarr5(vorarr.get());
-
 }
