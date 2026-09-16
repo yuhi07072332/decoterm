@@ -492,7 +492,7 @@ class StyledOstream : public StyleState,
         -> StyledOstream& {
         out.ensure_context();
 
-        detail::apply_styled(
+        detail::write_styled(
             out.current_style(),
             [&](const auto& value) { out.ostream() << value; },
             [&](concepts::style auto style) { out.output_style(style); },

@@ -22,7 +22,7 @@ std::cout << deco::italic % "main.cpp";
 - Cross-platform support for Windows, Linux, macOS and other platforms
 - Simple API syntax
 - Powerful output state management
-- `std::format`, `std::print`(C++23) support
+- `std::format`, `std::print` support
 
 ## Getting Started
 
