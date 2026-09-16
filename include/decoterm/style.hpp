@@ -31,6 +31,7 @@
 #include <concepts>
 #include <cstdint>
 #include <iterator>
+#include <memory>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -189,6 +190,42 @@ constexpr auto color_to_sgr_params(OutputIt out,
 }
 
 template <typename T>
+struct ValueOrRef {
+    explicit constexpr ValueOrRef(T value) 
+        : value(std::move(value)) {}
+
+    constexpr auto get() -> T& { return value; }
+
+    T value;
+};
+
+template <typename T>
+struct ValueOrRef<T&> {
+    explicit constexpr ValueOrRef(T& ref) 
+        : ptr(std::addressof(ref)) {}
+
+    constexpr auto get() -> T& { return *ptr; }
+
+    T* ptr;
+};
+
+// this guide is exclusively for non-lvalues
+template <typename T>
+    requires (!std::is_lvalue_reference_v<T>)
+ValueOrRef(T&& value) -> ValueOrRef<std::remove_cvref_t<T>>;
+
+template <typename T>
+ValueOrRef(T& ref) -> ValueOrRef<T&>;
+
+// decay function
+template <typename Ret, typename... Args>
+ValueOrRef(Ret (Args...)) -> ValueOrRef<std::decay_t<Ret (Args...)>>;
+
+template <typename T>
+using value_or_ref_t = decltype(ValueOrRef(std::declval<T>()));
+
+
+template <typename T>
 struct is_styled : std::false_type {};
 
 template <concepts::style StyleT, typename... Ts>
@@ -250,6 +287,7 @@ constexpr auto store_styled_value(auto(f)(Args...)->Ret)
     -> std::decay_t<auto(Args...)->Ret> {
     return f;
 }
+
 
 } // namespace detail
 
