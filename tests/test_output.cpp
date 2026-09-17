@@ -54,7 +54,7 @@ TEST_CASE("StyleState options" * test_suite("StyleState")) {
         CHECK(state.color_mode() == ColorMode::true_color);
         CHECK_FALSE(state.context_tracking_enabled());
         CHECK(state.base_style() == null_style);
-        CHECK(state.current_style().style == null_style);
+        CHECK(state.current_style().style_ == null_style);
     }
 
     SUBCASE("setter chain") {
@@ -69,7 +69,7 @@ TEST_CASE("StyleState options" * test_suite("StyleState")) {
         CHECK(state.color_mode() == ColorMode::color16);
         CHECK(state.context_tracking_enabled());
         CHECK(state.base_style() == fg(blue));
-        CHECK(state.current_style().style == fg(blue));
+        CHECK(state.current_style().style_ == fg(blue));
     }
 
     SUBCASE("setters after chained construction") {
@@ -83,7 +83,7 @@ TEST_CASE("StyleState options" * test_suite("StyleState")) {
         CHECK(chained.style_enabled());
         CHECK_FALSE(chained.context_tracking_enabled());
         CHECK(chained.base_style() == fg(red));
-        CHECK(chained.current_style().style == fg(red));
+        CHECK(chained.current_style().style_ == fg(red));
     }
 }
 
@@ -98,7 +98,7 @@ TEST_CASE("StyleState copy and move" * test_suite("StyleState")) {
         CHECK_FALSE(state.style_enabled());
         CHECK_FALSE(state.context_tracking_enabled());
         CHECK(state.base_style() == fg(blue));
-        CHECK(state.current_style().style == (fg(blue) | bold));
+        CHECK(state.current_style().style_ == (fg(blue) | bold));
     }
 
     SUBCASE("move constructs from state") {
@@ -107,7 +107,7 @@ TEST_CASE("StyleState copy and move" * test_suite("StyleState")) {
         CHECK_FALSE(state.style_enabled());
         CHECK_FALSE(state.context_tracking_enabled());
         CHECK(state.base_style() == fg(blue));
-        CHECK(state.current_style().style == (fg(blue) | bold));
+        CHECK(state.current_style().style_ == (fg(blue) | bold));
     }
 
     SUBCASE("copy assignment clears stale context tracking") {
@@ -127,32 +127,32 @@ TEST_CASE("StyleState manages nested styles" * test_suite("StyleState")) {
     state.set_base_style(fg(blue)).enable_nesting();
 
     SUBCASE("push, pop, and reset") {
-        CHECK(state.current_style().style == fg(blue));
+        CHECK(state.current_style().style_ == fg(blue));
 
         state.push_style(bold);
-        CHECK(state.current_style().style == (fg(blue) | bold));
+        CHECK(state.current_style().style_ == (fg(blue) | bold));
 
         state.push_style(italic);
-        CHECK(state.current_style().style == (fg(blue) | bold | italic));
+        CHECK(state.current_style().style_ == (fg(blue) | bold | italic));
 
         state.push_style(fg(red));
-        CHECK(state.current_style().style == (fg(red) | bold | italic));
+        CHECK(state.current_style().style_ == (fg(red) | bold | italic));
 
         state.pop_style();
-        CHECK(state.current_style().style == (fg(blue) | bold | italic));
+        CHECK(state.current_style().style_ == (fg(blue) | bold | italic));
 
         state.pop_style();
-        CHECK(state.current_style().style == (fg(blue) | bold));
+        CHECK(state.current_style().style_ == (fg(blue) | bold));
 
         state.pop_style();
-        CHECK(state.current_style().style == fg(blue));
+        CHECK(state.current_style().style_ == fg(blue));
 
         state.pop_style();
-        CHECK(state.current_style().style == fg(blue));
+        CHECK(state.current_style().style_ == fg(blue));
 
         state.push_style(bold);
         state.reset_style();
-        CHECK(state.current_style().style == fg(blue));
+        CHECK(state.current_style().style_ == fg(blue));
     }
 
     SUBCASE("StyleStack grows to heap") {
@@ -161,22 +161,22 @@ TEST_CASE("StyleState manages nested styles" * test_suite("StyleState")) {
         }
         state.push_style(italic);
 
-        CHECK(state.current_style().style == (fg(4) | italic));
+        CHECK(state.current_style().style_ == (fg(4) | italic));
         for (int i = 4; i >= 0; --i) {
             state.pop_style();
-            CHECK(state.current_style().style == fg(i));
+            CHECK(state.current_style().style_ == fg(i));
         }
     }
 
     SUBCASE("StyleStack grows more than once") {
         for (int i = 0; i < 12; ++i) {
             state.push_style(fg(i));
-            CHECK(state.current_style().style == fg(i));
+            CHECK(state.current_style().style_ == fg(i));
         }
 
         for (int i = 10; i >= 0; --i) {
             state.pop_style();
-            CHECK(state.current_style().style == fg(i));
+            CHECK(state.current_style().style_ == fg(i));
         }
     }
 }
@@ -192,10 +192,10 @@ TEST_CASE("StyleState copies and moves nested stacks"
 
         TestStyleState moved(std::move(source));
 
-        CHECK(moved.current_style().style == (fg(blue) | bold | italic));
+        CHECK(moved.current_style().style_ == (fg(blue) | bold | italic));
 
         source.push_style(fg(red));
-        CHECK(source.current_style().style == fg(red));
+        CHECK(source.current_style().style_ == fg(red));
     }
 
     SUBCASE("move preserves heap StyleStack") {
@@ -205,10 +205,10 @@ TEST_CASE("StyleState copies and moves nested stacks"
 
         TestStyleState moved(std::move(source));
 
-        CHECK(moved.current_style().style == fg(5));
+        CHECK(moved.current_style().style_ == fg(5));
 
         source.push_style(fg(red));
-        CHECK(source.current_style().style == fg(red));
+        CHECK(source.current_style().style_ == fg(red));
     }
 
     SUBCASE("copy assigns local StyleStack") {
@@ -218,11 +218,11 @@ TEST_CASE("StyleState copies and moves nested stacks"
         target.set_base_style(fg(red));
         target = source;
 
-        CHECK(target.current_style().style == (fg(blue) | bold));
+        CHECK(target.current_style().style_ == (fg(blue) | bold));
 
         target.push_style(italic);
-        CHECK(target.current_style().style == (fg(blue) | bold | italic));
-        CHECK(source.current_style().style == (fg(blue) | bold));
+        CHECK(target.current_style().style_ == (fg(blue) | bold | italic));
+        CHECK(source.current_style().style_ == (fg(blue) | bold));
     }
 
     SUBCASE("copy assigns heap StyleStack") {
@@ -233,11 +233,11 @@ TEST_CASE("StyleState copies and moves nested stacks"
         TestStyleState target;
         target = source;
 
-        CHECK(target.current_style().style == fg(5));
+        CHECK(target.current_style().style_ == fg(5));
 
         target.push_style(italic);
-        CHECK(target.current_style().style == (fg(5) | italic));
-        CHECK(source.current_style().style == fg(5));
+        CHECK(target.current_style().style_ == (fg(5) | italic));
+        CHECK(source.current_style().style_ == fg(5));
     }
 }
 
@@ -311,7 +311,7 @@ TEST_CASE("StyledOstream writes styles" * test_suite("StyledOstream")) {
         styled_os << fg(red) << "error" << reset;
         expected << "error";
 
-        CHECK(styled_os.current_style().style == null_style);
+        CHECK(styled_os.current_style().style_ == null_style);
     }
 
     CHECK(os.str() == expected.str());

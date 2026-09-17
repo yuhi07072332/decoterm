@@ -5,7 +5,7 @@
 
 #define ASSERT_TYPE(expr, t) static_assert(std::is_same_v<decltype(expr), t>);
 
-void handle_iarr5(int (&arr)[5]) {
+void handle_iarr5(const int (&arr)[5]) {
     for (int i : arr)
         std::cout << i << ' ';
     std::cout << '\n';
@@ -13,6 +13,7 @@ void handle_iarr5(int (&arr)[5]) {
 
 auto main() -> int {
     using namespace deco::detail;
+    using namespace deco;
 
     int i = 8;
     const int ci = 16;
@@ -50,12 +51,18 @@ auto main() -> int {
     auto vorvs = ValueOrRef("string");
     auto vorrs = ValueOrRef(s);
 
-    vorf.get()(arr);
+    vorf.get();
     ASSERT_TYPE(vorarr.get(), int (&)[5]);
     ASSERT_TYPE(vorrs.get(), const char *&);
 
-    std::cout << vorvs.get() << '\n';
+    std::cout << static_cast<const char*>(vorvs.get()) << '\n';
     std::cout << vorrs.get() << '\n';
 
     handle_iarr5(vorarr.get());
+
+    auto doc = bold << "bold" << (italic << "italic") << "bold";
+
+    std::cout << (bold | fg(blue) | "hello") << '\n';
+    std::cout << (bold | "hello") << '\n';
+    std::cout << vor << " hello";
 }

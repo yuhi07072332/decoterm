@@ -218,7 +218,7 @@ constexpr auto fallback(Style style, color_fallback_fn fallback_fn) -> Style {
 
 constexpr auto fallback(AbsoluteStyle style, color_fallback_fn fallback_fn)
     -> AbsoluteStyle {
-    return abs(fallback(style.style, fallback_fn));
+    return abs(fallback(style.style_, fallback_fn));
 }
 
 } // namespace detail
@@ -268,7 +268,7 @@ class StyleState { // NOLINT
 
     ~StyleState() { this->try_clean_context(); }
 
-    auto base_style() const -> Style { return stack_.base().style; }
+    auto base_style() const -> Style { return stack_.base().style_; }
 
     auto style_enabled() const -> bool { return style_enabled_; }
 
@@ -290,7 +290,7 @@ class StyleState { // NOLINT
     void push_style(AbsoluteStyle style) { stack_.push(style); }
 
     void push_style(Style style) {
-        stack_.push(abs(this->current_style().style | style));
+        stack_.push(abs(this->current_style().style_ | style));
     }
 
     /// @brief Updates the context if context tracking is enabled; otherwise
@@ -308,7 +308,7 @@ class StyleState { // NOLINT
             detail::g_style_output_context = &context_;
             if (base_style_changed_) {
                 base_style_changed_ = false;
-                return abs(base_style() | this->current_style().style);
+                return abs(base_style() | this->current_style().style_);
             }
             return this->current_style();
         }
