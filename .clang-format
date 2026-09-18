@@ -11,6 +11,7 @@ BreakBeforeBinaryOperators: NonAssignment
 BreakTemplateDeclarations: Leave
 FixNamespaceComments: true
 IncludeBlocks: Preserve
+IndentCaseLabels: true
 SpaceBeforeCpp11BracedList: true
 BinPackArguments: false
 BinPackParameters: OnePerLine

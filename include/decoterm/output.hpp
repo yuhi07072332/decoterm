@@ -14,7 +14,6 @@
 #include <memory>
 #include <optional>
 #include <ostream>
-#include <type_traits>
 #include <utility>
 
 namespace deco {
@@ -216,9 +215,9 @@ constexpr auto fallback(Style style, color_fallback_fn fallback_fn) -> Style {
     return {style.emphasis(), fallback_fn(style.fg()), fallback_fn(style.bg())};
 }
 
-constexpr auto fallback(AbsoluteStyle style, color_fallback_fn fallback_fn)
+constexpr auto fallback(AbsoluteStyle abstyle, color_fallback_fn fallback_fn)
     -> AbsoluteStyle {
-    return abs(fallback(style.style_, fallback_fn));
+    return abs(fallback(abstyle.inner(), fallback_fn));
 }
 
 } // namespace detail
@@ -268,7 +267,7 @@ class StyleState { // NOLINT
 
     ~StyleState() { this->try_clean_context(); }
 
-    auto base_style() const -> Style { return stack_.base().style_; }
+    auto base_style() const -> Style { return stack_.base().inner(); }
 
     auto style_enabled() const -> bool { return style_enabled_; }
 
@@ -280,7 +279,7 @@ class StyleState { // NOLINT
         return context_tracking_enabled_;
     }
 
-    auto current_style() const -> AbsoluteStyle { return stack_.top(); }
+    auto current_style() const -> Style { return stack_.top().inner(); }
 
   protected:
     void pop_style() { stack_.pop(); }
@@ -290,7 +289,7 @@ class StyleState { // NOLINT
     void push_style(AbsoluteStyle style) { stack_.push(style); }
 
     void push_style(Style style) {
-        stack_.push(abs(this->current_style().style_ | style));
+        stack_.push(abs(this->current_style() | style));
     }
 
     /// @brief Updates the context if context tracking is enabled; otherwise
@@ -308,9 +307,9 @@ class StyleState { // NOLINT
             detail::g_style_output_context = &context_;
             if (base_style_changed_) {
                 base_style_changed_ = false;
-                return abs(base_style() | this->current_style().style_);
+                return abs(base_style() | this->current_style());
             }
-            return this->current_style();
+            return abs(this->current_style());
         }
         return std::nullopt;
     }
@@ -321,15 +320,15 @@ class StyleState { // NOLINT
             detail::g_style_output_context = nullptr;
     }
 
-    template <concepts::style StyleT>
+    template <detail::style StyleT>
     auto fallback_style(StyleT style) const -> StyleT {
         switch (this->color_mode()) {
-        case ColorMode::color16:
-            return detail::fallback(style, detail::fallback_to_16);
-        case ColorMode::color256:
-            return detail::fallback(style, detail::fallback_to_256);
-        default:
-            return style;
+            case ColorMode::color16:
+                return detail::fallback(style, detail::fallback_to_16);
+            case ColorMode::color256:
+                return detail::fallback(style, detail::fallback_to_256);
+            default:
+                return style;
         }
     }
 
@@ -444,8 +443,8 @@ class StyledOstream : public StyleState,
     ///
     /// @throws `std::logic_error` if `operator<<(std::ostream&, T&&)` returns a
     /// different ostream object.
-    template <concepts::ostream_outputable T>
-        requires(!concepts::style<T> && !detail::styled<T>)
+    template <ostream_outputable T>
+        requires(!detail::style<T> && !detail::styled<T>)
     friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
         out.ensure_context();
 
@@ -457,15 +456,20 @@ class StyledOstream : public StyleState,
         return out;
     }
 
-    /// @brief output operator for style types
-    template <concepts::style StyleT>
-    friend auto operator<<(StyledOstream& out, StyleT style) -> StyledOstream& {
+    /// @brief output operator for `Style`
+    friend auto operator<<(StyledOstream& out, Style style) -> StyledOstream& {
         out.ensure_context();
-
-        if constexpr (std::is_same_v<StyleT, Style>
-                      || std::is_same_v<StyleT, AbsoluteStyle>)
-            out.push_style(style);
+        out.push_style(style);
         out.output_style(style);
+        return out;
+    }
+
+    /// @brief output operator for `AbsoluteStyle`
+    friend auto operator<<(StyledOstream& out, AbsoluteStyle abstyle)
+        -> StyledOstream& {
+        out.ensure_context();
+        out.push_style(abstyle);
+        out.output_style(abstyle);
         return out;
     }
 
@@ -485,19 +489,15 @@ class StyledOstream : public StyleState,
         return out;
     }
 
-    /// @brief output operator for styled values
-    template <concepts::style StyleT, typename... Ts>
+    /// @brief output operator for `styled()`
+    template <detail::style StyleT, typename T>
     friend auto operator<<(StyledOstream& out,
-                           const Styled<StyleT, Ts...>& styled) // NOLINT
+                           const detail::Styled<StyleT, T>& styled)
         -> StyledOstream& {
         out.ensure_context();
-
-        detail::write_styled(
-            out.current_style(),
-            [&](const auto& value) { out.ostream() << value; },
-            [&](concepts::style auto style) { out.output_style(style); },
-            styled);
-
+        out.output_style(styled.style());
+        out.ostream() << styled.value();
+        out.output_style(abs(out.current_style()));
         return out;
     }
 
@@ -543,7 +543,7 @@ class StyledOstream : public StyleState,
         if (auto style = this->update_context()) this->output_style(*style);
     }
 
-    void output_style(concepts::style auto style) const {
+    void output_style(detail::style auto style) const {
         if (!this->style_enabled()) return;
         this->ostream() << this->fallback_style(style);
     }

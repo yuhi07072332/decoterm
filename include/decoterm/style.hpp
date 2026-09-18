@@ -136,38 +136,35 @@ constexpr auto color_to_sgr_params(OutputIt out,
                                    ColorType type,
                                    ColorData data) -> OutputIt {
     switch (type) {
-    case ColorType::null:
-        return out;
-    case ColorType::default_color: {
-        if (is_bg) out = write_to(out, "49");
-        else out = write_to(out, "39");
-        return out;
-    }
-    case ColorType::terminal_color: {
-        uint8_t index = data[0];
-        if (index < 16) {
-            out = write_to(out,
-                           is_bg ? SGR_PARAM_BG[index] : SGR_PARAM_FG[index]);
-        } else {
-            out = write_to(out, is_bg ? "48;5;" : "38;5;");
-            out = write_to(out, index);
+        case ColorType::null:
+            return out;
+        case ColorType::default_color: {
+            if (is_bg) out = write_to(out, "49");
+            else out = write_to(out, "39");
+            return out;
         }
-        return out;
+        case ColorType::terminal_color: {
+            uint8_t index = data[0];
+            if (index < 16) {
+                out = write_to(
+                    out, is_bg ? SGR_PARAM_BG[index] : SGR_PARAM_FG[index]);
+            } else {
+                out = write_to(out, is_bg ? "48;5;" : "38;5;");
+                out = write_to(out, index);
+            }
+            return out;
+        }
+        case ColorType::true_color: {
+            auto [r, g, b] = data;
+            out = write_to(out, is_bg ? "48;2;" : "38;2;");
+            out = write_to(out, r);
+            *out++ = ';';
+            out = write_to(out, g);
+            *out++ = ';';
+            out = write_to(out, b);
+            return out;
+        }
     }
-    case ColorType::true_color: {
-        auto [r, g, b] = data;
-        out = write_to(out, is_bg ? "48;2;" : "38;2;");
-        out = write_to(out, r);
-        *out++ = ';';
-        out = write_to(out, g);
-        *out++ = ';';
-        out = write_to(out, b);
-        return out;
-    }
-    default:
-        return out;
-    }
-    return out;
 }
 
 /// @brief A wrapper that stores rvalue or references lvalue.
@@ -222,6 +219,9 @@ template <typename T> struct is_styled : std::false_type {};
 
 template <typename S, typename T>
 struct is_styled<Styled<S, T>> : std::true_type {};
+
+template <typename T>
+concept styled = is_styled<std::remove_cvref_t<T>>::value;
 
 } // namespace detail
 
@@ -308,27 +308,25 @@ struct Color {
     [[nodiscard]]
     auto debug_string() const -> std::string {
         switch (type_) {
-        case ColorType::null:
-            return "[null_color]";
-        case ColorType::default_color:
-            return "[default_color]";
-        case ColorType::terminal_color: {
-            return std::string("[terminal_color: ")
-                .append(std::to_string(data_[0]))
-                .append("]");
+            case ColorType::null:
+                return "[null_color]";
+            case ColorType::default_color:
+                return "[default_color]";
+            case ColorType::terminal_color: {
+                return std::string("[terminal_color: ")
+                    .append(std::to_string(data_[0]))
+                    .append("]");
+            }
+            case ColorType::true_color: {
+                return std::string("[true_color: ")
+                    .append(std::to_string(data_[0]))
+                    .append(", ")
+                    .append(std::to_string(data_[1]))
+                    .append(", ")
+                    .append(std::to_string(data_[2]))
+                    .append("]");
+            }
         }
-        case ColorType::true_color: {
-            return std::string("[true_color: ")
-                .append(std::to_string(data_[0]))
-                .append(", ")
-                .append(std::to_string(data_[1]))
-                .append(", ")
-                .append(std::to_string(data_[2]))
-                .append("]");
-        }
-        }
-        assert(false);
-        return "";
     }
 
   private:
