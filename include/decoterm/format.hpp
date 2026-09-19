@@ -87,7 +87,7 @@ template <typename Arg>
 static consteval void check_arg() {
     using arg_type = std::remove_cvref_t<Arg>;
     static_assert((!detail::style<arg_type>
-                   && !std::is_same_v<arg_type, style_reset_t>
+                   && !std::is_same_v<arg_type, Reset>
                    && !std::is_same_v<arg_type, style_pop_t>),
                   "deco::StyledFormat: Style, reset, pop are disallowed as "
                   "format arguments. Use print(style, ...), styled(), "
@@ -139,12 +139,12 @@ struct formatter<StyleT> {
 
 /// @brief formatter for `deco::reset`
 template <>
-struct formatter<deco::style_reset_t> {
+struct formatter<deco::Reset> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(deco::style_reset_t, std::format_context& ctx) const {
+    auto format(deco::Reset, std::format_context& ctx) const {
         return deco::abs(deco::null_style).to_escape(ctx.out());
     }
 };

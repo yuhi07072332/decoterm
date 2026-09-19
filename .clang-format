@@ -6,6 +6,7 @@ ColumnLimit: 80
 
 AlignOperands: Align
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+BreakAfterAttributes: Leave
 BreakAfterReturnType: Automatic
 BreakBeforeBinaryOperators: NonAssignment
 BreakTemplateDeclarations: Leave

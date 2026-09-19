@@ -420,10 +420,6 @@ inline constexpr Color bright_white    = Color(15);
 // ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-struct style_reset_t {};
-
-/// @brief IO manipulator that resets the terminal style.
-inline constexpr style_reset_t reset;
 
 /// @brief Represents a nullable terminal style.
 /// @details
@@ -681,6 +677,11 @@ constexpr auto bg(Color bg) -> Style {
     return {Style::Emphasis::none, null_color, bg};
 }
 
+struct Reset {};
+
+/// @brief IO manipulator that resets the terminal style.
+inline constexpr Reset reset;
+
 /// @brief output operator for `Style`
 inline auto operator<<(std::ostream& os, Style style) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
@@ -699,7 +700,7 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
 }
 
 /// @brief output operator for deco::reset
-inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
+inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
     os.write(buf.begin(), len);

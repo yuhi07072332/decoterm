@@ -76,8 +76,6 @@ inline auto is_ostream_stderr(const std::ostream& os) -> bool {
 
 } // namespace detail
 
-namespace terminal {
-
 #if defined(_WIN32)
 // Automatically enables Windows virtual terminal processing unless
 // DECOTERM_NO_AUTO_ENABLE_VT is defined.
@@ -129,7 +127,6 @@ inline auto styled_out(std::ostream& os) -> StyledOstream {
         is_tty);
 }
 
-}; // namespace terminal
 
 } // namespace deco
 

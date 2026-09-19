@@ -10,28 +10,42 @@
 #include "style.hpp"
 
 #include <array>
+#include <atomic>
 #include <iostream>
 #include <memory>
-#include <optional>
 #include <ostream>
 #include <utility>
 
 namespace deco {
 
+class OutputConfig;
+class Output;
+
 namespace detail {
 
-/* ----- global style output context ----- */
+template <detail::style StyleT>
+struct Push {
+    StyleT style;
+};
 
-// NOLINTBEGIN
+struct Pop {};
 
-struct style_output_context_t {};
+struct GlobalOutputContext {
+  public:
+    static auto get_active() -> const Output* {
+        return GlobalOutputContext::active().load(std::memory_order_relaxed);
+    }
 
-/// @brief global style output context for `StyleState`.
-/// @details Used to determine whether `StyleOutputState` needs to output the
-/// current style before outputting a value.
-inline const style_output_context_t* g_style_output_context = nullptr;
+    static void set_active(const Output* active) {
+        GlobalOutputContext::active().store(active, std::memory_order_relaxed);
+    }
 
-// NOLINTEND
+  private:
+    static auto active() -> std::atomic<const Output*>& {
+        static std::atomic<const Output*> active = nullptr;
+        return active;
+    }
+};
 
 /* ----- StyleStack ----- */
 
@@ -72,6 +86,11 @@ class StyleStack {
     constexpr auto top() const -> AbsoluteStyle {
         if (size_) return data_[size_ - 1];
         return base_;
+    }
+
+    constexpr void set_top(AbsoluteStyle style) {
+        if (size_) data_[size_ - 1] = style;
+        else base_ = style;
     }
 
     constexpr void push(AbsoluteStyle style) {
@@ -220,223 +239,118 @@ constexpr auto fallback(AbsoluteStyle abstyle, color_fallback_fn fallback_fn)
     return abs(fallback(abstyle.inner(), fallback_fn));
 }
 
+template <typename Ptr>
+    requires std::is_pointer_v<Ptr>
+struct NotNull {
+    using deref_type = decltype(*std::declval<Ptr>());
+
+    NotNull(Ptr ptr) : ptr_(ptr) {
+        if (ptr == nullptr)
+            throw std::logic_error("NotNull: received null pointer");
+    }
+
+    auto operator->() const -> Ptr { return ptr_; }
+    auto operator*() const -> deref_type& { return *ptr_; }
+
+    auto get() const -> Ptr { return ptr_; }
+
+  private:
+    Ptr ptr_;
+};
+
 } // namespace detail
 
-// ╔═════════════════════════════════════════════════════════╗
-// ║                       StyleState                        ║
-// ╚═════════════════════════════════════════════════════════╝
-
 /// @brief Terminal color capability levels.
-enum class ColorMode : uint8_t { color16 = 0, color256 = 1, true_color = 2 };
+enum class ColorMode : uint8_t { color16 = 0, color256, true_color };
 
-/// @brief Represents style output state.
-///
-/// It manages the current style output state (e.g. style enabled, base
-/// style, etc.) If context tracking is enabled, it will also check
-/// `detail::g_style_output_context` to determine whether it needs to output the
-/// current style before outputting a value.
-///
-/// @see `g_style_output_context`, `StyledOstream`, `StyledFormat`
-class StyleState { // NOLINT
+class OutputConfig {
   public:
-    StyleState() { stack_.to_single(); }
+    constexpr OutputConfig() = default;
 
-    StyleState(const StyleState& other) {
-        if (!other.context_tracking_enabled_) this->try_clean_context();
-        this->copy_from(other);
-    };
-
-    StyleState(StyleState&& other) noexcept {
-        if (!other.context_tracking_enabled_) this->try_clean_context();
-        this->move_from(std::move(other));
-    }
-
-    auto operator=(const StyleState& other) -> StyleState& {
-        if (this == &other) return *this;
-        if (!other.context_tracking_enabled_) this->try_clean_context();
-        this->copy_from(other);
-        return *this;
-    };
-
-    auto operator=(StyleState&& other) noexcept -> StyleState& {
-        if (this == &other) return *this;
-        if (!other.context_tracking_enabled_) this->try_clean_context();
-        this->move_from(std::move(other));
+    auto enable_style(bool enable = true) -> OutputConfig& {
+        style_enabled_.store(enable, std::memory_order_relaxed);
         return *this;
     }
 
-    ~StyleState() { this->try_clean_context(); }
+    auto set_color_mode(ColorMode mode) -> OutputConfig& {
+        color_mode_.store(mode, std::memory_order_relaxed);
+        return *this;
+    }
 
-    auto base_style() const -> Style { return stack_.base().inner(); }
+    [[nodiscard]] auto style_enabled() const -> bool {
+        return style_enabled_.load(std::memory_order_relaxed);
+    }
 
-    auto style_enabled() const -> bool { return style_enabled_; }
+    [[nodiscard]] auto color_mode() const -> ColorMode {
+        return color_mode_.load(std::memory_order_relaxed);
+    }
 
-    auto nesting_enabled() const -> bool { return !stack_.is_single(); }
+  private:
+    std::atomic_bool style_enabled_ = true;
+    std::atomic<ColorMode> color_mode_ = ColorMode::true_color;
+};
 
-    auto color_mode() const -> ColorMode { return color_mode_; }
+class Output {
+  public:
+    explicit Output(OutputConfig& cfg) : cfg_(&cfg) {}
 
-    auto context_tracking_enabled() const -> bool {
-        return context_tracking_enabled_;
+    Output(const Output&) = default;
+    Output(Output&&) noexcept = default;
+    auto operator=(const Output&) -> Output& = default;
+    auto operator=(Output&&) noexcept -> Output& = default;
+
+    ~Output() {
+        if (detail::GlobalOutputContext::get_active() == this) {
+            detail::GlobalOutputContext::set_active(nullptr);
+        }
     }
 
     auto current_style() const -> Style { return stack_.top().inner(); }
 
   protected:
-    void pop_style() { stack_.pop(); }
-
-    void reset_style() { stack_.clear(); }
-
-    void push_style(AbsoluteStyle style) { stack_.push(style); }
-
-    void push_style(Style style) {
-        stack_.push(abs(this->current_style() | style));
+    [[nodiscard]] auto needs_update_context() const -> bool {
+        const Output* active = detail::GlobalOutputContext::get_active();
+        return active != this
+               && active
+               && !(active->current_style() == this->current_style());
     }
 
-    /// @brief Updates the context if context tracking is enabled; otherwise
-    /// only checks whether the base style changed.
-    /// @returns The Style to emit when context or base style changed
-    auto update_context() -> std::optional<AbsoluteStyle> {
-        if (!context_tracking_enabled_) {
-            if (base_style_changed_) {
-                base_style_changed_ = false;
-                return abs(base_style());
-            }
-            return std::nullopt;
-        }
-        if (detail::g_style_output_context != &context_) {
-            detail::g_style_output_context = &context_;
-            if (base_style_changed_) {
-                base_style_changed_ = false;
-                return abs(base_style() | this->current_style());
-            }
-            return abs(this->current_style());
-        }
-        return std::nullopt;
+    void set_current_style(Style style) {
+        stack_.set_top(abs(stack_.top().inner() | style));
     }
 
-    void try_clean_context() const {
-        if (!context_tracking_enabled_) return;
-        if (detail::g_style_output_context == &context_)
-            detail::g_style_output_context = nullptr;
+    void set_current_style(AbsoluteStyle abstyle) { stack_.set_top(abstyle); }
+
+    void push(Style style) { stack_.push(abs(stack_.top().inner() | style)); }
+
+    void push(AbsoluteStyle abstyle) { stack_.push(abstyle); }
+
+    auto pop() -> AbsoluteStyle {
+        stack_.pop();
+        return stack_.top();
     }
 
-    template <detail::style StyleT>
-    auto fallback_style(StyleT style) const -> StyleT {
-        switch (this->color_mode()) {
-            case ColorMode::color16:
-                return detail::fallback(style, detail::fallback_to_16);
-            case ColorMode::color256:
-                return detail::fallback(style, detail::fallback_to_256);
-            default:
-                return style;
-        }
+    auto reset() -> AbsoluteStyle {
+        stack_.clear();
+        return stack_.top();
     }
+
+    auto cfg() -> OutputConfig& { return *cfg_; }
 
   private:
-    template <typename>
-    friend class StyleStateSetter;
-
-    void copy_from(const StyleState& other) {
-        stack_ = other.stack_;
-        style_enabled_ = other.style_enabled_;
-        color_mode_ = other.color_mode_;
-        context_tracking_enabled_ = other.context_tracking_enabled_;
-        base_style_changed_ = other.base_style_changed_;
-        context_ = other.context_;
-    }
-
-    void move_from(StyleState&& other) noexcept {
-        stack_ = std::move(other.stack_);
-        style_enabled_ = other.style_enabled_;
-        color_mode_ = other.color_mode_;
-        context_tracking_enabled_ = other.context_tracking_enabled_;
-        base_style_changed_ = other.base_style_changed_;
-        context_ = other.context_;
-    }
-
-    // config
-    ColorMode color_mode_ = ColorMode::true_color;
-    bool style_enabled_ = true;
-    bool context_tracking_enabled_ = false;
-
-    // state
-    bool base_style_changed_ = true;
-    detail::style_output_context_t context_;
+    detail::NotNull<OutputConfig*> cfg_;
     detail::StyleStack<5> stack_;
 };
 
-/// @brief CRTP class that provides chainable StyleState options
-template <typename Self>
-class StyleStateSetter {
-  public:
-    /// @brief Enable or disable style output.
-    auto enable_style(bool enable = true) -> Self& {
-        this->state().style_enabled_ = enable;
-        return this->self();
-    }
-
-    auto enable_nesting(bool enable = true) -> Self& {
-        if (!this->state().nesting_enabled() && enable) {
-            this->state().stack_.to_multiple();
-        } else if (this->state().nesting_enabled() && !enable) {
-            this->state().stack_.to_single();
-        }
-        return this->self();
-    }
-
-    /// @brief Enable or disable context tracking.
-    auto enable_context_tracking(bool enable = true) -> Self& {
-        if (this->state().context_tracking_enabled_ && !enable) {
-            this->state().try_clean_context();
-        }
-        this->state().context_tracking_enabled_ = enable;
-        return this->self();
-    }
-
-    auto set_color_mode(ColorMode color_mode) -> Self& {
-        this->state().color_mode_ = color_mode;
-        return this->self();
-    }
-
-    /// @brief Set the base style for this output state.
-    auto set_base_style(Style base) -> Self& {
-        this->state().stack_.set_base(abs(base));
-        this->state().base_style_changed_ = true;
-        return this->self();
-    }
-
-  private:
-    friend Self;
-
-    StyleStateSetter() = default;
-
-    auto state() -> StyleState& {
-        return static_cast<StyleState&>(static_cast<Self&>(*this));
-    }
-
-    auto self() -> Self& { return static_cast<Self&>(*this); }
-};
-
 // ╔═════════════════════════════════════════════════════════╗
-// ║                      StyledOstream                      ║
+// ║                         Ostream                         ║
 // ╚═════════════════════════════════════════════════════════╝
 
-struct style_pop_t {};
-
-/// @brief StyledOstream manipulator that restores the previous style.
-inline constexpr style_pop_t pop;
-
-/// @brief A stateful lightweight writer over an existing std::ostream.
-/// @warning The passed std::ostream object must outlive this object.
-/// @see `StyleState`
-class StyledOstream : public StyleState,
-                      public StyleStateSetter<StyledOstream> {
+class Ostream : public Output {
   public:
-    StyledOstream(std::ostream& os) : ostream_(&os) {}
-
-    StyledOstream(StyleState state, std::ostream& os)
-        : StyleState(std::move(state)),
-          ostream_(&os) {}
+    explicit Ostream(OutputConfig& config, std::ostream& ostream)
+        : Output(config),
+          ostream_(&ostream) {}
 
     /// @brief Output operator for any type that can be written to
     /// `std::ostream`.
@@ -445,118 +359,118 @@ class StyledOstream : public StyleState,
     /// different ostream object.
     template <ostream_outputable T>
         requires(!detail::style<T> && !detail::styled<T>)
-    friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
-        out.ensure_context();
-
+    friend auto operator<<(Ostream& out, T&& value) -> Ostream& {
         if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
             os_ptr != out.ostream_)
             throw std::logic_error(
-                "StyledOstream: std::ostream output operator returned a "
+                "Ostream: std::ostream output operator returned a "
                 "different ostream object");
         return out;
     }
 
-    /// @brief output operator for `Style`
-    friend auto operator<<(StyledOstream& out, Style style) -> StyledOstream& {
-        out.ensure_context();
-        out.push_style(style);
+    friend auto operator<<(Ostream& out, Style style) -> Ostream& {
+        out.set_current_style(style);
         out.output_style(style);
         return out;
     }
 
-    /// @brief output operator for `AbsoluteStyle`
-    friend auto operator<<(StyledOstream& out, AbsoluteStyle abstyle)
-        -> StyledOstream& {
-        out.ensure_context();
-        out.push_style(abstyle);
+    friend auto operator<<(Ostream& out, AbsoluteStyle abstyle) -> Ostream& {
+        out.set_current_style(abstyle);
         out.output_style(abstyle);
         return out;
     }
 
-    /// @brief output operator for `reset`
-    friend auto operator<<(StyledOstream& out, style_reset_t)
-        -> StyledOstream& {
-        out.reset_style();
+    friend auto operator<<(Ostream& out, Reset) -> Ostream& {
+        out.reset();
         out.output_style(out.current_style());
         return out;
     }
 
-    /// @brief output operator for `pop`
-    friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
-        out.ensure_context();
-        out.pop_style();
-        out.output_style(out.current_style());
-        return out;
-    }
-
-    /// @brief output operator for `styled()`
-    template <detail::style StyleT, typename T>
-    friend auto operator<<(StyledOstream& out,
+    template <detail::style StyleT, ostream_outputable T>
+    friend auto operator<<(Ostream& out,
                            const detail::Styled<StyleT, T>& styled)
-        -> StyledOstream& {
-        out.ensure_context();
+        -> Ostream& {
         out.output_style(styled.style());
         out.ostream() << styled.value();
-        out.output_style(abs(out.current_style()));
+        out.output_style(out.current_style());
+    }
+
+    template <detail::style StyleT>
+    friend auto operator<<(Ostream& out, detail::Push<StyleT> push)
+        -> Ostream& {
+        out.push(push.style);
+        out.output_style(push.style);
+        return out;
+    }
+
+    friend auto operator<<(Ostream& out, detail::Pop) -> Ostream& {
+        out.output_style(out.pop());
         return out;
     }
 
     /// @brief output operator for IO manipulators
-    friend auto operator<<(StyledOstream& out,
+    friend auto operator<<(Ostream& out,
                            auto (*fn)(std::ios_base&)->std::ios_base&)
-        -> StyledOstream& {
-        out.ensure_context();
+        -> Ostream& {
         out.ostream() << fn;
         return out;
     }
 
     /// @brief output operator for IO manipulators
     friend auto operator<<(
-        StyledOstream& out,
-        auto (*fn)(std::basic_ios<char>&)->std::basic_ios<char>&)
-        -> StyledOstream& {
-        out.ensure_context();
+        Ostream& out, auto (*fn)(std::basic_ios<char>&)->std::basic_ios<char>&)
+        -> Ostream& {
         out.ostream() << fn;
         return out;
     }
 
     /// @brief output operator for IO manipulators
-    friend auto operator<<(StyledOstream& out,
+    friend auto operator<<(Ostream& out,
                            auto (*fn)(std::ostream&)->std::ostream&)
-        -> StyledOstream& {
+        -> Ostream& {
         // `std::operator<<(std::ostream& os,
         // std::ostream&(*fn)(std::ostream&))` returns `fn(os)` instead of `os`,
         // so we should assume that it may return a different std::ostream&.
-        out.ensure_context();
         out.ostream_ = &(out.ostream() << fn);
         return out;
     }
 
-    /// @brief Swithes the underlying `std::ostream`.
-    void set_stream(std::ostream& os) { ostream_ = &os; }
+    void ensure_style() {
+        if (!this->needs_update_context()) return;
+        this->output_style(abs(this->current_style()));
+        detail::GlobalOutputContext::set_active(this);
+    }
 
-    /// @brief Returns the underlying `std::ostream`.
     auto ostream() const -> std::ostream& { return *ostream_; }
 
   private:
-    void ensure_context() {
-        if (auto style = this->update_context()) this->output_style(*style);
+    template <detail::style StyleT>
+    void output_style(StyleT style) {
+        if (!cfg().style_enabled()) return;
+        switch (cfg().color_mode()) {
+            case ColorMode::color16:
+                style = detail::fallback(style, detail::fallback_to_16);
+            case ColorMode::color256:
+                style = detail::fallback(style, detail::fallback_to_256);
+            default:
+        }
+        this->ostream() << style;
     }
 
-    void output_style(detail::style auto style) const {
-        if (!this->style_enabled()) return;
-        this->ostream() << this->fallback_style(style);
-    }
-
-    std::ostream* ostream_;
+    detail::NotNull<std::ostream*> ostream_;
 };
 
-/// @brief Creates a `StyledOstream` with context tracking enabled.
-/// @details equivalent to `StyledOstream(os).enable_context()`
-[[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream {
-    return StyledOstream(os).enable_context_tracking();
+// ----- IO manipualtors ----- 
+
+[[nodiscard]] constexpr auto push(Style style) -> detail::Push<Style> {
+    return {style};
 }
+[[nodiscard]] constexpr auto push(AbsoluteStyle abstyle)
+    -> detail::Push<AbsoluteStyle> {
+    return {abstyle};
+}
+
+inline constexpr detail::Pop pop {};
 
 } // namespace deco
 
