@@ -11,6 +11,7 @@
 
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <iostream>
 #include <memory>
 #include <ostream>
@@ -19,7 +20,7 @@
 namespace deco {
 
 class OutputConfig;
-class Output;
+class StyleState;
 
 namespace detail {
 
@@ -32,46 +33,42 @@ struct Pop {};
 
 struct GlobalOutputContext {
   public:
-    static auto get_active() -> const Output* {
+    static auto get_active() -> const StyleState* {
         return GlobalOutputContext::active().load(std::memory_order_relaxed);
     }
 
-    static void set_active(const Output* active) {
+    static void set_active(const StyleState* active) {
         GlobalOutputContext::active().store(active, std::memory_order_relaxed);
     }
 
   private:
-    static auto active() -> std::atomic<const Output*>& {
-        static std::atomic<const Output*> active = nullptr;
+    static auto active() -> std::atomic<const StyleState*>& {
+        static std::atomic<const StyleState*> active = nullptr;
         return active;
     }
 };
 
 /* ----- StyleStack ----- */
 
-/// @brief A stack that can store single or multiple `AbsoluteStyle`.
+/// @brief
 /// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
 /// if the size exceeds N.
-/// In single mode, the size will only be 0 or 1, and pushing style only
-/// changes first element.
-template <std::size_t N = 5>
+template <std::size_t N>
 class StyleStack {
     static_assert(N > 1);
 
   public:
-    // multiple by default
-    constexpr StyleStack() = default;
+    constexpr StyleStack() { local_[0] = AbsoluteStyle(); }
+
     constexpr StyleStack(const StyleStack& other) { this->copy_from(other); }
     constexpr StyleStack(StyleStack&& other) noexcept {
         this->move_from(std::move(other));
     }
-
     constexpr auto operator=(const StyleStack& other) -> StyleStack& {
         if (this == &other) return *this;
         this->copy_from(other);
         return *this;
     }
-
     constexpr auto operator=(StyleStack&& other) noexcept -> StyleStack& {
         if (this == &other) return *this;
         this->move_from(std::move(other));
@@ -80,109 +77,93 @@ class StyleStack {
 
     constexpr ~StyleStack() = default;
 
-    constexpr auto base() const -> AbsoluteStyle { return base_; }
-    constexpr auto is_single() const -> bool { return is_single_; }
-
-    constexpr auto top() const -> AbsoluteStyle {
-        if (size_) return data_[size_ - 1];
-        return base_;
-    }
-
-    constexpr void set_top(AbsoluteStyle style) {
-        if (size_) data_[size_ - 1] = style;
-        else base_ = style;
-    }
-
     constexpr void push(AbsoluteStyle style) {
-        if (size_ == capacity_) {
+        if (is_heap_) {
+            if (top_ == this->heap_end() - 1) this->grow();
+            top_++;
+        } else if (top_ == local_.end() - 1) {
             this->grow();
-        } else if (is_single_) {
-            size_ = 1;
-            data_[0] = style;
-            return;
+            top_ = heap_.get();
+        } else {
+            top_++;
         }
-        data_[size_++] = style; // NOLINT
+
+        *top_ = style;
     }
 
     constexpr void pop() {
-        if (size_) size_--;
-    }
-
-    constexpr void clear() { size_ = 0; }
-
-    constexpr void set_base(AbsoluteStyle base) { base_ = base; }
-
-    constexpr void to_single() {
-        if (size_) {
-            local_[0] = this->top();
-            size_ = 1;
+        if (is_heap_) {
+            if (top_ == heap_.get()) top_ = local_.data() + N - 1;
+            else top_--;
+        } else if (top_ > local_.data()) {
+            top_--;
         }
-        data_ = local_.data();
-        is_single_ = true;
     }
 
-    constexpr void to_multiple() { is_single_ = false; }
+    constexpr void clear() {
+        local_[0] = AbsoluteStyle();
+        top_ = local_.data();
+    }
+
+    [[nodiscard]] constexpr auto top() -> AbsoluteStyle& { return *top_; }
+
+    [[nodiscard]] constexpr auto top() const -> AbsoluteStyle { return *top_; }
 
   private:
-    constexpr auto is_heap() const noexcept -> bool {
-        return data_ != local_.data();
+    constexpr auto heap_end() const noexcept -> AbsoluteStyle* {
+        return heap_.get() + heap_capacity();
+    }
+
+    constexpr auto heap_capacity() const noexcept -> std::size_t {
+        return capacity_ > N ? capacity_ - N : 0;
     }
 
     constexpr void copy_from(const StyleStack& other) {
-        if (other.is_heap()) {
+        local_ = other.local_;
+        if (other.is_heap_) {
+            std::size_t heap_size = other.top_ - other.heap_.get() + 1;
             heap_ = std::make_unique_for_overwrite<AbsoluteStyle[]>(
-                other.capacity_);
-            for (std::size_t i = 0; i < other.size_; ++i)
+                other.heap_capacity());
+            for (std::size_t i = 0; i < heap_size; ++i)
                 heap_[i] = other.heap_[i];
-            data_ = heap_.get();
+            top_ = heap_.get() + heap_size - 1;
         } else {
-            local_ = other.local_;
-            data_ = local_.data();
+            top_ = local_.data() + (other - other.local_.data());
         }
-        size_ = other.size_;
         capacity_ = other.capacity_;
-        base_ = other.base_;
-        is_single_ = other.is_single_;
+        is_heap_ = other.is_heap_;
     }
 
     constexpr void move_from(StyleStack&& other) noexcept {
-        if (other.is_heap()) {
-            heap_ = std::move(other.heap_);
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
+        local_ = other.local_;
+        if (other.is_heap_) heap_ = std::move(other.heap_);
 
-        size_ = other.size_;
+        top_ = other.top_;
         capacity_ = other.capacity_;
-        base_ = other.base_;
-        is_single_ = other.is_single_;
+        is_heap_ = other.is_heap_;
 
-        other.size_ = 0;
+        other.local_[0] = AbsoluteStyle();
+        other.top_ = other.local_.data();
         other.capacity_ = N;
-        other.data_ = other.local_.data();
+        other.is_heap_ = false;
     }
 
     constexpr void grow() {
-        auto new_heap =
-            std::make_unique_for_overwrite<AbsoluteStyle[]>(capacity_ * 2);
-        for (std::size_t i = 0; i < size_; ++i)
-            new_heap[i] = data_[i];
+        std::size_t heap_size = is_heap_ ? top_ - heap_.get() + 1 : 0;
+        auto new_heap = std::make_unique_for_overwrite<AbsoluteStyle[]>(
+            (capacity_ * 2) - N);
+        for (std::size_t i = 0; i < heap_size; ++i)
+            new_heap[i] = heap_[i];
         heap_ = std::move(new_heap);
-        data_ = heap_.get();
         capacity_ *= 2;
     }
 
     std::array<AbsoluteStyle, N> local_;
     std::unique_ptr<AbsoluteStyle[]> heap_;
 
-    AbsoluteStyle* data_ = local_.data();
-    std::size_t size_ = 0;
+    AbsoluteStyle* top_ = local_.data();
     std::size_t capacity_ = N;
-
-    AbsoluteStyle base_ = AbsoluteStyle();
-    bool is_single_ = false;
+    bool is_heap_ = false;
 };
 
 /* ----- color fallback ----- */
@@ -252,6 +233,8 @@ struct NotNull {
     auto operator->() const -> Ptr { return ptr_; }
     auto operator*() const -> deref_type& { return *ptr_; }
 
+    operator Ptr() const { return ptr_; }
+
     auto get() const -> Ptr { return ptr_; }
 
   private:
@@ -290,67 +273,73 @@ class OutputConfig {
     std::atomic<ColorMode> color_mode_ = ColorMode::true_color;
 };
 
-class Output {
+class StyleState {
   public:
-    explicit Output(OutputConfig& cfg) : cfg_(&cfg) {}
+    StyleState() = default;
+    StyleState(const StyleState&) = default;
+    StyleState(StyleState&&) noexcept = default;
+    auto operator=(const StyleState&) -> StyleState& = default;
+    auto operator=(StyleState&&) noexcept -> StyleState& = default;
 
-    Output(const Output&) = default;
-    Output(Output&&) noexcept = default;
-    auto operator=(const Output&) -> Output& = default;
-    auto operator=(Output&&) noexcept -> Output& = default;
-
-    ~Output() {
+    ~StyleState() {
         if (detail::GlobalOutputContext::get_active() == this) {
             detail::GlobalOutputContext::set_active(nullptr);
         }
     }
 
-    auto current_style() const -> Style { return stack_.top().inner(); }
-
-  protected:
-    [[nodiscard]] auto needs_update_context() const -> bool {
-        const Output* active = detail::GlobalOutputContext::get_active();
-        return active != this
-               && active
-               && !(active->current_style() == this->current_style());
-    }
-
     void set_current_style(Style style) {
-        stack_.set_top(abs(stack_.top().inner() | style));
+        stack_.top() = abs(stack_.top().inner() | style);
     }
 
-    void set_current_style(AbsoluteStyle abstyle) { stack_.set_top(abstyle); }
+    void set_current_style(AbsoluteStyle abstyle) { stack_.top() = abstyle; }
 
     void push(Style style) { stack_.push(abs(stack_.top().inner() | style)); }
 
     void push(AbsoluteStyle abstyle) { stack_.push(abstyle); }
 
-    auto pop() -> AbsoluteStyle {
+    [[nodiscard]] auto pop() -> AbsoluteStyle {
         stack_.pop();
         return stack_.top();
     }
 
-    auto reset() -> AbsoluteStyle {
+    [[nodiscard]] auto reset() -> AbsoluteStyle {
         stack_.clear();
         return stack_.top();
     }
 
-    auto cfg() -> OutputConfig& { return *cfg_; }
+    [[nodiscard]] auto needs_update_context() const -> bool {
+        const StyleState* active = detail::GlobalOutputContext::get_active();
+        return active != this && active
+               && !(active->current_style() == this->current_style());
+    }
+
+    [[nodiscard]] auto current_style() const -> AbsoluteStyle {
+        return stack_.top();
+    }
 
   private:
-    detail::NotNull<OutputConfig*> cfg_;
-    detail::StyleStack<5> stack_;
+    detail::StyleStack<3> stack_;
 };
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         Ostream                         ║
 // ╚═════════════════════════════════════════════════════════╝
 
-class Ostream : public Output {
+class Ostream : public StyleState {
   public:
     explicit Ostream(OutputConfig& config, std::ostream& ostream)
-        : Output(config),
+        : cfg_(&config),
           ostream_(&ostream) {}
+
+    void ensure_style() {
+        if (!this->needs_update_context()) return;
+        this->output_style(this->current_style());
+        detail::GlobalOutputContext::set_active(this);
+    }
+
+    auto ostream() const -> std::ostream& { return *ostream_; }
+
+    /* ----- output operators ----- */
 
     /// @brief Output operator for any type that can be written to
     /// `std::ostream`.
@@ -360,8 +349,8 @@ class Ostream : public Output {
     template <ostream_outputable T>
         requires(!detail::style<T> && !detail::styled<T>)
     friend auto operator<<(Ostream& out, T&& value) -> Ostream& {
-        if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
-            os_ptr != out.ostream_)
+        auto os_ptr = &(out.ostream() << std::forward<T>(value));
+        if (os_ptr != out.ostream_)
             throw std::logic_error(
                 "Ostream: std::ostream output operator returned a "
                 "different ostream object");
@@ -381,8 +370,7 @@ class Ostream : public Output {
     }
 
     friend auto operator<<(Ostream& out, Reset) -> Ostream& {
-        out.reset();
-        out.output_style(out.current_style());
+        out.output_style(out.reset());
         return out;
     }
 
@@ -392,7 +380,7 @@ class Ostream : public Output {
         -> Ostream& {
         out.output_style(styled.style());
         out.ostream() << styled.value();
-        out.output_style(out.current_style());
+        if (!styled.style().is_null()) out.output_style(out.current_style());
     }
 
     template <detail::style StyleT>
@@ -435,19 +423,11 @@ class Ostream : public Output {
         return out;
     }
 
-    void ensure_style() {
-        if (!this->needs_update_context()) return;
-        this->output_style(abs(this->current_style()));
-        detail::GlobalOutputContext::set_active(this);
-    }
-
-    auto ostream() const -> std::ostream& { return *ostream_; }
-
   private:
     template <detail::style StyleT>
     void output_style(StyleT style) {
-        if (!cfg().style_enabled()) return;
-        switch (cfg().color_mode()) {
+        if (!cfg_->style_enabled()) return;
+        switch (cfg_->color_mode()) {
             case ColorMode::color16:
                 style = detail::fallback(style, detail::fallback_to_16);
             case ColorMode::color256:
@@ -457,10 +437,9 @@ class Ostream : public Output {
         this->ostream() << style;
     }
 
+    detail::NotNull<OutputConfig*> cfg_;
     detail::NotNull<std::ostream*> ostream_;
 };
-
-// ----- IO manipualtors ----- 
 
 [[nodiscard]] constexpr auto push(Style style) -> detail::Push<Style> {
     return {style};

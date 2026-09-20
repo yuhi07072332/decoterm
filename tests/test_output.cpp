@@ -12,18 +12,18 @@
 
 namespace {
 
-struct TestStyleState : public deco::Output,
+struct TestStyleState : public deco::StyleState,
                         public deco::StyleStateSetter<TestStyleState> {
-    using deco::Output::pop_style;
-    using deco::Output::push_style;
-    using deco::Output::reset_style;
-    using deco::Output::update_context;
+    using deco::StyleState::pop_style;
+    using deco::StyleState::push_style;
+    using deco::StyleState::reset_style;
+    using deco::StyleState::update_context;
 
     TestStyleState() = default; // NOLINT
 
-    TestStyleState(const Output& other) : Output(other) {}
+    TestStyleState(const StyleState& other) : StyleState(other) {}
 
-    TestStyleState(Output&& other) : Output(std::forward<Output>(other)) {}
+    TestStyleState(StyleState&& other) : StyleState(std::forward<StyleState>(other)) {}
 };
 
 struct return_different_ostream_t {};
