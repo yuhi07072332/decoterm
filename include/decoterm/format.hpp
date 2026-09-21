@@ -53,7 +53,7 @@ struct StyledFormatContext {
 
 // `Styled` with format context.
 // This is used instead of `Styled` in `StyledFormat`.
-template <detail::style StyleT, typename T>
+template <detail::style_type StyleT, typename T>
 struct FStyled {
     constexpr FStyled(Styled<StyleT, T> styled, StyledFormatContext context)
         : styled(std::move(styled)),
@@ -94,7 +94,7 @@ static consteval void check_arg() {
                   "push(), reset(), or pop() instead.");
 }
 
-template <std::output_iterator<const char&> OutputIt, style StyleT>
+template <std::output_iterator<const char&> OutputIt, style_type StyleT>
 inline auto vformat_to(OutputIt out,
                        StyleT style,
                        std::string_view fmt,
@@ -105,7 +105,7 @@ inline auto vformat_to(OutputIt out,
     return out;
 }
 
-template <style StyleT>
+template <style_type StyleT>
 inline auto vformat(StyleT style, std::string_view fmt, std::format_args args)
     -> std::string {
     std::string buf;

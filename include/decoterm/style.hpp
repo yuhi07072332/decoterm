@@ -70,7 +70,7 @@ namespace detail {
 // Whether remove_cvref_t<StyleT> is a Style or an AbsoluteStyle.
 // The requires expression describes the common interface of both types.
 template <typename S>
-concept style = (std::is_same_v<std::remove_cvref_t<S>, Style>
+concept style_type = (std::is_same_v<std::remove_cvref_t<S>, Style>
         || std::is_same_v<std::remove_cvref_t<S>, AbsoluteStyle>)
     && requires(
         const std::remove_cvref_t<S>& style,
@@ -199,7 +199,7 @@ template <typename Ret, typename... Args>
 ValueOrRef(Ret(Args...)) -> ValueOrRef<std::decay_t<Ret(Args...)>>;
 
 /// @brief A `ValueOrRef` with a style.
-template <style StyleT, typename T>
+template <style_type StyleT, typename T>
 struct Styled {
     using value_type = T;
 
@@ -757,7 +757,7 @@ constexpr auto operator|(AbsoluteStyle abstyle, T&& value) {
 }
 
 /// @brief output operator for `styled()`
-template <detail::style StyleT, ostream_outputable T>
+template <detail::style_type StyleT, ostream_outputable T>
 inline auto operator<<(std::ostream& os,
                        const detail::Styled<StyleT, T>& styled)
     -> std::ostream& {
