@@ -12,10 +12,8 @@
 #include <array>
 #include <atomic>
 #include <cassert>
-#include <iostream>
 #include <memory>
 #include <ostream>
-#include <syncstream>
 #include <type_traits>
 #include <utility>
 
@@ -26,6 +24,12 @@ class StyleState;
 
 namespace detail {
 
+constexpr auto merge(Style lhs, Style rhs) -> Style { return lhs | rhs; }
+
+constexpr auto merge(Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+    return rhs;
+}
+
 constexpr auto merge(AbsoluteStyle lhs, Style rhs) -> AbsoluteStyle {
     return abs(lhs.inner() | rhs);
 }
@@ -35,43 +39,45 @@ constexpr auto merge(AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
 }
 
 struct AnyStyle {
-
     constexpr AnyStyle() : type_(Type::Normal) {}
-    constexpr AnyStyle(Style style) : type_(Type::Normal), style_(style) {}
+    constexpr AnyStyle(Style style) : type_(Type::Normal), inner_(style) {}
     constexpr AnyStyle(AbsoluteStyle abstyle)
         : type_(Type::Absolute),
-          style_(abstyle.inner()) {}
+          inner_(abstyle.inner()) {}
 
-    constexpr void merge(Style s) { style_ |= s; }
-    constexpr void merge(AbsoluteStyle s) {
-        type_ = Type::Absolute;
-        style_ = s.inner();
-    }
-
-    constexpr auto is_null() const -> bool {
-        return type_ == Type::Normal && style_.is_null();
-    }
-
-    constexpr auto inner() const -> Style { return style_; }
-
-    template <typename Fn>
-        requires std::is_invocable_v<Fn, Style> || std::is_invocable_v<Fn, AbsoluteStyle>
-    constexpr auto visit(Fn&& visitor) const { // NOLINT
+    constexpr void merge(detail::style_type auto s) {
         switch (type_) {
             case Type::Normal:
-                visitor(style_);
+                *this = detail::merge(inner_, s);
                 break;
             case Type::Absolute:
-                visitor(abs(style_));
+                *this = detail::merge(abs(inner_), s);
                 break;
         }
     }
+
+    template <typename Visitor>
+    constexpr auto visit(Visitor&& visitor) const -> decltype(auto) { // NOLINT
+        switch (type_) {
+            case Type::Normal:
+                return visitor(inner_);
+            case Type::Absolute:
+                return visitor(abs(inner_));
+        }
+    }
+
+    constexpr auto is_null() const -> bool {
+        return this->visit([](detail::style_type auto style){ return style.is_null(); });
+    }
+
+    constexpr auto inner() const -> Style { return inner_; }
+
 
   private:
     enum class Type { Normal, Absolute };
 
     Type type_;
-    Style style_;
+    Style inner_;
 };
 
 template <detail::style_type StyleT>
@@ -150,8 +156,8 @@ class StyleStack {
         }
     }
 
-    constexpr void clear() {
-        local_[0] = AbsoluteStyle();
+    constexpr void clear(AbsoluteStyle first) {
+        local_[0] = first;
         top_ = local_.data();
         is_heap_ = false;
     }
@@ -159,6 +165,10 @@ class StyleStack {
     [[nodiscard]] constexpr auto top() -> AbsoluteStyle& { return *top_; }
 
     [[nodiscard]] constexpr auto top() const -> AbsoluteStyle { return *top_; }
+
+    [[nodiscard]] constexpr auto is_first_elem() const -> bool {
+        return top_ == local_.data();
+    }
 
   private:
     constexpr auto heap_end() const noexcept -> AbsoluteStyle* {
@@ -334,6 +344,13 @@ class StyleState {
         }
     }
 
+    void set_base_style(Style s) {
+        AbsoluteStyle base = abs(s);
+        if (stack_.is_first_elem() && base != base_style_ && stack_.top() == base_style_)
+            pending_.merge(base);
+        base_style_ = base;
+    }
+
     void ensure_style() {
         // TODO: needs to set active every output
         if (!this->needs_update_context()) return;
@@ -343,6 +360,10 @@ class StyleState {
 
     [[nodiscard]] auto current_style() const -> Style {
         return stack_.top().inner();
+    }
+
+    [[nodiscard]] auto base_style() const -> Style {
+        return base_style_.inner();
     }
 
   protected:
@@ -356,16 +377,14 @@ class StyleState {
         pending_.merge(style);
     }
 
-    auto pop() -> AbsoluteStyle {
+    void pop() {
         stack_.pop();
         pending_.merge(this->current_abstyle());
-        return stack_.top();
     }
 
-    auto reset() -> AbsoluteStyle {
-        stack_.clear();
+    void reset() {
+        stack_.clear(base_style_);
         pending_.merge(this->current_abstyle());
-        return stack_.top();
     }
 
     [[nodiscard]] auto has_pending() -> bool { return !pending_.is_null(); }
@@ -387,6 +406,8 @@ class StyleState {
     }
 
   private:
+    AbsoluteStyle base_style_;
+
     detail::StyleStack<3> stack_;
     detail::AnyStyle pending_;
 };
@@ -424,13 +445,11 @@ class Ostream : public StyleState {
 
     friend auto operator<<(Ostream& out, Style style) -> Ostream& {
         out.set_current_style(style);
-        out.output_pending();
         return out;
     }
 
     friend auto operator<<(Ostream& out, AbsoluteStyle abstyle) -> Ostream& {
         out.set_current_style(abstyle);
-        out.output_pending();
         return out;
     }
 
@@ -441,7 +460,7 @@ class Ostream : public StyleState {
         if (out.has_pending()) {
             auto pending = out.consume_pending();
             pending.merge(styled.style());
-            pending.visit([&out](detail::style_type auto style){
+            pending.visit([&out](auto style) {
                 out.output_style(style);
             });
         } else {
@@ -455,19 +474,16 @@ class Ostream : public StyleState {
     friend auto operator<<(Ostream& out, detail::Push<StyleT> push)
         -> Ostream& {
         out.push(push.style);
-        out.output_pending();
         return out;
     }
 
     friend auto operator<<(Ostream& out, detail::Pop) -> Ostream& {
         out.pop();
-        out.output_pending();
         return out;
     }
 
-    friend auto operator<<(Ostream& out, Reset) -> Ostream& {
+    friend auto operator<<(Ostream& out, detail::Reset) -> Ostream& {
         out.reset();
-        out.output_pending();
         return out;
     }
 
@@ -503,7 +519,7 @@ class Ostream : public StyleState {
     void output_pending() {
         if (this->has_pending()) {
             const auto pending = this->consume_pending();
-            pending.visit([this](detail::style_type auto style){
+            pending.visit([this](detail::style_type auto style) constexpr {
                 this->output_style(style);
             });
         }

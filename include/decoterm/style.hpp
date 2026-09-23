@@ -87,6 +87,8 @@ concept style_type = (std::is_same_v<std::remove_cvref_t<S>, Style>
 
 using ColorData = std::array<uint8_t, 3>;
 
+struct Reset {};
+
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
     "30", "31", "32",
@@ -677,10 +679,9 @@ constexpr auto bg(Color bg) -> Style {
     return {Style::Emphasis::none, null_color, bg};
 }
 
-struct Reset {};
 
 /// @brief IO manipulator that resets the terminal style.
-inline constexpr Reset reset;
+inline constexpr detail::Reset reset;
 
 /// @brief output operator for `Style`
 inline auto operator<<(std::ostream& os, Style style) -> std::ostream& {
@@ -700,7 +701,7 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
 }
 
 /// @brief output operator for deco::reset
-inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
+inline auto operator<<(std::ostream& os, detail::Reset) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
     os.write(buf.begin(), len);
