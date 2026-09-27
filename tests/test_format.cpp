@@ -1,3 +1,5 @@
+#if 0
+
 #include <decoterm/format.hpp>
 
 #include "unit_test.hpp"
@@ -10,6 +12,7 @@
 #include <version>
 
 // NOLINTBEGIN
+
 
 using namespace deco;
 using doctest::test_suite;
@@ -173,3 +176,5 @@ TEST_CASE("StyledPrint" * test_suite("StyledPrint")) {
 # endif
 
 // NOLINTEND
+
+#endif

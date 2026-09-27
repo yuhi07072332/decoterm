@@ -67,8 +67,8 @@ namespace detail {
 
 // clang-format off
 
-// Whether remove_cvref_t<StyleT> is a Style or an AbsoluteStyle.
-// The requires expression describes the common interface of both types.
+/// Whether remove_cvref_t<StyleT> is a Style or an AbsoluteStyle.
+/// The requires expression describes the common interface of both types.
 template <typename S>
 concept style_type = (std::is_same_v<std::remove_cvref_t<S>, Style>
         || std::is_same_v<std::remove_cvref_t<S>, AbsoluteStyle>)
@@ -169,7 +169,7 @@ constexpr auto color_to_sgr_params(OutputIt out,
     }
 }
 
-/// @brief A wrapper that stores rvalue or references lvalue.
+/// A wrapper that stores rvalue or references lvalue.
 template <typename T>
 struct ValueOrRef {
     explicit constexpr ValueOrRef(T value) : value(std::move(value)) {}
@@ -200,7 +200,7 @@ ValueOrRef(T& ref) -> ValueOrRef<T&>;
 template <typename Ret, typename... Args>
 ValueOrRef(Ret(Args...)) -> ValueOrRef<std::decay_t<Ret(Args...)>>;
 
-/// @brief A `ValueOrRef` with a style.
+/// A `ValueOrRef` with a style.
 template <style_type StyleT, typename T>
 struct Styled {
     using value_type = T;
@@ -261,7 +261,7 @@ struct Color {
         return Color(ColorType::null, {0, 0, 0});
     }
 
-    /// @brief Create a color implicitly from an index in [0, 255]
+    /// Create a color implicitly from an index in [0, 255]
     constexpr Color(uint8_t index)
         : type_(ColorType::terminal_color),
           data_({index, 0, 0}) {}
@@ -298,8 +298,7 @@ struct Color {
 
     /* ----- output ----- */
 
-    [[nodiscard]]
-    auto to_escape(bool is_bg) const -> std::string {
+    [[nodiscard]] auto to_escape(bool is_bg) const -> std::string {
         std::string esc = "\x1b[";
         detail::color_to_sgr_params(
             std::back_inserter(esc), is_bg, type_, data_);
@@ -307,8 +306,7 @@ struct Color {
         return esc;
     }
 
-    [[nodiscard]]
-    auto debug_string() const -> std::string {
+    [[nodiscard]] auto debug_string() const -> std::string {
         switch (type_) {
             case ColorType::null:
                 return "[null_color]";
@@ -422,7 +420,6 @@ inline constexpr Color bright_white    = Color(15);
 // ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-
 /// @brief Represents a nullable terminal style.
 /// @details
 /// * It contains 8 emphasis flags and 2 `Color`s for foreground color and
@@ -448,7 +445,7 @@ struct Style {
 
     // clang-format on
 
-    constexpr Style(uint8_t emphasis = 0,
+    explicit constexpr Style(uint8_t emphasis = 0,
                     Color fg = null_color,
                     Color bg = null_color)
         : fg_data_(fg.data()),
@@ -491,7 +488,7 @@ struct Style {
     constexpr auto operator==(const Style&) const -> bool = default;
     constexpr auto operator!=(const Style&) const -> bool = default;
 
-    /// @brief equivalent to !is_null()
+    /// equivalent to !is_null()
     constexpr explicit operator bool() const { return !this->is_null(); }
 
     // ----- observe -----
@@ -500,15 +497,14 @@ struct Style {
     constexpr auto fg() const -> Color { return {this->fg_type(), fg_data_}; }
     constexpr auto bg() const -> Color { return {this->bg_type(), bg_data_}; }
 
-    /// @brief Will `to_escape()` return a empty string?
+    /// Will `to_escape()` return a empty string?
     constexpr auto is_null() const -> bool {
         return emphasis_ == none && this->fg_null() && this->bg_null();
     }
 
     // ----- output -----
 
-    /// @brief Writes SGR parameters to the output iterator.
-    /// @details format: "P1;P2;...;Pn"
+    /// Writes SGR parameters to the output iterator in the form "P1;P2;...;Pn".
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
         using namespace detail;
@@ -538,7 +534,7 @@ struct Style {
         return out;
     }
 
-    /// @brief Writes ANSI escape sequence to the output iterator.
+    /// Writes ANSI escape sequence to the output iterator.
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         if (this->is_null()) return out;
@@ -549,16 +545,14 @@ struct Style {
         return out;
     }
 
-    /// @brief Writes ANSI escape sequence to a string.
-    [[nodiscard]]
-    auto to_escape() const -> std::string {
+    /// Writes ANSI escape sequence to a string.
+    [[nodiscard]] auto to_escape() const -> std::string {
         std::string esc;
         this->to_escape(std::back_inserter(esc));
         return esc;
     }
 
-    [[nodiscard]]
-    auto debug_string() const -> std::string {
+    [[nodiscard]] auto debug_string() const -> std::string {
         std::string debug = "[flags=";
         std::array<char, 8> buf {};
 
@@ -632,9 +626,10 @@ struct AbsoluteStyle {
 
     constexpr auto inner() const -> Style { return style_; }
 
-    /// @details This is always `false` since `to_escape()` will never be empty.
+    /// This is always `false` since `to_escape()` will never be empty.
     constexpr auto is_null() const -> bool { return false; }
 
+    /// Writes ANSI escape sequence to the output iterator.
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
@@ -644,15 +639,14 @@ struct AbsoluteStyle {
         return out;
     }
 
-    [[nodiscard]]
-    auto to_escape() const -> std::string {
+    /// Writes ANSI escape sequence to a string.
+    [[nodiscard]] auto to_escape() const -> std::string {
         std::string esc;
         this->to_escape(std::back_inserter(esc));
         return esc;
     }
 
-    [[nodiscard]]
-    auto debug_string() const -> std::string {
+    [[nodiscard]] auto debug_string() const -> std::string {
         return std::string("[absolute:") + style_.debug_string() + "]";
     }
 
@@ -666,24 +660,23 @@ constexpr auto abs(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
-/// @brief Creates a Style with foreground and background colors.
+/// Creates a Style with foreground and background colors.
 constexpr auto color(Color fg, Color bg) -> Style {
-    return {Style::Emphasis::none, fg, bg};
+    return Style(Style::Emphasis::none, fg, bg);
 }
 
-/// @brief Create a Style with foreground color.
-constexpr auto fg(Color fg) -> Style { return {Style::Emphasis::none, fg}; }
+/// Create a Style with foreground color.
+constexpr auto fg(Color fg) -> Style { return Style(Style::Emphasis::none, fg); }
 
-/// @brief Create a Style with background color.
+/// Create a Style with background color.
 constexpr auto bg(Color bg) -> Style {
-    return {Style::Emphasis::none, null_color, bg};
+    return Style(Style::Emphasis::none, null_color, bg);
 }
 
-
-/// @brief IO manipulator that resets the terminal style.
+/// IO manipulator that resets the terminal style.
 inline constexpr detail::Reset reset;
 
-/// @brief output operator for `Style`
+/// output operator for `Style`
 inline auto operator<<(std::ostream& os, Style style) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = style.to_escape(buf.begin()) - buf.begin();
@@ -691,7 +684,7 @@ inline auto operator<<(std::ostream& os, Style style) -> std::ostream& {
     return os;
 }
 
-/// @brief output operator for `AbsoluteStyle`
+/// output operator for `AbsoluteStyle`
 inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
     -> std::ostream& {
     std::array<char, AbsoluteStyle::MAX_ESCAPE_SEQ_SIZE> buf = {0};
@@ -700,7 +693,7 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
     return os;
 }
 
-/// @brief output operator for deco::reset
+/// output operator for deco::reset
 inline auto operator<<(std::ostream& os, detail::Reset) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
@@ -739,25 +732,25 @@ constexpr auto styled(T&& value, Style style) {
     return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), style);
 }
 
-/// @brief `AbsoluteStyle` version of `styled()`
+/// `AbsoluteStyle` version of `styled()`
 template <typename T>
 constexpr auto styled(T&& value, AbsoluteStyle abstyle) {
     return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), abstyle);
 }
 
-/// @brief shorthand for `styled(value, style)`
+/// shorthand for `styled(value, style)`
 template <typename T>
 constexpr auto operator|(Style style, T&& value) {
     return styled(std::forward<T>(value), style);
 }
 
-/// @brief shorthand for `styled(value, abstyle)`
+/// shorthand for `styled(value, abstyle)`
 template <typename T>
 constexpr auto operator|(AbsoluteStyle abstyle, T&& value) {
     return styled(std::forward<T>(value), abstyle);
 }
 
-/// @brief output operator for `styled()`
+/// output operator for `styled()`
 template <detail::style_type StyleT, ostream_outputable T>
 inline auto operator<<(std::ostream& os,
                        const detail::Styled<StyleT, T>& styled)
