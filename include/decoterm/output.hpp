@@ -26,12 +26,12 @@ namespace detail {
 
 constexpr auto merge(Style lhs, Style rhs) -> Style { return lhs | rhs; }
 
-constexpr auto merge(Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
-    return rhs;
-}
-
 constexpr auto merge(AbsoluteStyle lhs, Style rhs) -> AbsoluteStyle {
     return abs(lhs.inner() | rhs);
+}
+
+constexpr auto merge(Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+    return rhs;
 }
 
 constexpr auto merge(AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
@@ -104,27 +104,24 @@ struct GlobalOutputContext {
     }
 };
 
-/* ----- StyleStack ----- */
-
-/// @brief
-/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
-/// if the size exceeds N.
 template <std::size_t N>
+    requires (N > 1)
 class StyleStack {
-    static_assert(N > 1);
-
   public:
-    constexpr StyleStack() { local_[0] = AbsoluteStyle(); }
+    using value_type = AbsoluteStyle;
 
+    constexpr StyleStack() = default;
     constexpr StyleStack(const StyleStack& other) { this->copy_from(other); }
     constexpr StyleStack(StyleStack&& other) noexcept {
         this->move_from(std::move(other));
     }
+
     constexpr auto operator=(const StyleStack& other) -> StyleStack& {
         if (this == &other) return *this;
         this->copy_from(other);
         return *this;
     }
+
     constexpr auto operator=(StyleStack&& other) noexcept -> StyleStack& {
         if (this == &other) return *this;
         this->move_from(std::move(other));
@@ -133,95 +130,82 @@ class StyleStack {
 
     constexpr ~StyleStack() = default;
 
-    constexpr void push(AbsoluteStyle style) {
-        if (is_heap_) {
-            if (top_ == this->heap_end() - 1) this->grow();
-            top_++;
-        } else if (top_ == local_.end() - 1) {
-            this->grow();
-            top_ = heap_.get();
-        } else {
-            top_++;
-        }
-
-        *top_ = style;
+    [[nodiscard]] constexpr auto top() -> value_type& {
+        assert(!this->empty());
+        return data_[size_ - 1];
     }
 
-    constexpr void pop() {
-        if (is_heap_) {
-            if (top_ == heap_.get()) top_ = local_.data() + N - 1;
-            else top_--;
-        } else if (top_ > local_.data()) {
-            top_--;
-        }
+    constexpr void push(value_type v) {
+        if (size_ == capacity_) this->grow();
+        data_[size_++] = v; // NOLINT
     }
 
-    constexpr void clear(AbsoluteStyle first) {
-        local_[0] = first;
-        top_ = local_.data();
-        is_heap_ = false;
+    constexpr void pop() { if (size_ > 0) size_--; }
+
+    constexpr void clear() { size_ = 0; }
+
+    [[nodiscard]] constexpr auto top_or(value_type v) const -> value_type {
+        return this->empty() ? v : data_[size_ - 1];
     }
 
-    [[nodiscard]] constexpr auto top() -> AbsoluteStyle& { return *top_; }
-
-    [[nodiscard]] constexpr auto top() const -> AbsoluteStyle { return *top_; }
-
-    [[nodiscard]] constexpr auto is_first_elem() const -> bool {
-        return top_ == local_.data();
+    [[nodiscard]] constexpr auto top() const -> value_type {
+        assert(!this->empty());
+        return data_[size_ - 1];
     }
+
+    [[nodiscard]] constexpr auto empty() const -> bool { return size_; }
 
   private:
-    constexpr auto heap_end() const noexcept -> AbsoluteStyle* {
-        return heap_.get() + heap_capacity_;
+    constexpr auto is_heap() const noexcept -> bool {
+        return size_ > N;
     }
 
     constexpr void copy_from(const StyleStack& other) {
-        local_ = other.local_;
-        if (other.is_heap_) {
-            std::size_t heap_size = other.top_ - other.heap_.get() + 1;
-            heap_ = std::make_unique_for_overwrite<AbsoluteStyle[]>(
-                other.heap_capacity_);
-            for (std::size_t i = 0; i < heap_size; ++i)
+        if (other.is_heap()) {
+            heap_ = std::make_unique_for_overwrite<value_type[]>(
+                other.capacity_);
+            for (std::size_t i = 0; i < other.size_; ++i)
                 heap_[i] = other.heap_[i];
-            top_ = heap_.get() + heap_size - 1;
+            data_ = heap_.get();
         } else {
-            top_ = local_.data() + (other - other.local_.data());
+            local_ = other.local_;
+            data_ = local_.data();
         }
-        heap_capacity_ = other.heap_capacity_;
-        is_heap_ = other.is_heap_;
+        size_ = other.size_;
+        capacity_ = other.capacity_;
     }
 
     constexpr void move_from(StyleStack&& other) noexcept {
-        local_ = other.local_;
-        if (other.is_heap_) heap_ = std::move(other.heap_);
+        if (other.is_heap()) {
+            heap_ = std::move(other.heap_);
+            data_ = heap_.get();
+        } else {
+            local_ = other.local_;
+            data_ = local_.data();
+        }
 
-        top_ = other.top_;
-        heap_capacity_ = other.heap_capacity_;
-        is_heap_ = other.is_heap_;
+        size_ = other.size_;
+        capacity_ = other.capacity_;
 
-        other.clear();
+        other.size_ = 0;
     }
 
     constexpr void grow() {
-        std::size_t heap_size = is_heap_ ? top_ - heap_.get() + 1 : 0;
-        std::size_t new_capacity = heap_capacity_ ? heap_capacity_ * 2 : N;
         auto new_heap =
-            std::make_unique_for_overwrite<AbsoluteStyle[]>(new_capacity);
-
-        for (std::size_t i = 0; i < heap_size; ++i)
-            new_heap[i] = heap_[i];
-
+            std::make_unique_for_overwrite<value_type[]>(capacity_ * 2);
+        for (std::size_t i = 0; i < size_; ++i)
+            new_heap[i] = data_[i];
         heap_ = std::move(new_heap);
-        heap_capacity_ = new_capacity;
-        is_heap_ = false;
+        data_ = heap_.get();
+        capacity_ *= 2;
     }
 
-    std::array<AbsoluteStyle, N> local_;
-    std::unique_ptr<AbsoluteStyle[]> heap_;
+    std::array<value_type, N> local_;
+    std::unique_ptr<value_type[]> heap_;
 
-    AbsoluteStyle* top_ = local_.data();
-    std::size_t heap_capacity_ = N;
-    bool is_heap_ = false;
+    value_type* data_ = local_.data();
+    std::size_t size_ = 0;
+    std::size_t capacity_ = N;
 };
 
 /* ----- color fallback ----- */
@@ -281,14 +265,12 @@ constexpr auto fallback(AbsoluteStyle abstyle, color_fallback_fn fallback_fn)
 template <typename Ptr>
     requires std::is_pointer_v<Ptr>
 struct NotNull {
-    using deref_type = decltype(*std::declval<Ptr>());
-
     NotNull(Ptr ptr) : ptr_(ptr) {
         if (ptr == nullptr) throw std::logic_error("NotNull: null pointer");
     }
 
     auto operator->() const -> Ptr { return ptr_; }
-    auto operator*() const -> deref_type& { return *ptr_; }
+    auto operator*() const -> decltype(auto) { return *ptr_; }
 
     operator Ptr() const { return ptr_; }
 
@@ -346,7 +328,7 @@ class StyleState {
 
     void set_base_style(Style s) {
         AbsoluteStyle base = abs(s);
-        if (stack_.is_first_elem() && base != base_style_ && stack_.top() == base_style_)
+        if (stack_.empty())
             pending_.merge(base);
         base_style_ = base;
     }
@@ -359,7 +341,7 @@ class StyleState {
     }
 
     [[nodiscard]] auto current_style() const -> Style {
-        return stack_.top().inner();
+        return this->current_abstyle().inner();
     }
 
     [[nodiscard]] auto base_style() const -> Style {
@@ -367,13 +349,15 @@ class StyleState {
     }
 
   protected:
+    /// @details This will push `style` to the stack implicitly when the stack is empty.
     void set_current_style(detail::style_type auto style) {
-        stack_.top() = detail::merge(stack_.top(), style);
+        if (stack_.empty()) stack_.push(detail::merge(base_style_, style));
+        else stack_.top() = detail::merge(stack_.top(), style);
         pending_.merge(style);
     }
 
     void push(detail::style_type auto style) {
-        stack_.push(detail::merge(stack_.top(), style));
+        stack_.push(detail::merge(stack_.top_or(base_style_), style));
         pending_.merge(style);
     }
 
@@ -383,7 +367,7 @@ class StyleState {
     }
 
     void reset() {
-        stack_.clear(base_style_);
+        stack_.clear();
         pending_.merge(this->current_abstyle());
     }
 
@@ -402,7 +386,7 @@ class StyleState {
     }
 
     [[nodiscard]] auto current_abstyle() const -> AbsoluteStyle {
-        return stack_.top();
+        return stack_.top_or(base_style_);
     }
 
   private:

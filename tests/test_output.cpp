@@ -24,6 +24,8 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
     return ios;
 }
 
+const deco::OutputConfig ocfg;
+
 } // namespace
 
 // NOLINTBEGIN
@@ -31,7 +33,18 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
 using namespace deco;
 using doctest::test_suite;
 
-// TODO: test cases for detail::StyleStack
+TEST_CASE("StyleStack copy and move" * test_suite("StyleStack")) {
+    detail::StyleStack<3> stack;
+    stack.push(abs(bold));
+    stack.push(abs(italic));
+
+    SUBCASE("copy") {
+        auto cp = stack;
+    }
+    SUBCASE("move") {
+
+    }
+}
 
 TEST_CASE("StyleState options" * test_suite("StyleState")) {
 }
