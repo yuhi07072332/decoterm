@@ -37,8 +37,6 @@ inline auto toString(const EscapeSeq& s) -> doctest::String {
 
 }
 
-
-
 namespace deco {
 
 // Stringification for custom types.

@@ -1,5 +1,5 @@
-#include <decoterm/output.hpp>
 #include <decoterm/style.hpp>
+#include <decoterm/output.hpp>
 
 #include "unit_test.hpp"
 #include <doctest.h>
@@ -8,7 +8,6 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
-#include <string>
 #include <utility>
 
 namespace {
@@ -147,7 +146,7 @@ TEST_CASE("StyleStack copy and move" * test_suite("StyleStack")) {
 TEST_CASE("StyleContext manages pending style" * test_suite("StyleContext")) {
     detail::StyleContext ctx;
     ctx.set_base_style(bold);
-    CHECK(pending_escape(ctx) == to_escape(bold));
+    CHECK(pending_escape(ctx) == to_escape(abs(bold)));
 
     static_cast<void>(ctx.consume_pending());
 

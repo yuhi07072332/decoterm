@@ -81,6 +81,7 @@ struct AnyStyle {
             case Type::Absolute:
                 return visitor(abs(inner_));
         }
+        assert(false);
     }
 
     constexpr auto is_null() const -> bool {
@@ -153,7 +154,7 @@ class StyleStack {
         return data_[size_ - 1];
     }
 
-    [[nodiscard]] constexpr auto empty() const -> bool { return size_; }
+    [[nodiscard]] constexpr auto empty() const -> bool { return !size_; }
 
   private:
     constexpr auto is_heap() const noexcept -> bool { return size_ > N; }

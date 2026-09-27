@@ -167,6 +167,7 @@ constexpr auto color_to_sgr_params(OutputIt out,
             return out;
         }
     }
+    assert(false);
 }
 
 /// A wrapper that stores rvalue or references lvalue.
@@ -327,6 +328,7 @@ struct Color {
                     .append("]");
             }
         }
+        assert(false);
     }
 
   private:
