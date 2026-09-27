@@ -56,11 +56,11 @@ inline auto get_color_support() -> ColorMode {
     std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
     if (contains(env_colorterm, "truecolor")
         || contains(env_colorterm, "24bit"))
-        return ColorMode::true_color;
+        return ColorMode::TrueColor;
 
     // TODO:
 
-    return ColorMode::color16;
+    return ColorMode::Color16;
 #endif
 };
 

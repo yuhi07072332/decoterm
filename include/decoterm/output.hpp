@@ -221,15 +221,15 @@ constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
 
 constexpr auto fallback_to_16(Color color) -> Color {
     const ColorType type = color.type();
-    if (type == ColorType::null || type == ColorType::default_color)
+    if (type == ColorType::Null || type == ColorType::DefaultColor)
         return color;
 
     RGB rgb; // NOLINT
-    if (type == ColorType::terminal_color) {
+    if (type == ColorType::TerminalColor) {
         const uint8_t index = color.data()[0];
         if (index < 16) return color;
         rgb = color_info[index];
-    } else if (type == ColorType::true_color) {
+    } else if (type == ColorType::TrueColor) {
         const auto [r, g, b] = color.data();
         rgb = RGB(r, g, b);
     }
@@ -335,7 +335,7 @@ struct Pop {};
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief Terminal color capability levels.
-enum class ColorMode : uint8_t { color16 = 0, color256, true_color };
+enum class ColorMode : uint8_t { Color16 = 0, Color256, TrueColor };
 
 class OutputConfig {
   public:
@@ -361,7 +361,7 @@ class OutputConfig {
 
   private:
     std::atomic_bool style_enabled_ = true;
-    std::atomic<ColorMode> color_mode_ = ColorMode::true_color;
+    std::atomic<ColorMode> color_mode_ = ColorMode::TrueColor;
 };
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -493,10 +493,10 @@ class Ostream {
     void output_style(StyleT style) {
         if (!cfg_->style_enabled()) return;
         switch (cfg_->color_mode()) {
-            case ColorMode::color16:
+            case ColorMode::Color16:
                 style = detail::fallback(style, detail::fallback_to_16);
                 break;
-            case ColorMode::color256:
+            case ColorMode::Color256:
                 style = detail::fallback(style, detail::fallback_to_256);
                 break;
             default: break;

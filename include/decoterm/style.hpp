@@ -52,10 +52,10 @@ struct Style;
 struct AbsoluteStyle;
 
 enum class ColorType : uint8_t {
-    null = 0,
-    default_color,
-    terminal_color,
-    true_color
+    Null = 0,
+    DefaultColor,
+    TerminalColor,
+    TrueColor
 };
 
 template <typename T>
@@ -137,13 +137,13 @@ constexpr auto color_to_sgr_params(OutputIt out,
                                    ColorType type,
                                    ColorData data) -> OutputIt {
     switch (type) {
-        case ColorType::null:
+        case ColorType::Null:
             return out;
-        case ColorType::default_color: {
+        case ColorType::DefaultColor: {
             if constexpr (BG) return write_to(out, "49");
             else return write_to(out, "39");
         }
-        case ColorType::terminal_color: {
+        case ColorType::TerminalColor: {
             uint8_t index = data[0];
             if (index < 16) {
                 if constexpr (BG) return write_to(out, SGR_PARAM_BG[index]);
@@ -155,7 +155,7 @@ constexpr auto color_to_sgr_params(OutputIt out,
             }
             return out;
         }
-        case ColorType::true_color: {
+        case ColorType::TrueColor: {
             auto [r, g, b] = data;
                 if constexpr (BG) out = write_to(out, "48;2;");
                 else out = write_to(out, "38;2;");
@@ -256,20 +256,20 @@ struct Color {
     /* ----- constructors ----- */
 
     static constexpr auto default_color() -> Color {
-        return Color(ColorType::default_color, {0, 0, 0});
+        return Color(ColorType::DefaultColor, {0, 0, 0});
     }
 
     static constexpr auto null_color() -> Color {
-        return Color(ColorType::null, {0, 0, 0});
+        return Color(ColorType::Null, {0, 0, 0});
     }
 
     /// Create a color implicitly from an index in [0, 255]
     constexpr Color(uint8_t index)
-        : type_(ColorType::terminal_color),
+        : type_(ColorType::TerminalColor),
           data_({index, 0, 0}) {}
 
     constexpr explicit Color(uint8_t r, uint8_t g, uint8_t b)
-        : type_(ColorType::true_color),
+        : type_(ColorType::TrueColor),
           data_({r, g, b}) {}
 
     /* ----- observe ----- */
@@ -281,7 +281,7 @@ struct Color {
     constexpr explicit operator bool() const { return !this->is_null(); }
 
     /// Whether this Color's type is `ColorType::null`
-    constexpr auto is_null() const -> bool { return type_ == ColorType::null; }
+    constexpr auto is_null() const -> bool { return type_ == ColorType::Null; }
     constexpr auto type() const -> ColorType { return type_; }
 
     /// @brief Returns the raw data(`uint8_t[3]`) stored in this Color.
@@ -318,16 +318,16 @@ struct Color {
 
     [[nodiscard]] auto debug_string() const -> std::string {
         switch (type_) {
-            case ColorType::null:
+            case ColorType::Null:
                 return "[null_color]";
-            case ColorType::default_color:
+            case ColorType::DefaultColor:
                 return "[default_color]";
-            case ColorType::terminal_color: {
+            case ColorType::TerminalColor: {
                 return std::string("[terminal_color: ")
                     .append(std::to_string(data_[0]))
                     .append("]");
             }
-            case ColorType::true_color: {
+            case ColorType::TrueColor: {
                 return std::string("[true_color: ")
                     .append(std::to_string(data_[0]))
                     .append(", ")
@@ -440,15 +440,15 @@ inline constexpr Color bright_white    = Color(15);
 struct Style {
     // clang-format off
     enum Emphasis : uint8_t {                              //NOLINT
-        none                = 0,
-        bold                = 1 << 0,
-        dim                 = 1 << 1,
-        italic              = 1 << 2,
-        underline           = 1 << 3,
-        blink               = 1 << 4,
-        invert              = 1 << 5,
-        strikethrough       = 1 << 6,
-        underline_double    = 1 << 7,
+        None                = 0,
+        Bold                = 1 << 0,
+        Dim                 = 1 << 1,
+        Italic              = 1 << 2,
+        Underline           = 1 << 3,
+        Blink               = 1 << 4,
+        Invert              = 1 << 5,
+        Strikethrough       = 1 << 6,
+        UnderlineDouble     = 1 << 7,
     };
 
     static constexpr std::size_t MAX_ESCAPE_SEQ_SIZE =
@@ -510,7 +510,7 @@ struct Style {
 
     /// Will `to_escape()` return a empty string?
     constexpr auto is_null() const -> bool {
-        return emphasis_ == none && this->fg_null() && this->bg_null();
+        return emphasis_ == None && this->fg_null() && this->bg_null();
     }
 
     // ----- output -----
@@ -600,10 +600,10 @@ struct Style {
     }
 
     constexpr auto fg_null() const -> bool {
-        return this->fg_type() == ColorType::null;
+        return this->fg_type() == ColorType::Null;
     }
     constexpr auto bg_null() const -> bool {
-        return this->bg_type() == ColorType::null;
+        return this->bg_type() == ColorType::Null;
     }
 
     detail::ColorData fg_data_ = {0, 0, 0};
@@ -613,7 +613,7 @@ struct Style {
     // fg uses the upper 4 bits and bg uses the lower 4 bits.
     uint8_t color_types_ = 0;
 
-    uint8_t emphasis_ = none;
+    uint8_t emphasis_ = None;
 };
 
 /// @brief A Style wrapper that represents an absolute style.
@@ -673,15 +673,15 @@ constexpr auto abs(Style style) -> AbsoluteStyle {
 
 /// Creates a Style with foreground and background colors.
 constexpr auto color(Color fg, Color bg) -> Style {
-    return Style(Style::Emphasis::none, fg, bg);
+    return Style(Style::Emphasis::None, fg, bg);
 }
 
 /// Create a Style with foreground color.
-constexpr auto fg(Color fg) -> Style { return Style(Style::Emphasis::none, fg); }
+constexpr auto fg(Color fg) -> Style { return Style(Style::Emphasis::None, fg); }
 
 /// Create a Style with background color.
 constexpr auto bg(Color bg) -> Style {
-    return Style(Style::Emphasis::none, null_color, bg);
+    return Style(Style::Emphasis::None, null_color, bg);
 }
 
 /// IO manipulator that resets the terminal style.
@@ -717,14 +717,14 @@ inline auto operator<<(std::ostream& os, detail::Reset) -> std::ostream& {
 // clang-format off
 
 inline constexpr Style null_style        = Style();
-inline constexpr Style bold              = Style(Style::Emphasis::bold);
-inline constexpr Style dim               = Style(Style::Emphasis::dim);
-inline constexpr Style italic            = Style(Style::Emphasis::italic);
-inline constexpr Style underline         = Style(Style::Emphasis::underline);
-inline constexpr Style blink             = Style(Style::Emphasis::blink);
-inline constexpr Style invert            = Style(Style::Emphasis::invert);
-inline constexpr Style strikethrough     = Style(Style::Emphasis::strikethrough);
-inline constexpr Style underline_double  = Style(Style::Emphasis::underline_double);
+inline constexpr Style bold              = Style(Style::Emphasis::Bold);
+inline constexpr Style dim               = Style(Style::Emphasis::Dim);
+inline constexpr Style italic            = Style(Style::Emphasis::Italic);
+inline constexpr Style underline         = Style(Style::Emphasis::Underline);
+inline constexpr Style blink             = Style(Style::Emphasis::Blink);
+inline constexpr Style invert            = Style(Style::Emphasis::Invert);
+inline constexpr Style strikethrough     = Style(Style::Emphasis::Strikethrough);
+inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDouble);
 
 // clang-format on
 

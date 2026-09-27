@@ -29,7 +29,7 @@ TEST_CASE("Color construct" * test_suite("Color")) {
     SUBCASE("from index") {
         constexpr Color c = 7;
         CHECK(c.data()[0] == 7);
-        CHECK(c.type() == ColorType::terminal_color);
+        CHECK(c.type() == ColorType::TerminalColor);
         CHECK(c == white);
         CHECK(c);
         CHECK_FALSE(c.is_null());
@@ -41,7 +41,7 @@ TEST_CASE("Color construct" * test_suite("Color")) {
         CHECK(r == 16);
         CHECK(g == 32);
         CHECK(b == 64);
-        CHECK(c.type() == ColorType::true_color);
+        CHECK(c.type() == ColorType::TrueColor);
         CHECK(c == rgb(16, 32, 64));
 
         CHECK(rgb(0x123456) == rgb(0x12, 0x34, 0x56));
@@ -51,14 +51,14 @@ TEST_CASE("Color construct" * test_suite("Color")) {
 
     SUBCASE("default color") {
         constexpr Color c = Color::default_color();
-        CHECK(c.type() == ColorType::default_color);
+        CHECK(c.type() == ColorType::DefaultColor);
         CHECK(c == default_color);
         CHECK(c);
     }
 
     SUBCASE("null color") {
         constexpr Color c = Color::null_color();
-        CHECK(c.type() == ColorType::null);
+        CHECK(c.type() == ColorType::Null);
         CHECK(c == null_color);
         CHECK_FALSE(c);
         CHECK(c.is_null());
@@ -245,7 +245,7 @@ TEST_CASE("Style composition" * test_suite("Style")) {
     SUBCASE("emphasis") {
         s |= dim;
 
-        CHECK(s.emphasis() == (Style::bold | Style::italic | Style::dim));
+        CHECK(s.emphasis() == (Style::Bold | Style::Italic | Style::Dim));
         CHECK(s.fg() == red);
         CHECK(s.bg() == blue);
     }
