@@ -6,7 +6,6 @@
 
 // NOLINTBEGIN
 
-namespace {
 
 inline std::string printable_csi(const std::string& esc) {
     assert(esc.starts_with("\x1b["));
@@ -26,15 +25,13 @@ struct EscapeSeq {
 };
 
 template <typename StyleT>
-auto to_escape(StyleT style) -> EscapeSeq {
+inline auto to_escape(StyleT style) -> EscapeSeq {
     return style.to_escape();
 }
 
 // Stringification for escape sequence.
 inline auto toString(const EscapeSeq& s) -> doctest::String {
     return printable_csi(s.str);
-}
-
 }
 
 namespace deco {

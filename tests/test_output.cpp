@@ -30,7 +30,6 @@ auto pending_escape(const deco::detail::StyleContext& ctx) -> EscapeSeq {
         [](deco::detail::style_type auto style) { return style.to_escape(); });
 }
 
-
 } // namespace
 
 // NOLINTBEGIN
@@ -39,7 +38,6 @@ using namespace deco;
 using doctest::test_suite;
 
 TEST_CASE("StyleStack opeartions" * test_suite("StyleStack")) {
-    // 每个SUBCASE分别测试top()和empty()
     detail::StyleStack<3> stack;
 
     SUBCASE("push and pop") {
@@ -75,7 +73,6 @@ TEST_CASE("StyleStack opeartions" * test_suite("StyleStack")) {
 }
 
 TEST_CASE("StyleStack grows to heap" * test_suite("StyleStack")) {
-    // grow后是否能继续接着使用？
     detail::StyleStack<2> stack;
 
     SUBCASE("grow once") {
