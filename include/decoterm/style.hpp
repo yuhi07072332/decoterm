@@ -132,33 +132,33 @@ constexpr auto write_to(OutputIt out, uint8_t value) {
     return out;
 }
 
-template <std::output_iterator<const char&> OutputIt>
+template <bool BG, std::output_iterator<const char&> OutputIt>
 constexpr auto color_to_sgr_params(OutputIt out,
-                                   bool is_bg,
                                    ColorType type,
                                    ColorData data) -> OutputIt {
     switch (type) {
         case ColorType::null:
             return out;
         case ColorType::default_color: {
-            if (is_bg) out = write_to(out, "49");
-            else out = write_to(out, "39");
-            return out;
+            if constexpr (BG) return write_to(out, "49");
+            else return write_to(out, "39");
         }
         case ColorType::terminal_color: {
             uint8_t index = data[0];
             if (index < 16) {
-                out = write_to(
-                    out, is_bg ? SGR_PARAM_BG[index] : SGR_PARAM_FG[index]);
+                if constexpr (BG) return write_to(out, SGR_PARAM_BG[index]);
+                else return write_to(out, SGR_PARAM_FG[index]);
             } else {
-                out = write_to(out, is_bg ? "48;5;" : "38;5;");
+                if constexpr (BG) out = write_to(out, "48;5;");
+                else out = write_to(out, "38;5;");
                 out = write_to(out, index);
             }
             return out;
         }
         case ColorType::true_color: {
             auto [r, g, b] = data;
-            out = write_to(out, is_bg ? "48;2;" : "38;2;");
+                if constexpr (BG) out = write_to(out, "48;2;");
+                else out = write_to(out, "38;2;");
             out = write_to(out, r);
             *out++ = ';';
             out = write_to(out, g);
@@ -169,6 +169,7 @@ constexpr auto color_to_sgr_params(OutputIt out,
     }
     assert(false);
 }
+
 
 /// A wrapper that stores rvalue or references lvalue.
 template <typename T>
@@ -299,10 +300,18 @@ struct Color {
 
     /* ----- output ----- */
 
-    [[nodiscard]] auto to_escape(bool is_bg) const -> std::string {
+    [[nodiscard]] auto to_escape_fg() const -> std::string {
         std::string esc = "\x1b[";
-        detail::color_to_sgr_params(
-            std::back_inserter(esc), is_bg, type_, data_);
+        detail::color_to_sgr_params<false>(
+            std::back_inserter(esc), type_, data_);
+        esc.push_back('m');
+        return esc;
+    }
+
+    [[nodiscard]] auto to_escape_bg() const -> std::string {
+        std::string esc = "\x1b[";
+        detail::color_to_sgr_params<true>(
+            std::back_inserter(esc), type_, data_);
         esc.push_back('m');
         return esc;
     }
@@ -513,12 +522,12 @@ struct Style {
         bool needs_separate = false;
 
         if (!this->fg_null()) {
-            out = color_to_sgr_params(out, false, this->fg_type(), fg_data_);
+            out = color_to_sgr_params<false>(out, this->fg_type(), fg_data_);
             needs_separate = true;
         }
         if (!this->bg_null()) {
             if (needs_separate) *out++ = ';';
-            out = color_to_sgr_params(out, true, this->bg_type(), bg_data_);
+            out = color_to_sgr_params<true>(out, this->bg_type(), bg_data_);
             needs_separate = true;
         }
 
