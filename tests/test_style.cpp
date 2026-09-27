@@ -340,10 +340,8 @@ TEST_CASE("ValueOrRef" * test_suite("ValueOrRef")) {
         static_assert(
             std::is_same_v<decltype(vcounter), detail::ValueOrRef<Counter>>);
 
-        static_assert(
-            std::is_same_v<decltype(vi), detail::ValueOrRef<int>>);
-        static_assert(
-            std::is_same_v<decltype(vci), detail::ValueOrRef<int>>);
+        static_assert(std::is_same_v<decltype(vi), detail::ValueOrRef<int>>);
+        static_assert(std::is_same_v<decltype(vci), detail::ValueOrRef<int>>);
         static_assert(
             std::is_same_v<decltype(vpi), detail::ValueOrRef<const int*>>);
 
@@ -358,7 +356,7 @@ TEST_CASE("ValueOrRef" * test_suite("ValueOrRef")) {
     SUBCASE("borrows lvalue") {
         int i = 128;
         const int ci = 64;
-        int arr[] = {1, 2 ,3};
+        int arr[] = {1, 2, 3};
         int* pi = &i;
         const int* cpi = &i;
         Counter counter(0);
@@ -370,16 +368,14 @@ TEST_CASE("ValueOrRef" * test_suite("ValueOrRef")) {
         auto vcpi = detail::ValueOrRef(cpi);
         auto vcounter = detail::ValueOrRef(counter);
 
+        static_assert(std::is_same_v<decltype(vi), detail::ValueOrRef<int&>>);
         static_assert(
-            std::is_same_v<decltype(vi), detail::ValueOrRef<int&>>);
-        static_assert(std::is_same_v<decltype(vci),
-                                     detail::ValueOrRef<const int&>>);
-        static_assert(std::is_same_v<decltype(varr),
-                                     detail::ValueOrRef<int (&)[3]>>);
-        static_assert(std::is_same_v<decltype(vpi),
-                                     detail::ValueOrRef<int*&>>);
-        static_assert(std::is_same_v<decltype(vcpi),
-                                     detail::ValueOrRef<const int*&>>);
+            std::is_same_v<decltype(vci), detail::ValueOrRef<const int&>>);
+        static_assert(
+            std::is_same_v<decltype(varr), detail::ValueOrRef<int (&)[3]>>);
+        static_assert(std::is_same_v<decltype(vpi), detail::ValueOrRef<int*&>>);
+        static_assert(
+            std::is_same_v<decltype(vcpi), detail::ValueOrRef<const int*&>>);
         static_assert(
             std::is_same_v<decltype(vcounter), detail::ValueOrRef<Counter&>>);
 
