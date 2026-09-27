@@ -6,9 +6,10 @@
 #include <array>
 #include <cstdint>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <string_view>
-#include <sstream>
+#include <type_traits>
 
 // NOLINTBEGIN
 
@@ -21,6 +22,8 @@ auto sgr(std::string_view params) -> EscapeSeq {
     result += 'm';
     return result;
 }
+
+// ──────────────────────────────── Color ────────────────────────────────
 
 TEST_CASE("Color construct" * test_suite("Color")) {
     SUBCASE("from index") {
@@ -81,8 +84,10 @@ TEST_CASE("Color generates escape sequence" * test_suite("Color")) {
         for (std::size_t i = 0; i < 16; ++i) {
             CAPTURE(i);
             const Color color = Color(i);
-            CHECK(EscapeSeq(color.to_escape_fg()) == sgr(detail::SGR_PARAM_FG[i]));
-            CHECK(EscapeSeq(color.to_escape_bg()) == sgr(detail::SGR_PARAM_BG[i]));
+            CHECK(EscapeSeq(color.to_escape_fg())
+                  == sgr(detail::SGR_PARAM_FG[i]));
+            CHECK(EscapeSeq(color.to_escape_bg())
+                  == sgr(detail::SGR_PARAM_BG[i]));
         }
     }
 
@@ -94,16 +99,20 @@ TEST_CASE("Color generates escape sequence" * test_suite("Color")) {
             CAPTURE(index);
             const Color c = Color(index);
             std::string index_str = std::to_string(index);
-            CHECK(EscapeSeq(c.to_escape_fg()) == sgr(std::string("38;5;") + index_str));
-            CHECK(EscapeSeq(c.to_escape_bg()) == sgr(std::string("48;5;" + index_str)));
+            CHECK(EscapeSeq(c.to_escape_fg())
+                  == sgr(std::string("38;5;") + index_str));
+            CHECK(EscapeSeq(c.to_escape_bg())
+                  == sgr(std::string("48;5;" + index_str)));
         }
     }
 
     SUBCASE("true color") {
         constexpr Color c = rgb(12, 34, 56);
         std::string rgb_params = "12;34;56";
-        CHECK(EscapeSeq(c.to_escape_fg()) == sgr(std::string("38;2;") + rgb_params));
-        CHECK(EscapeSeq(c.to_escape_bg()) == sgr(std::string("48;2;") + rgb_params));
+        CHECK(EscapeSeq(c.to_escape_fg())
+              == sgr(std::string("38;2;") + rgb_params));
+        CHECK(EscapeSeq(c.to_escape_bg())
+              == sgr(std::string("48;2;") + rgb_params));
     }
 
     SUBCASE("default color") {
@@ -156,6 +165,8 @@ TEST_CASE("Color predefined constants" * test_suite("Color")) {
         CHECK(constants[i].to_escape_bg() == sgr(detail::SGR_PARAM_BG[i]));
     }
 }
+
+// ──────────────────────────────── Style ────────────────────────────────
 
 TEST_CASE("Style construct" * test_suite("Style")) {
     {
@@ -274,7 +285,9 @@ TEST_CASE("AbsoluteStyle is never null" * test_suite("AbsoluteStyle")) {
 
 TEST_CASE("AbsoluteStyle writes escape sequence"
           * test_suite("AbsoluteStyle")) {
-    SUBCASE("null style") { CHECK(abs(null_style).to_escape() == EscapeSeq("\x1b[m")); }
+    SUBCASE("null style") {
+        CHECK(abs(null_style).to_escape() == EscapeSeq("\x1b[m"));
+    }
 
     SUBCASE("style") {
         std::string buf;
@@ -295,6 +308,8 @@ TEST_CASE("AbsoluteStyle writes escape sequence"
     }
 }
 
+// ──────────────────────────────── misc ─────────────────────────────
+
 class Counter {
   public:
     Counter(int init) : value_(init) {}
@@ -311,26 +326,58 @@ std::ostream& operator<<(std::ostream& os, const Counter& cc) {
     return os;
 }
 
-auto styled_test_function(int value) -> int { return value + 1; }
+auto test_fn(int value) -> int { return value + 1; }
 
-TEST_CASE("styled stores value with style" * test_suite("styled")) {
+TEST_CASE("ValueOrRef" * test_suite("ValueOrRef")) {
     std::ostringstream os;
     std::ostringstream expected;
 
-    SUBCASE("styled() stores rvalue") {
-        
-    }
+    SUBCASE("stores rvalue") {
+        auto value = detail::ValueOrRef(Counter(0));
+        static_assert(
+            std::is_same_v<decltype(value), detail::ValueOrRef<Counter>>);
 
-    SUBCASE("styled() borrows lvalue") {
-    }
+        value.get().increment();
+        os << value.get();
+        expected << 1;
 
-    SUBCASE("styled() decays functions") {
-    }
-
-    SUBCASE("nested Styled") {
         CHECK(os.str() == expected.str());
     }
 
+    SUBCASE("borrows lvalue") {
+        Counter counter(0);
+        auto value = detail::ValueOrRef(counter);
+        static_assert(
+            std::is_same_v<decltype(value), detail::ValueOrRef<Counter&>>);
+
+        counter.increment();
+        value.get().increment();
+        os << value.get();
+        expected << 2;
+
+        CHECK(counter.value() == 2);
+        CHECK(os.str() == expected.str());
+    }
+
+    SUBCASE("decays functions") {
+        auto value = detail::ValueOrRef(test_fn);
+        static_assert(
+            std::is_same_v<decltype(value), detail::ValueOrRef<int (*)(int)>>);
+
+        CHECK(value.get()(41) == 42);
+    }
+}
+
+TEST_CASE("styled() wraps value with style" * test_suite("styled")) {
+    std::ostringstream os;
+    std::ostringstream expected;
+
+    auto styled_counter = italic | Counter(0);
+    styled_counter.value().increment();
+
+    os << (bold | "hello") << styled_counter;
+    expected << bold << "hello" << reset << italic << 1 << reset;
+    CHECK(os.str() == expected.str());
 }
 
 // NOLINTEND
