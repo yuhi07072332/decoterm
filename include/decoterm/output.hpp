@@ -99,10 +99,10 @@ struct AnyStyle {
 };
 
 /// @brief A stack for storing multiple `AbsoluteStyle`s.
-///
-/// @details Similar to a small vector, it has inline storage for up to `N`
-/// elements and switches to heap storage when its size exceeds `N`. Once it
-/// grows onto the heap, it never switches back to inline storage.
+/// @details
+/// Similar to a small vector, it has inline storage for up to `N` elements and
+/// switches to heap storage when its size exceeds `N`. Once it grows onto the
+/// heap, it never switches back to inline storage.
 template <std::size_t N>
     requires(N > 1)
 class StyleStack {
@@ -253,7 +253,8 @@ constexpr auto fallback_to_256(Color color) -> Color {
 }
 
 constexpr auto fallback(Style style, color_fallback_fn fallback_fn) -> Style {
-    return Style(style.emphasis(), fallback_fn(style.fg()), fallback_fn(style.bg()));
+    return Style(
+        style.emphasis(), fallback_fn(style.fg()), fallback_fn(style.bg()));
 }
 
 constexpr auto fallback(AbsoluteStyle abstyle, color_fallback_fn fallback_fn)
@@ -271,8 +272,8 @@ class StyleContext {
         base_style_ = base;
     }
 
-    /// @details This will push `style` to the stack implicitly when the stack
-    /// is empty.
+    /// @details
+    /// This will push `style` to the stack implicitly when the stack is empty.
     void set_current_style(detail::style_type auto style) {
         if (stack_.empty()) stack_.push(detail::merge(base_style_, style));
         else stack_.top() = detail::merge(stack_.top(), style);
@@ -308,7 +309,9 @@ class StyleContext {
 
     [[nodiscard]] auto pending() const -> AnyStyle { return pending_; }
 
-    [[nodiscard]] auto has_pending() const -> bool { return !pending_.is_null(); }
+    [[nodiscard]] auto has_pending() const -> bool {
+        return !pending_.is_null();
+    }
 
     [[nodiscard]] auto current_abstyle() const -> AbsoluteStyle {
         return stack_.top_or(base_style_);
@@ -334,7 +337,7 @@ struct Pop {};
 // ║                      OutputConfig                       ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Terminal color capability levels.
+/// Terminal color capability levels.
 enum class ColorMode : uint8_t { Color16 = 0, Color256, TrueColor };
 
 class OutputConfig {
@@ -449,7 +452,7 @@ class Ostream {
         return out;
     }
 
-    /// @brief output operator for IO manipulators
+    /// output operator for IO manipulators
     friend auto operator<<(Ostream& out, std::ios_base& (*fn)(std::ios_base&))
         -> Ostream& {
         out.output_pending();
@@ -457,7 +460,7 @@ class Ostream {
         return out;
     }
 
-    /// @brief output operator for IO manipulators
+    /// output operator for IO manipulators
     friend auto operator<<(Ostream& out,
                            std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
         -> Ostream& {
@@ -466,7 +469,7 @@ class Ostream {
         return out;
     }
 
-    /// @brief output operator for IO manipulators
+    /// output operator for IO manipulators
     friend auto operator<<(Ostream& out, std::ostream& (*fn)(std::ostream&))
         -> Ostream& {
         // `std::operator<<(std::ostream& os,
@@ -499,7 +502,8 @@ class Ostream {
             case ColorMode::Color256:
                 style = detail::fallback(style, detail::fallback_to_256);
                 break;
-            default: break;
+            default:
+                break;
         }
         this->ostream() << style;
     }

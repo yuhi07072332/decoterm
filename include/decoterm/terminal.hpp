@@ -84,7 +84,7 @@ inline bool g_virtual_terminal_mode_enabled = enable_virtual_terminal_mode();
 #endif // DECOTERM_NO_AUTO_ENABLE_VT
 #endif // _WIN32
 
-/// @brief Checks whether stdout is pointed to a terminal.
+/// Checks whether stdout is pointed to a terminal.
 [[nodiscard]]
 inline auto is_stdout_tty() -> bool {
 #if defined(_WIN32)
@@ -96,7 +96,7 @@ inline auto is_stdout_tty() -> bool {
 #endif
 };
 
-/// @brief Check whether stderr is pointed to a terminal.
+/// Check whether stderr is pointed to a terminal.
 [[nodiscard]]
 inline auto is_stderr_tty() -> bool {
 #if defined(_WIN32)
@@ -108,7 +108,7 @@ inline auto is_stderr_tty() -> bool {
 #endif
 };
 
-/// @brief Returns the detected color support of teh current terminal.
+/// Returns the detected color support of teh current terminal.
 [[nodiscard]]
 inline auto color_support() -> ColorMode {
     static ColorMode s_color_support = detail::get_color_support();
@@ -116,9 +116,10 @@ inline auto color_support() -> ColorMode {
 }
 
 /// @brief Creates a StyledOstream with TTY-based automatic configuration.
-/// @details Equivalent to `deco::styled_out(os)`, but style output and context
-/// tracking are enabled only when os is detected as stdout or stderr attached
-/// to a terminal.
+/// @details
+/// Equivalent to `deco::styled_out(os)`, but style output and context tracking
+/// are enabled only when os is detected as stdout or stderr attached to a
+/// terminal.
 [[nodiscard]]
 inline auto styled_out(std::ostream& os) -> StyledOstream {
     bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
@@ -126,7 +127,6 @@ inline auto styled_out(std::ostream& os) -> StyledOstream {
     return deco::styled_out(os).enable_style(is_tty).enable_context_tracking(
         is_tty);
 }
-
 
 } // namespace deco
 

@@ -51,6 +51,7 @@ namespace deco {
 struct Style;
 struct AbsoluteStyle;
 
+/// @see Color
 enum class ColorType : uint8_t {
     Null = 0,
     DefaultColor,
@@ -239,20 +240,21 @@ concept styled = is_styled<std::remove_cvref_t<T>>::value;
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief Represents a nullable terminal color.
-/// @details A `Color` is similar to a tagged union with 4 color types.
+/// @details
+/// A `Color` is similar to a tagged union with 4 color types.
 /// It stores a `ColorType` and a `uint8_t[3]` containing the data.
 ///
 /// Color types:
-/// * `null` => A null color. It emits no ANSI escape sequence.
+/// * `Null` => A null color. It emits no ANSI escape sequence.
 ///
-/// * `default_color` => The terminal's default color.
+/// * `DefaultColor` => The terminal's default color.
 ///
-/// * `terminal_color` => System 16 color or XTerm 256 color.
+/// * `TerminalColor` => System 16 color or XTerm 256 color.
 ///     `data[0]` stores the index [0, 255], with indices 0-15 corresponding
 ///     to the system 16 colors.
 ///     (See https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit)
 ///
-/// * `true_color` => A 24-bit RGB color.
+/// * `TrueColor` => A 24-bit RGB color.
 ///     `data[0]`, `data[1]`, `data[2]` store the red, green and blue components
 ///     respectively.
 struct Color {
@@ -290,13 +292,14 @@ struct Color {
     constexpr auto type() const -> ColorType { return type_; }
 
     /// @brief Returns the raw data(`uint8_t[3]`) stored in this Color.
-    /// @details Usage:
+    /// @details
+    /// Usage:
     /// ```cpp
     /// Color col = rgb(32, 64, 128);
-    /// if (col.type() == ColorType::true_color) {
+    /// if (col.type() == ColorType::TrueColor) {
     ///     auto [r, g, b] = col.data();
     ///     /* ... */
-    /// } else if (col.type() == ColorType::terminal_color) {
+    /// } else if (col.type() == ColorType::TerminalColor) {
     ///     uint8_t index = col.data()[0];
     ///     /* ... */
     /// }
@@ -473,7 +476,8 @@ struct Style {
     // ----- operators -----
 
     /// @brief Combines two styles.
-    /// @details It works like applying 2 ANSI escape sequences, meaning that
+    /// @details
+    /// It works like applying 2 ANSI escape sequences, meaning that
     /// `std::cout << style1 << style2` is roughly equivalent to
     /// `std::cout << (style1 | style2)`.
     ///
@@ -622,8 +626,8 @@ struct Style {
 };
 
 /// @brief A Style wrapper that represents an absolute style.
-/// @details Style output normally has *additive semantics*, but this does't
-/// have.
+/// @details
+/// Style output normally has *additive semantics*, but this does't have.
 ///
 /// Example for `std::cout`:
 /// ```cpp
@@ -740,7 +744,8 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief Creates a styled wrapper of a value.
-/// @details `std::cout << styled(s, v)` is equivalent to
+/// @details
+/// `std::cout << styled(s, v)` is equivalent to
 /// `std::cout << s << v << deco::reset;`.
 ///
 /// @return An implementation-defined object that associates `value` with
