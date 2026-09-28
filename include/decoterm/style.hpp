@@ -133,9 +133,8 @@ constexpr auto write_to(OutputIt out, uint8_t value) {
 }
 
 template <bool BG, std::output_iterator<const char&> OutputIt>
-constexpr auto color_to_sgr_params(OutputIt out,
-                                   ColorType type,
-                                   ColorData data) -> OutputIt {
+constexpr auto color_to_sgr_params(OutputIt out, ColorType type, ColorData data)
+    -> OutputIt {
     switch (type) {
         case ColorType::Null:
             return out;
@@ -157,8 +156,8 @@ constexpr auto color_to_sgr_params(OutputIt out,
         }
         case ColorType::TrueColor: {
             auto [r, g, b] = data;
-                if constexpr (BG) out = write_to(out, "48;2;");
-                else out = write_to(out, "38;2;");
+            if constexpr (BG) out = write_to(out, "48;2;");
+            else out = write_to(out, "38;2;");
             out = write_to(out, r);
             *out++ = ';';
             out = write_to(out, g);
@@ -170,11 +169,17 @@ constexpr auto color_to_sgr_params(OutputIt out,
     assert(false);
 }
 
-
 /// A wrapper that stores rvalue or references lvalue.
 template <typename T>
 struct ValueOrRef {
-    explicit constexpr ValueOrRef(T value) : value(std::move(value)) {}
+    explicit constexpr ValueOrRef(T value)
+        requires std::move_constructible<T>
+        : value(std::move(value)) {}
+
+    explicit constexpr ValueOrRef(const T& value)
+        requires(!std::move_constructible<T>
+                 && std::constructible_from<T, const T&>)
+        : value(value) {}
 
     constexpr auto get() const -> T& { return value; }
 
@@ -457,8 +462,8 @@ struct Style {
     // clang-format on
 
     explicit constexpr Style(uint8_t emphasis = 0,
-                    Color fg = null_color,
-                    Color bg = null_color)
+                             Color fg = null_color,
+                             Color bg = null_color)
         : fg_data_(fg.data()),
           bg_data_(bg.data()),
           color_types_((static_cast<uint8_t>(fg.type()) << 4)
@@ -677,7 +682,9 @@ constexpr auto color(Color fg, Color bg) -> Style {
 }
 
 /// Create a Style with foreground color.
-constexpr auto fg(Color fg) -> Style { return Style(Style::Emphasis::None, fg); }
+constexpr auto fg(Color fg) -> Style {
+    return Style(Style::Emphasis::None, fg);
+}
 
 /// Create a Style with background color.
 constexpr auto bg(Color bg) -> Style {

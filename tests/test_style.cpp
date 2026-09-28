@@ -310,6 +310,8 @@ TEST_CASE("AbsoluteStyle writes escape sequence"
 
 // ──────────────────────────────── misc ─────────────────────────────
 
+namespace {
+
 class Counter {
   public:
     Counter(int init) : value_(init) {}
@@ -328,7 +330,34 @@ std::ostream& operator<<(std::ostream& os, const Counter& cc) {
 
 auto test_fn(int value) -> int { return value + 1; }
 
-TEST_CASE("ValueOrRef" * test_suite("ValueOrRef")) {
+struct MoveOnly {
+    std::string v;
+
+    MoveOnly(std::string v) : v(std::move(v)) {}
+    MoveOnly(const MoveOnly&) = delete;
+    auto operator=(const MoveOnly&) -> MoveOnly& = delete;
+
+    MoveOnly(MoveOnly&&) noexcept = default;
+    auto operator=(MoveOnly&&) noexcept -> MoveOnly& = default;
+    ~MoveOnly() = default;
+};
+
+struct CopyOnly {
+    std::string v;
+
+    CopyOnly(std::string v) : v(std::move(v)) {}
+    CopyOnly(const CopyOnly&) = default;
+    auto operator=(const CopyOnly&) -> CopyOnly& = default;
+
+    CopyOnly(CopyOnly&&) noexcept = delete;
+    auto operator=(CopyOnly&&) noexcept -> CopyOnly& = delete;
+    ~CopyOnly() = default;
+};
+
+} // namespace
+
+
+TEST_CASE("ValueOrRef stores or borrows value" * test_suite("ValueOrRef")) {
 
     SUBCASE("stores rvalue") {
         const int ci = 64;
@@ -401,6 +430,20 @@ TEST_CASE("ValueOrRef" * test_suite("ValueOrRef")) {
     }
 }
 
+TEST_CASE("ValueOrRef handles move or copy" * test_suite("ValueOrRef")) {
+    SUBCASE("move only type") {
+        MoveOnly m("move only");
+        auto v = detail::ValueOrRef(std::move(m));
+        CHECK(m.v == "");
+    }
+
+    SUBCASE("copy only type") {
+        CopyOnly c("copy only");
+        auto v = detail::ValueOrRef(std::move(c));
+        CHECK(c.v == "copy only");
+    }
+}
+
 TEST_CASE("styled() wraps value with style" * test_suite("styled")) {
     std::ostringstream os;
     std::ostringstream expected;
@@ -412,5 +455,6 @@ TEST_CASE("styled() wraps value with style" * test_suite("styled")) {
     expected << bold << "hello" << reset << italic << 1 << reset;
     CHECK(os.str() == expected.str());
 }
+
 
 // NOLINTEND
