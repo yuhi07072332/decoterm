@@ -6,13 +6,11 @@ add_executable(decoterm_test
     test_format.cpp
 )
 
-target_include_directories(decoterm_test
-    PRIVATE
+target_include_directories(decoterm_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
-target_link_libraries(decoterm_test
-    PRIVATE
+target_link_libraries(decoterm_test PRIVATE
     decoterm
 )
 

@@ -37,108 +37,99 @@ auto pending_escape(const deco::detail::StyleContext& ctx) -> EscapeSeq {
 using namespace deco;
 using doctest::test_suite;
 
-TEST_CASE("StyleStack opeartions" * test_suite("StyleStack")) {
-    detail::StyleStack<3> stack;
+TEST_CASE("Buffer opeartions" * test_suite("Buffer")) {
+    detail::Buffer<char, 3> buf;
 
     SUBCASE("push and pop") {
-        CHECK(stack.empty());
+        CHECK(buf.empty());
 
-        stack.push(abs(bold));
-        stack.push(abs(italic));
-        CHECK_FALSE(stack.empty());
-        CHECK(stack.top() == abs(italic));
+        buf.push_back('a');
+        buf.push_back('b');
+        CHECK_FALSE(buf.empty());
+        CHECK(buf.back() == 'b');
+        CHECK(buf.size() == 2);
 
-        stack.pop();
-        CHECK(stack.top() == abs(bold));
-        stack.pop();
-        CHECK(stack.empty());
+        buf.pop_back();
+        CHECK(buf.back() == 'a');
+        buf.pop_back();
+        CHECK(buf.empty());
     }
 
-    SUBCASE("pop empty stack") {
-        stack.pop();
-        CHECK(stack.empty());
+    SUBCASE("pop empty buffer") {
+        buf.pop_back();
+        CHECK(buf.empty());
     }
 
     SUBCASE("clear") {
-        stack.push(abs(bold));
-        stack.push(abs(italic));
-        stack.clear();
-        CHECK(stack.empty());
+        buf.push_back('a');
+        buf.push_back('b');
+        buf.clear();
+        CHECK(buf.empty());
 
-        stack.push(abs(underline));
-        CHECK(stack.top() == abs(underline));
-        stack.pop();
-        CHECK(stack.empty());
+        buf.push_back('a');
+        CHECK(buf.back() == 'a');
+        buf.pop_back();
+        CHECK(buf.empty());
     }
 }
 
-TEST_CASE("StyleStack grows to heap" * test_suite("StyleStack")) {
-    detail::StyleStack<2> stack;
+TEST_CASE("Buffer grows to heap" * test_suite("StyleStack")) {
+    detail::Buffer<char, 2> buf;
 
     SUBCASE("grow once") {
-        stack.push(abs(bold));
-        stack.push(abs(italic));
-        stack.push(abs(underline));
-        CHECK(stack.top() == abs(underline));
+        for (char c : std::string_view("abc"))
+            buf.push_back(c);
+        CHECK(buf.back() == 'c');
 
-        stack.pop();
-        CHECK(stack.top() == abs(italic));
-        stack.pop();
-        CHECK(stack.top() == abs(bold));
-        stack.pop();
-        CHECK(stack.empty());
+        buf.pop_back();
+        CHECK(buf.back() == 'b');
+        buf.pop_back();
+        CHECK(buf.back() == 'a');
+        buf.pop_back();
+        CHECK(buf.empty());
     }
     SUBCASE("grow more than once") {
-        for (const auto style : {bold, italic, underline, blink, invert})
-            stack.push(abs(style));
+        for (char c : "hello, world")
+            buf.push_back(c);
 
-        CHECK(stack.top() == abs(invert));
-        stack.pop();
-        CHECK(stack.top() == abs(blink));
-        stack.pop();
-        CHECK(stack.top() == abs(underline));
-        stack.pop();
-        CHECK(stack.top() == abs(italic));
-        stack.pop();
-        CHECK(stack.top() == abs(bold));
+        CHECK(std::string_view(buf.data()) == "hello, world");
     }
 }
 
-TEST_CASE("StyleStack copy and move" * test_suite("StyleStack")) {
-    detail::StyleStack<3> local;
-    local.push(abs(bold));
-    local.push(abs(italic));
+TEST_CASE("Buffer copy and move" * test_suite("StyleStack")) {
+    detail::Buffer<AbsoluteStyle, 3> local;
+    local.push_back(abs(bold));
+    local.push_back(abs(italic));
 
-    detail::StyleStack<2> heap;
-    heap.push(abs(bold));
-    heap.push(abs(italic));
-    heap.push(abs(underline));
+    detail::Buffer<AbsoluteStyle, 2> heap;
+    heap.push_back(abs(bold));
+    heap.push_back(abs(italic));
+    heap.push_back(abs(underline));
 
     SUBCASE("copy") {
         const auto local_copy = local;
-        local.top() = abs(underline);
-        CHECK(local_copy.top() == abs(italic));
+        local.back() = abs(underline);
+        CHECK(local_copy.back() == abs(italic));
 
         const auto heap_copy = heap;
-        heap.top() = abs(blink);
-        CHECK(heap_copy.top() == abs(underline));
+        heap.back() = abs(blink);
+        CHECK(heap_copy.back() == abs(underline));
     }
 
     SUBCASE("move") {
         auto moved_local = std::move(local);
-        CHECK(moved_local.top() == abs(italic));
+        CHECK(moved_local.back() == abs(italic));
         CHECK(local.empty());
-        local.push(abs(underline));
-        CHECK(local.top() == abs(underline));
+        local.push_back(abs(underline));
+        CHECK(local.back() == abs(underline));
 
         auto moved_heap = std::move(heap);
-        CHECK(moved_heap.top() == abs(underline));
+        CHECK(moved_heap.back() == abs(underline));
         CHECK(heap.empty());
-        heap.push(abs(blink));
-        CHECK(heap.top() == abs(blink));
+        heap.push_back(abs(blink));
+        CHECK(heap.back() == abs(blink));
     }
 }
-
 
 TEST_CASE("StyleContext manages pending style" * test_suite("StyleContext")) {
     detail::StyleContext ctx;

@@ -14,6 +14,7 @@
 #include <optional>
 #include <ostream>
 #include <type_traits>
+#include <string_view>
 #include <version>
 
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L
@@ -47,38 +48,58 @@ concept formattable =
 
 namespace detail {
 
-inline constexpr std::size_t FMT_BUFFER_SIZE = 500;
+template <typename T>
+struct formatter_type { using type = std::formatter<T>; };
 
-template <style_type StyleT>
-struct FStyle {
-    constexpr FStyle(StyleT style, const OutputConfig& cfg)
-        : style(style),
-          cfg(&cfg) {}
+template <typename Char, std::size_t N>
+    requires requires {
+        std::formatter<std::basic_string_view<Char>, Char>(); 
+    }
+struct formatter_type<Char[N]> {
+    using type = std::formatter<std::basic_string_view<Char>, Char>; 
+};
 
-    StyleT style;
-    NotNull<const OutputConfig*> cfg;
+template <typename T>
+using formatter_t = formatter_type<std::remove_cvref_t<T>>::type;
+
+// inspired by {fmt} library
+inline constexpr std::size_t FMT_INLINE_BUFFER_SIZE = 500;
+using FormatBuf = Buffer<char, FMT_INLINE_BUFFER_SIZE>;
+
+template <typename T, std::size_t N>
+struct BufAppender {
+    using difference_type = std::ptrdiff_t;
+
+    explicit constexpr BufAppender(Buffer<T, N>& buf) : buf(&buf) {}
+
+    constexpr auto operator*() -> BufAppender& { return *this; }
+    constexpr auto operator++() -> BufAppender& { return *this; }
+    constexpr auto operator++(int) -> BufAppender& { return *this; }
+
+    constexpr auto operator=(T v) -> BufAppender& {
+        buf->push_back(v);
+        return *this;
+    }
+
+    NotNull<Buffer<T, N>*> buf;
 };
 
 template <style_type StyleT, typename T>
 struct FStyled {
-    constexpr FStyled(const Styled<StyleT, T>& styled,
-                      AbsoluteStyle current_style,
-                      const OutputConfig* cfg)
-        : styled(&styled),
-          reset_style(current_style),
-          cfg(cfg) {}
+    constexpr FStyled(Styled<StyleT, T> styled,
+                      AbsoluteStyle current_style)
+        : styled(std::move(styled)),
+          reset_style(current_style) {}
 
-    NotNull<const Styled<StyleT, T>*> styled;
+    Styled<StyleT, T> styled;
     AbsoluteStyle reset_style;
-    const OutputConfig* cfg;
 };
 
 // Replace Styled<T> with FStyled<T>
 template <typename Arg>
-constexpr auto process_fmt_arg(const Arg& arg,
-                               AbsoluteStyle current_style,
-                               const OutputConfig* cfg) -> decltype(auto) {
-    if constexpr (detail::styled<Arg>) return FStyled(arg, current_style, cfg);
+constexpr auto process_fmt_arg(const Arg& arg, AbsoluteStyle current_style)
+    -> decltype(auto) {
+    if constexpr (detail::styled<Arg>) return FStyled(std::move(arg), current_style);
     else return arg;
 }
 
@@ -90,26 +111,13 @@ constexpr auto process_fmt_arg_ctx(
     const OutputConfig& cfg,
     std::optional<AbsoluteStyle> current_style_override) -> decltype(auto) {
     if constexpr (detail::style_type<Arg>) {
-        ctx.set_current_style(arg);
+        // ctx.set_current_style(arg);
         return FStyle(arg, cfg);
     } else {
         return process_fmt_arg(
             arg, current_style_override.value_or(ctx.current_abstyle()), &cfg);
     }
 }
-
-template <typename Arg>
-using process_fmt_arg_t =
-    decltype(process_fmt_arg(std::declval<Arg>(),
-                             std::declval<AbsoluteStyle>(),
-                             std::declval<const OutputConfig*>));
-
-template <typename Arg>
-using process_fmt_arg_ctx_t =
-    decltype(process_fmt_arg_ctx(std::declval<Arg>(),
-                                 std::declval<StyleContext&>,
-                                 std::declval<const OutputConfig*>(),
-                                 std::declval<std::optional<AbsoluteStyle>>));
 
 template <std::output_iterator<const char&> OutputIt, style_type StyleT>
 auto write_style_to(OutputIt out, StyleT style, const OutputConfig& cfg) {
@@ -118,7 +126,10 @@ auto write_style_to(OutputIt out, StyleT style, const OutputConfig& cfg) {
     return style.to_escape(out);
 }
 
-using FormatBuf = Buffer<char, FMT_BUFFER_SIZE>;
+template <typename... Args>
+inline auto make_format_args(Args&&... args /* NOLINT */) {
+    return std::make_format_args(args...);
+}
 
 template <std::output_iterator<const char&> OutputIt,
           style_type StyleT,
@@ -128,11 +139,12 @@ inline auto format_to(OutputIt out,
                       AbsoluteStyle restore_style,
                       std::format_string<Args...> fmt,
                       Args&&... args /* NOLINT */) -> OutputIt {
+    const AbsoluteStyle current_style = merge(restore_style, style);
     out = style.to_escape(out);
     out = std::vformat_to(
         out,
-        fmt,
-        std::make_format_args(process_fmt_arg(args, style, nullptr)...));
+        fmt.get(),
+        make_format_args(process_fmt_arg(args, current_style)...));
     if (!style.is_null()) out = restore_style.to_escape(out);
     return out;
 }
@@ -144,15 +156,20 @@ inline auto format_to(OutputIt out,
                       StyleT style,
                       std::format_string<Args...> fmt,
                       Args&&... args /* NOLINT */) -> OutputIt {
-    return format_to(out, style, null_style, fmt, args...);
+    return format_to(
+        out, style, abs(null_style), fmt, std::forward<Args>(args)...);
 }
 
 template <style_type StyleT, typename... Args>
 inline auto format(StyleT style,
                    std::format_string<Args...> fmt,
-                   Args&&... args) -> std::string {
+                   Args&&... args /* NOLINT */) -> std::string {
     auto buf = FormatBuf();
-    format_to(BufInserter(buf), style, fmt, std::forward<Args>(args)...);
+    format_to(BufAppender(buf),
+              style,
+              abs(null_style),
+              fmt,
+              std::forward<Args>(args)...);
     return {buf.data(), buf.size()};
 }
 
@@ -162,20 +179,22 @@ template <typename Stream, style_type StyleT, typename... Args>
 inline auto print(Stream& stream,
                   StyleT style,
                   std::format_string<Args...> fmt,
-                  Args&&... args /* NOLINT */) {
+                  Args&&... args) {
     auto buffer = FormatBuf();
-    format_to(BufInserter(buffer), style, fmt, args...);
-    std::print("{}", buffer.data());
+    detail::format_to(
+        BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
+    std::print(stream, "{}", std::string_view(buffer.data(), buffer.size()));
 }
 
 template <typename Stream, style_type StyleT, typename... Args>
 inline auto println(Stream& stream,
                     StyleT style,
                     std::format_string<Args...> fmt,
-                    Args&&... args /* NOLINT */) {
+                    Args&&... args) {
     auto buffer = FormatBuf();
-    format_to(BufInserter(buffer), style, fmt, args...);
-    std::println("{}", buffer.data());
+    detail::format_to(
+        BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
+    std::println(stream, "{}", std::string_view(buffer.data(), buffer.size()));
 }
 
 #endif // DECO_ENABLE_STD_PRINT
@@ -217,60 +236,33 @@ struct formatter<deco::detail::Reset> {
 /// formatter for `styled()`
 template <deco::detail::style_type StyleT, typename T>
     requires deco::formattable<T>
-struct formatter<deco::detail::Styled<StyleT, T>> {
-    std::formatter<std::remove_cvref_t<T>, char> value_formatter;
-
-    constexpr formatter() = default;
-
-    constexpr auto parse(std::format_parse_context& ctx) {
-        return value_formatter.parse(ctx);
-    }
-
+struct formatter<deco::detail::Styled<StyleT, T>> : deco::detail::formatter_t<T> {
     auto format(const deco::detail::Styled<StyleT, T>& styled, /*NOLINT*/
                 std::format_context& ctx) const {
         using namespace deco;
 
         ctx.advance_to(styled.style().to_escape(ctx.out()));
-        ctx.advance_to(value_formatter.format(styled.value(), ctx));
+        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
         ctx.advance_to(abs(null_style).to_escape(ctx.out()));
 
         return ctx.out();
     }
 };
 
-template <deco::detail::style_type StyleT>
-struct formatter<deco::detail::FStyle<StyleT>> {
-    constexpr auto parse(std::format_parse_context& ctx) const {
-        return ctx.begin();
-    }
-
-    auto format(const deco::detail::FStyle<StyleT> fstyle,
-                std::format_context& ctx) const {
-        return deco::detail::write_style_to(
-            ctx.out(), fstyle.style, fstyle.cfg);
-    }
-};
-
 template <deco::detail::style_type StyleT, typename T>
     requires deco::formattable<T>
 struct formatter<deco::detail::FStyled<StyleT, T>>
-    : formatter<deco::detail::Styled<StyleT, T>> {
-    using formatter<deco::detail::Styled<StyleT, T>>::value_formatter;
-
-    constexpr formatter() = default;
-
+    : deco::detail::formatter_t<T> {
     auto format(const deco::detail::FStyled<StyleT, T>& fstyled,
                 std::format_context& ctx) const {
         using namespace deco;
+        const auto& styled = fstyled.styled;
 
-        const auto& styled = *fstyled.styled;
-        const OutputConfig* cfg = fstyled.cfg;
+        ctx.advance_to(styled.style().to_escape(ctx.out()));
+        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
+        ctx.advance_to(fstyled.reset_style.to_escape(ctx.out()));
 
-        ctx.advance_to(
-            deco::detail::write_style_to(ctx.out(), styled.style(), cfg));
-        ctx.advance_to(value_formatter.format(styled.value(), ctx));
-        ctx.advance_to(
-            deco::detail::write_style_to(ctx.out(), fstyled.reset_style, cfg));
+        return ctx.out();
     }
 };
 
@@ -281,13 +273,6 @@ namespace deco {
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         format                          ║
 // ╚═════════════════════════════════════════════════════════╝
-
-template <std::output_iterator<const char&> OutputIt, typename... Args>
-inline auto format_to(OutputIt out,
-                      std::format_string<Args...> fmt,
-                      Args&&... args) -> OutputIt {
-    return detail::format_to(out, null_style, fmt, std::forward<Args>(args)...);
-}
 
 template <std::output_iterator<const char&> OutputIt, typename... Args>
 inline auto format_to(OutputIt out,
@@ -303,12 +288,6 @@ inline auto format_to(OutputIt out,
                       std::format_string<Args...> fmt,
                       Args&&... args) -> OutputIt {
     return detail::format_to(out, abstyle, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-[[nodiscard]] inline auto format(std::format_string<Args...> fmt,
-                                 Args&&... args) -> std::string {
-    return detail::format(null_style, fmt, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
@@ -332,11 +311,6 @@ template <typename... Args>
 // ╚═════════════════════════════════════════════════════════╝
 
 template <typename... Args>
-inline void print(std::format_string<Args...> fmt, Args&&... args) {
-    detail::print<FILE*>(stdout, null_style, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
 inline void print(Style s, std::format_string<Args...> fmt, Args&&... args) {
     detail::print<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
 }
@@ -349,11 +323,6 @@ inline void print(AbsoluteStyle s,
 }
 
 template <typename... Args>
-inline void print(FILE* f, std::format_string<Args...> fmt, Args&&... args) {
-    detail::print<FILE*>(f, null_style, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
 inline void print(FILE* f,
                   Style s,
                   std::format_string<Args...> fmt,
@@ -371,13 +340,6 @@ inline void print(FILE* f,
 
 template <typename... Args>
 inline void print(std::ostream& os,
-                  std::format_string<Args...> fmt,
-                  Args&&... args) {
-    detail::print(os, null_style, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void print(std::ostream& os,
                   Style s,
                   std::format_string<Args...> fmt,
                   Args&&... args) {
@@ -390,12 +352,6 @@ inline void print(std::ostream& os,
                   std::format_string<Args...> fmt,
                   Args&&... args) {
     detail::print(os, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void println(std::format_string<Args...> fmt, Args&&... args) {
-    detail::println<FILE*>(
-        stdout, null_style, fmt, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
@@ -411,11 +367,6 @@ inline void println(AbsoluteStyle s,
 }
 
 template <typename... Args>
-inline void println(FILE* f, std::format_string<Args...> fmt, Args&&... args) {
-    detail::println<FILE*>(f, null_style, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
 inline void println(FILE* f,
                     Style s,
                     std::format_string<Args...> fmt,
@@ -433,13 +384,6 @@ inline void println(FILE* f,
 
 template <typename... Args>
 inline void println(std::ostream& os,
-                    std::format_string<Args...> fmt,
-                    Args&&... args) {
-    detail::println(os, null_style, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void println(std::ostream& os,
                     Style s,
                     std::format_string<Args...> fmt,
                     Args&&... args) {
@@ -453,8 +397,6 @@ inline void println(std::ostream& os,
                     Args&&... args) {
     detail::println(os, s, fmt, std::forward<Args>(args)...);
 }
-
-class Print {};
 
 #endif // DECO_ENABLE_STD_PRINT
 
@@ -671,8 +613,8 @@ inline auto styled_print(std::ostream& os) -> StyledPrint {
 
 } // namespace deco
 
-#ifdef DECO_ENABLE_PRINT
-#undef DECO_ENABLE_PRINT
+#ifdef DECO_ENABLE_STD_PRINT
+#undef DECO_ENABLE_STD_PRINT
 #endif
 
 #endif // !DECOTERM_FORMAT_HPP

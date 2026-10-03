@@ -164,24 +164,6 @@ private:
     std::size_t capacity_ = N;
 };
 
-template <typename T, std::size_t N>
-struct BufInserter {
-    using difference_type = std::ptrdiff_t;
-
-    explicit constexpr BufInserter(Buffer<T, N>& buf)
-        : buf(&buf) {}
-
-    constexpr auto operator*() -> BufInserter& { return *this; }
-    constexpr auto operator++() -> BufInserter& { return *this; }
-    constexpr auto operator++(int) -> BufInserter& { return *this; }
-
-    constexpr auto operator=(T v) -> BufInserter& {
-        buf->push_back(v);
-        return *this;
-    }
-
-    NotNull<Buffer<T, N>*> buf;
-};
 
 /* ----- color fallback ----- */
 
@@ -251,18 +233,18 @@ constexpr auto fallback_color(AbsoluteStyle abstyle, ColorMode mode)
 }
 
 struct AnyStyle {
-    constexpr AnyStyle() : type_(Type::Normal) {}
-    constexpr AnyStyle(Style style) : type_(Type::Normal), inner_(style) {}
+    constexpr AnyStyle() : type_(Type::Style) {}
+    constexpr AnyStyle(Style style) : type_(Type::Style), inner_(style) {}
     constexpr AnyStyle(AbsoluteStyle abstyle)
-        : type_(Type::Absolute),
+        : type_(Type::AbsoluteStyle),
           inner_(abstyle.inner()) {}
 
     constexpr void merge(detail::style_type auto s) {
         switch (type_) {
-            case Type::Normal:
+            case Type::Style:
                 *this = detail::merge(inner_, s);
                 break;
-            case Type::Absolute:
+            case Type::AbsoluteStyle:
                 *this = detail::merge(abs(inner_), s);
                 break;
         }
@@ -271,9 +253,9 @@ struct AnyStyle {
     template <typename Visitor>
     constexpr auto visit(Visitor&& visitor) const -> decltype(auto) { // NOLINT
         switch (type_) {
-            case Type::Normal:
+            case Type::Style:
                 return visitor(inner_);
-            case Type::Absolute:
+            case Type::AbsoluteStyle:
                 return visitor(abs(inner_));
         }
         assert(false);
@@ -287,11 +269,14 @@ struct AnyStyle {
     constexpr auto inner() const -> Style { return inner_; }
 
   private:
-    enum class Type { Normal, Absolute };
+    enum class Type { Style, AbsoluteStyle };
 
     Type type_;
     Style inner_;
 };
+
+template <std::size_t N>
+using StyleStack = Buffer<AbsoluteStyle, N>;
 
 class StyleContext {
   public:
@@ -351,7 +336,7 @@ class StyleContext {
   private:
     AbsoluteStyle base_style_;
 
-    Buffer<AbsoluteStyle, 3> stack_;
+    StyleStack<3> stack_;
     AnyStyle pending_;
 };
 
