@@ -61,7 +61,7 @@ constexpr auto merge(AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
 template <typename T, std::size_t N>
     requires(N > 0 && std::is_copy_assignable_v<T>)
 class Buffer {
-public:
+  public:
     using value_type = T;
 
     constexpr Buffer() = default;
@@ -99,7 +99,9 @@ public:
         data_[size_++] = v; // NOLINT
     }
 
-    constexpr void pop_back() { if (size_ > 0) size_--; }
+    constexpr void pop_back() {
+        if (size_ > 0) size_--;
+    }
 
     [[nodiscard]] constexpr auto data() const -> const T* { return data_; }
     [[nodiscard]] constexpr auto back() const -> T {
@@ -112,13 +114,12 @@ public:
     [[nodiscard]] constexpr auto size() const -> std::size_t { return size_; }
     [[nodiscard]] constexpr auto empty() const -> bool { return !size_; }
 
-private:
+  private:
     constexpr auto is_heap() const noexcept -> bool { return size_ > N; }
 
     constexpr void copy_from(const Buffer& other) {
         if (other.is_heap()) {
-            heap_ =
-                std::make_unique_for_overwrite<T[]>(other.capacity_);
+            heap_ = std::make_unique_for_overwrite<T[]>(other.capacity_);
             for (std::size_t i = 0; i < other.size_; ++i)
                 heap_[i] = other.heap_[i];
             data_ = heap_.get();
@@ -147,8 +148,7 @@ private:
 
     constexpr void grow() {
         const std::size_t new_capacity = capacity_ + (capacity_ / 2);
-        auto new_heap =
-            std::make_unique_for_overwrite<T[]>(new_capacity);
+        auto new_heap = std::make_unique_for_overwrite<T[]>(new_capacity);
         for (std::size_t i = 0; i < size_; ++i)
             new_heap[i] = data_[i];
         heap_ = std::move(new_heap);
@@ -163,7 +163,6 @@ private:
     std::size_t size_ = 0;
     std::size_t capacity_ = N;
 };
-
 
 /* ----- color fallback ----- */
 
@@ -211,17 +210,13 @@ constexpr auto fallback_to_256(Color color) -> Color {
 constexpr auto fallback_color(Style style, ColorMode mode) -> Style {
     switch (mode) {
         case ColorMode::Color16:
-            return Style(
-                style.emphasis(),
-                fallback_to_16(style.fg()),
-                fallback_to_16(style.bg())
-            );
+            return Style(style.emphasis(),
+                         fallback_to_16(style.fg()),
+                         fallback_to_16(style.bg()));
         case ColorMode::Color256:
-            return Style(
-                style.emphasis(),
-                fallback_to_256(style.fg()),
-                fallback_to_256(style.bg())
-            );
+            return Style(style.emphasis(),
+                         fallback_to_256(style.fg()),
+                         fallback_to_256(style.bg()));
         default:
             return style;
     }
@@ -291,9 +286,13 @@ class StyleContext {
     /// @details
     /// This will push `style` to the stack implicitly when the stack is empty.
     constexpr void set_current_style(detail::style_type auto style) {
+        this->set_current_style_no_pending(style);
+        pending_.merge(style);
+    }
+
+    constexpr void set_current_style_no_pending(detail::style_type auto style) {
         if (stack_.empty()) stack_.push_back(detail::merge(base_style_, style));
         else stack_.back() = detail::merge(stack_.back(), style);
-        pending_.merge(style);
     }
 
     constexpr void ensure_style() { pending_.merge(this->current_abstyle()); }
@@ -323,7 +322,9 @@ class StyleContext {
         return base_style_.inner();
     }
 
-    [[nodiscard]] constexpr auto pending() const -> AnyStyle { return pending_; }
+    [[nodiscard]] constexpr auto pending() const -> AnyStyle {
+        return pending_;
+    }
 
     [[nodiscard]] constexpr auto has_pending() const -> bool {
         return !pending_.is_null();
@@ -381,18 +382,24 @@ class OutputConfig {
 };
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                         Ostream                         ║
+// ║                         OStream                         ║
 // ╚═════════════════════════════════════════════════════════╝
 
-class Ostream {
+class OStream {
   public:
-    explicit Ostream(const OutputConfig& config, std::ostream& ostream)
+    explicit OStream(const OutputConfig& config, std::ostream& ostream)
         : cfg_(&config),
           ostream_(&ostream) {}
 
-    void set_base_style(Style s) { ctx_.set_base_style(s); }
+    auto set_base_style(Style s) -> OStream& {
+        ctx_.set_base_style(s);
+        return *this;
+    }
 
-    void ensure_style() { ctx_.ensure_style(); }
+    auto ensure_style() -> OStream& {
+        ctx_.ensure_style();
+        return *this;
+    }
 
     [[nodiscard]] auto current_style() const -> Style {
         return ctx_.current_abstyle().inner();
@@ -411,30 +418,30 @@ class Ostream {
     /// different ostream object.
     template <ostream_outputable T>
         requires(!detail::style_type<T> && !detail::styled<T>)
-    friend auto operator<<(Ostream& out, T&& value) -> Ostream& {
+    friend auto operator<<(OStream& out, T&& value) -> OStream& {
         out.output_pending();
         auto os_ptr = &(out.ostream() << std::forward<T>(value));
         if (os_ptr != out.ostream_)
             throw std::logic_error(
-                "deco::Ostream: std::ostream output operator returned a "
+                "deco::OStream: std::ostream output operator returned a "
                 "different ostream object");
         return out;
     }
 
-    friend auto operator<<(Ostream& out, Style style) -> Ostream& {
+    friend auto operator<<(OStream& out, Style style) -> OStream& {
         out.ctx().set_current_style(style);
         return out;
     }
 
-    friend auto operator<<(Ostream& out, AbsoluteStyle abstyle) -> Ostream& {
+    friend auto operator<<(OStream& out, AbsoluteStyle abstyle) -> OStream& {
         out.ctx().set_current_style(abstyle);
         return out;
     }
 
     template <detail::style_type StyleT, ostream_outputable T>
-    friend auto operator<<(Ostream& out,
+    friend auto operator<<(OStream& out,
                            const detail::Styled<StyleT, T>& styled)
-        -> Ostream& {
+        -> OStream& {
         auto& ctx = out.ctx();
         if (ctx.has_pending()) {
             auto pending = ctx.consume_pending();
@@ -449,42 +456,42 @@ class Ostream {
     }
 
     template <detail::style_type StyleT>
-    friend auto operator<<(Ostream& out, detail::Push<StyleT> push)
-        -> Ostream& {
+    friend auto operator<<(OStream& out, detail::Push<StyleT> push)
+        -> OStream& {
         out.ctx().push(push.style);
         return out;
     }
 
-    friend auto operator<<(Ostream& out, detail::Pop) -> Ostream& {
+    friend auto operator<<(OStream& out, detail::Pop) -> OStream& {
         out.ctx().pop();
         return out;
     }
 
-    friend auto operator<<(Ostream& out, detail::Reset) -> Ostream& {
+    friend auto operator<<(OStream& out, detail::Reset) -> OStream& {
         out.ctx().reset();
         return out;
     }
 
     /// output operator for IO manipulators
-    friend auto operator<<(Ostream& out, std::ios_base& (*fn)(std::ios_base&))
-        -> Ostream& {
+    friend auto operator<<(OStream& out, std::ios_base& (*fn)(std::ios_base&))
+        -> OStream& {
         out.output_pending();
         out.ostream() << fn;
         return out;
     }
 
     /// output operator for IO manipulators
-    friend auto operator<<(Ostream& out,
+    friend auto operator<<(OStream& out,
                            std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
-        -> Ostream& {
+        -> OStream& {
         out.output_pending();
         out.ostream() << fn;
         return out;
     }
 
     /// output operator for IO manipulators
-    friend auto operator<<(Ostream& out, std::ostream& (*fn)(std::ostream&))
-        -> Ostream& {
+    friend auto operator<<(OStream& out, std::ostream& (*fn)(std::ostream&))
+        -> OStream& {
         // `std::operator<<(std::ostream& os,
         // std::ostream&(*fn)(std::ostream&))` returns `fn(os)` instead of `os`,
         // so we should assume that it may return a different std::ostream&.
@@ -497,8 +504,8 @@ class Ostream {
     auto ctx() -> detail::StyleContext& { return ctx_; }
 
     void output_pending() {
-        if (this->ctx().has_pending()) {
-            const auto pending = this->ctx().consume_pending();
+        if (ctx_.has_pending()) {
+            const auto pending = ctx_.consume_pending();
             pending.visit([this](detail::style_type auto style) constexpr {
                 this->output_style(style);
             });
@@ -518,7 +525,7 @@ class Ostream {
     detail::NotNull<std::ostream*> ostream_;
 };
 
-/* ----- Ostream manipulators ----- */
+/* ----- OStream manipulators ----- */
 
 [[nodiscard]] constexpr auto push(Style style) -> detail::Push<Style> {
     return {style};

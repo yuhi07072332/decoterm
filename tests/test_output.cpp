@@ -212,7 +212,7 @@ TEST_CASE("Ostream writes values" * test_suite("Ostream")) {
     std::ostringstream os;
     std::ostringstream expected;
 
-    Ostream out(ocfg, os);
+    OStream out(ocfg, os);
 
     SUBCASE("plain values") {
         out << "answer=" << 42 << ' ' << true;
@@ -254,14 +254,14 @@ TEST_CASE("Ostream writes values" * test_suite("Ostream")) {
 
 TEST_CASE("Ostream throws error if output operator returns different std::ostream" * test_suite("Ostream")) {
     std::ostringstream os;
-    Ostream out(ocfg, os);
+    OStream out(ocfg, os);
     CHECK_THROWS_AS(out << ReturnDifferentOstream {}, std::logic_error);
 }
 
 TEST_CASE("Ostream writes styled" * test_suite("Ostream")) {
     std::ostringstream os;
     std::ostringstream expected;
-    Ostream out(ocfg, os);
+    OStream out(ocfg, os);
 
     out.set_base_style(bold);
     out << "before" << styled("inside", italic) << "after";
@@ -274,7 +274,7 @@ TEST_CASE("Ostream writes styled" * test_suite("Ostream")) {
 TEST_CASE("Ostream merges styles" * test_suite("Ostream")) {
     std::ostringstream os;
     std::ostringstream expected;
-    Ostream out(ocfg, os);
+    OStream out(ocfg, os);
 
     SUBCASE("merges consecutive styles and pushes") {
         out << bold << fg(red) << "one" << push(underline) << bg(blue) << "two";
@@ -294,7 +294,7 @@ TEST_CASE("Ostream merges styles" * test_suite("Ostream")) {
 
 TEST_CASE("Ostream tracks current style" * test_suite("Ostream")) {
     std::ostringstream os;
-    Ostream out(ocfg, os);
+    OStream out(ocfg, os);
 
     out.set_base_style(bold);
     CHECK(out.base_style() == bold);
