@@ -56,7 +56,7 @@ enum class ColorType : uint8_t {
     Null = 0,
     DefaultColor,
     TerminalColor,
-    TrueColor
+    TrueColor,
 };
 
 template <typename T>
@@ -97,7 +97,7 @@ inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
     "36", "37", "90",
     "91", "92", "93",
     "94", "95", "96",
-    "97"
+    "97",
 };
 
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_BG {
@@ -106,13 +106,13 @@ inline constexpr std::array<std::string_view, 16> SGR_PARAM_BG {
     "46", "47", "100",
     "101", "102", "103",
     "104", "105", "106",
-    "107"
+    "107",
 };
 
 inline constexpr std::array<std::string_view, 8> SGR_PARAM_STYLE {
     "1" /*bold*/,           "2"  /*dim*/,           "3" /*italic*/,
     "4" /*underline*/,      "5"  /*blink*/,         "7" /*invert*/,
-    "9" /*strikethrough*/,  "21" /*double underline*/
+    "9" /*strikethrough*/,  "21" /*double underline*/,
 };
 // clang-format on
 
@@ -370,9 +370,9 @@ constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
     if (hex > 0xffffff) 
         throw std::invalid_argument("deco::rgb(): rgb > 0xffffff");
-    return Color((hex >> 16) & 0xFF,
-                    (hex >> 8) & 0xFF,
-                    hex & 0xFF);
+    return Color((hex >> 16u) & 0xFFu,
+                    (hex >> 8u) & 0xFFu,
+                    hex & 0xFFu);
     // clang-format on
 }
 
@@ -449,14 +449,14 @@ struct Style {
     // clang-format off
     enum Emphasis : uint8_t {                              //NOLINT
         None                = 0,
-        Bold                = 1 << 0,
-        Dim                 = 1 << 1,
-        Italic              = 1 << 2,
-        Underline           = 1 << 3,
-        Blink               = 1 << 4,
-        Invert              = 1 << 5,
-        Strikethrough       = 1 << 6,
-        UnderlineDouble     = 1 << 7,
+        Bold                = 1u << 0u,
+        Dim                 = 1u << 1u,
+        Italic              = 1u << 2u,
+        Underline           = 1u << 3u,
+        Blink               = 1u << 4u,
+        Invert              = 1u << 5u,
+        Strikethrough       = 1u << 6u,
+        UnderlineDouble     = 1u << 7u,
     };
 
     static constexpr std::size_t MAX_ESCAPE_SEQ_SIZE =
@@ -469,8 +469,8 @@ struct Style {
                              Color bg = null_color)
         : fg_data_(fg.data()),
           bg_data_(bg.data()),
-          color_types_((static_cast<uint8_t>(fg.type()) << 4)
-                       | static_cast<uint8_t>(bg.type())),
+          color_types_((static_cast<unsigned int>(fg.type()) << 4u)
+                       | static_cast<unsigned int>(bg.type())),
           emphasis_(emphasis) {}
 
     // ----- operators -----
@@ -543,13 +543,13 @@ struct Style {
         uint8_t current_flag = emphasis_;
         int count = 0;
         do {
-            if (current_flag & 1) {
+            if (current_flag & 1u) {
                 if (needs_separate) *out++ = ';';
                 out = write_to(out, SGR_PARAM_STYLE[count]);
                 needs_separate = true;
             }
             count++;
-            current_flag >>= 1;
+            current_flag >>= 1u;
         } while (current_flag);
         return out;
     }
@@ -576,8 +576,9 @@ struct Style {
         std::string debug = "[flags=";
         std::array<char, 8> buf {};
 
-        for (int i = 0; i < 8; i++) {
-            if ((emphasis_ >> (7 - i)) & 1) buf[i] = '1';
+        for (unsigned int i = 0; i < 8; i++) {
+            if ((static_cast<unsigned int>(emphasis_) >> (7u - i)) & 1u)
+                buf[i] = '1';
             else buf[i] = '0';
         }
 
@@ -591,21 +592,22 @@ struct Style {
 
   private:
     constexpr auto fg_type() const -> ColorType {
-        return static_cast<ColorType>((color_types_ >> 4) & 0x0F);
+        return static_cast<ColorType>(
+            (static_cast<unsigned int>(color_types_) >> 4u) & 0x0Fu);
     }
 
     constexpr auto bg_type() const -> ColorType {
-        return static_cast<ColorType>(color_types_ & 0x0F);
+        return static_cast<ColorType>(color_types_ & 0x0Fu);
     }
 
     constexpr void set_fg_type(ColorType type) {
         color_types_ =
-            (static_cast<uint8_t>(type) << 4) | (color_types_ & 0x0F);
+            (static_cast<unsigned int>(type) << 4u) | (color_types_ & 0x0Fu);
     }
 
     constexpr void set_bg_type(ColorType type) {
         color_types_ =
-            (static_cast<uint8_t>(type) & 0x0F) | (color_types_ & 0xF0);
+            (static_cast<unsigned int>(type) & 0x0Fu) | (color_types_ & 0xF0u);
     }
 
     constexpr auto fg_null() const -> bool {

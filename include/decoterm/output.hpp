@@ -19,13 +19,16 @@
 
 namespace deco {
 
+/// Terminal color capability levels.
+enum class ColorMode : uint8_t { Color16 = 0, Color256, TrueColor };
+
 namespace detail {
 
 template <typename Ptr>
     requires std::is_pointer_v<Ptr>
 struct NotNull {
     NotNull(Ptr ptr) : ptr_(ptr) {
-        if (ptr == nullptr) throw std::logic_error("NotNull: null pointer");
+        assert(ptr != nullptr && "deco::detail::NotNull(): null pointer");
     }
 
     auto operator->() const -> Ptr { return ptr_; }
@@ -53,6 +56,198 @@ constexpr auto merge(Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
 
 constexpr auto merge(AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
     return rhs;
+}
+
+template <typename T, std::size_t N>
+    requires(N > 0 && std::is_copy_assignable_v<T>)
+class Buffer {
+public:
+    using value_type = T;
+
+    constexpr Buffer() = default;
+
+    constexpr Buffer(const Buffer& other) { this->copy_from(other); }
+    constexpr Buffer(Buffer&& other) noexcept {
+        this->move_from(std::move(other));
+    }
+
+    constexpr auto operator=(const Buffer& other) -> Buffer& {
+        if (this == &other) return *this;
+        this->copy_from(other);
+        return *this;
+    }
+
+    constexpr auto operator=(Buffer&& other) noexcept -> Buffer& {
+        if (this == &other) return *this;
+        this->move_from(std::move(other));
+        return *this;
+    }
+
+    constexpr ~Buffer() = default;
+
+    [[nodiscard]] constexpr auto data() -> T* { return data_; }
+
+    [[nodiscard]] constexpr auto back() -> T& {
+        assert(!this->empty());
+        return data_[size_ - 1];
+    }
+
+    constexpr void clear() { size_ = 0; }
+
+    constexpr void push_back(T v) {
+        if (size_ == capacity_) this->grow();
+        data_[size_++] = v; // NOLINT
+    }
+
+    constexpr void pop_back() { if (size_ > 0) size_--; }
+
+    [[nodiscard]] constexpr auto data() const -> const T* { return data_; }
+    [[nodiscard]] constexpr auto back() const -> T {
+        assert(!this->empty());
+        return data_[size_ - 1];
+    }
+    [[nodiscard]] constexpr auto back_or(T v) const -> T {
+        return this->empty() ? v : this->back();
+    }
+    [[nodiscard]] constexpr auto size() const -> std::size_t { return size_; }
+    [[nodiscard]] constexpr auto empty() const -> bool { return !size_; }
+
+private:
+    constexpr auto is_heap() const noexcept -> bool { return size_ > N; }
+
+    constexpr void copy_from(const Buffer& other) {
+        if (other.is_heap()) {
+            heap_ =
+                std::make_unique_for_overwrite<T[]>(other.capacity_);
+            for (std::size_t i = 0; i < other.size_; ++i)
+                heap_[i] = other.heap_[i];
+            data_ = heap_.get();
+        } else {
+            store_ = other.store_;
+            data_ = store_.data();
+        }
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+    }
+
+    constexpr void move_from(Buffer&& other) noexcept {
+        if (other.is_heap()) {
+            heap_ = std::move(other.heap_);
+            data_ = heap_.get();
+        } else {
+            store_ = other.store_;
+            data_ = store_.data();
+        }
+
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+
+        other.size_ = 0;
+    }
+
+    constexpr void grow() {
+        const std::size_t new_capacity = capacity_ + (capacity_ / 2);
+        auto new_heap =
+            std::make_unique_for_overwrite<T[]>(new_capacity);
+        for (std::size_t i = 0; i < size_; ++i)
+            new_heap[i] = data_[i];
+        heap_ = std::move(new_heap);
+        data_ = heap_.get();
+        capacity_ = new_capacity;
+    }
+
+    std::array<T, N> store_;
+    std::unique_ptr<T[]> heap_;
+
+    T* data_ = store_.data();
+    std::size_t size_ = 0;
+    std::size_t capacity_ = N;
+};
+
+template <typename T, std::size_t N>
+struct BufInserter {
+    using difference_type = std::ptrdiff_t;
+
+    explicit constexpr BufInserter(Buffer<T, N>& buf)
+        : buf(&buf) {}
+
+    constexpr auto operator*() -> BufInserter& { return *this; }
+    constexpr auto operator++() -> BufInserter& { return *this; }
+    constexpr auto operator++(int) -> BufInserter& { return *this; }
+
+    constexpr auto operator=(T v) -> BufInserter& {
+        buf->push_back(v);
+        return *this;
+    }
+
+    NotNull<Buffer<T, N>*> buf;
+};
+
+/* ----- color fallback ----- */
+
+// TODO: replace this with better algorithm
+constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
+    const uint8_t dr = lhs.r - rhs.r;
+    const uint8_t dg = lhs.g - rhs.g;
+    const uint8_t db = lhs.b - rhs.b;
+    return (2 * (dr * dr)) + (4 * (db * db)) + (3 * (dg * dg));
+}
+
+constexpr auto fallback_to_16(Color color) -> Color {
+    const ColorType type = color.type();
+    if (type == ColorType::Null || type == ColorType::DefaultColor)
+        return color;
+
+    RGB rgb; // NOLINT
+    if (type == ColorType::TerminalColor) {
+        const uint8_t index = color.data()[0];
+        if (index < 16) return color;
+        rgb = color_info[index];
+    } else if (type == ColorType::TrueColor) {
+        const auto [r, g, b] = color.data();
+        rgb = RGB(r, g, b);
+    }
+
+    int closest = (256 * 256) * 3; // max distance
+    uint8_t closest_idx = 0;
+    for (uint8_t i = 0; i < 16; ++i) {
+        int distance = rgb_distance(rgb, color_info[i]);
+        if (distance < closest) {
+            closest = distance;
+            closest_idx = i;
+        }
+    }
+
+    return {closest_idx};
+}
+
+constexpr auto fallback_to_256(Color color) -> Color {
+    // TODO:
+    return color;
+}
+
+constexpr auto fallback_color(Style style, ColorMode mode) -> Style {
+    switch (mode) {
+        case ColorMode::Color16:
+            return Style(
+                style.emphasis(),
+                fallback_to_16(style.fg()),
+                fallback_to_16(style.bg())
+            );
+        case ColorMode::Color256:
+            return Style(
+                style.emphasis(),
+                fallback_to_256(style.fg()),
+                fallback_to_256(style.bg())
+            );
+        default:
+            return style;
+    }
+}
+
+constexpr auto fallback_color(AbsoluteStyle abstyle, ColorMode mode)
+    -> AbsoluteStyle {
+    return abs(fallback_color(abstyle.inner(), mode));
 }
 
 struct AnyStyle {
@@ -98,175 +293,11 @@ struct AnyStyle {
     Style inner_;
 };
 
-/// @brief A stack for storing multiple `AbsoluteStyle`s.
-/// @details
-/// Similar to a small vector, it has inline storage for up to `N` elements and
-/// switches to heap storage when its size exceeds `N`. Once it grows onto the
-/// heap, it never switches back to inline storage.
-template <std::size_t N>
-    requires(N > 1)
-class StyleStack {
-  public:
-    using value_type = AbsoluteStyle;
-
-    constexpr StyleStack() = default;
-    constexpr StyleStack(const StyleStack& other) { this->copy_from(other); }
-    constexpr StyleStack(StyleStack&& other) noexcept {
-        this->move_from(std::move(other));
-    }
-
-    constexpr auto operator=(const StyleStack& other) -> StyleStack& {
-        if (this == &other) return *this;
-        this->copy_from(other);
-        return *this;
-    }
-
-    constexpr auto operator=(StyleStack&& other) noexcept -> StyleStack& {
-        if (this == &other) return *this;
-        this->move_from(std::move(other));
-        return *this;
-    }
-
-    constexpr ~StyleStack() = default;
-
-    [[nodiscard]] constexpr auto top() -> value_type& {
-        assert(!this->empty());
-        return data_[size_ - 1];
-    }
-
-    constexpr void push(value_type v) {
-        if (size_ == capacity_) this->grow();
-        data_[size_++] = v; // NOLINT
-    }
-
-    constexpr void pop() {
-        if (size_ > 0) size_--;
-    }
-
-    constexpr void clear() { size_ = 0; }
-
-    [[nodiscard]] constexpr auto top_or(value_type v) const -> value_type {
-        return this->empty() ? v : data_[size_ - 1];
-    }
-
-    [[nodiscard]] constexpr auto top() const -> value_type {
-        assert(!this->empty());
-        return data_[size_ - 1];
-    }
-
-    [[nodiscard]] constexpr auto empty() const -> bool { return !size_; }
-
-  private:
-    constexpr auto is_heap() const noexcept -> bool { return size_ > N; }
-
-    constexpr void copy_from(const StyleStack& other) {
-        if (other.is_heap()) {
-            heap_ =
-                std::make_unique_for_overwrite<value_type[]>(other.capacity_);
-            for (std::size_t i = 0; i < other.size_; ++i)
-                heap_[i] = other.heap_[i];
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-    }
-
-    constexpr void move_from(StyleStack&& other) noexcept {
-        if (other.is_heap()) {
-            heap_ = std::move(other.heap_);
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
-
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-
-        other.size_ = 0;
-    }
-
-    constexpr void grow() {
-        auto new_heap =
-            std::make_unique_for_overwrite<value_type[]>(capacity_ * 2);
-        for (std::size_t i = 0; i < size_; ++i)
-            new_heap[i] = data_[i];
-        heap_ = std::move(new_heap);
-        data_ = heap_.get();
-        capacity_ *= 2;
-    }
-
-    std::array<value_type, N> local_;
-    std::unique_ptr<value_type[]> heap_;
-
-    value_type* data_ = local_.data();
-    std::size_t size_ = 0;
-    std::size_t capacity_ = N;
-};
-
-/* ----- color fallback ----- */
-
-using color_fallback_fn = Color (*)(Color);
-
-// TODO: replace this with better algorithm
-constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
-    const uint8_t dr = lhs.r - rhs.r;
-    const uint8_t dg = lhs.g - rhs.g;
-    const uint8_t db = lhs.b - rhs.b;
-    return (2 * (dr * dr)) + (4 * (db * db)) + (3 * (dg * dg));
-}
-
-constexpr auto fallback_to_16(Color color) -> Color {
-    const ColorType type = color.type();
-    if (type == ColorType::Null || type == ColorType::DefaultColor)
-        return color;
-
-    RGB rgb; // NOLINT
-    if (type == ColorType::TerminalColor) {
-        const uint8_t index = color.data()[0];
-        if (index < 16) return color;
-        rgb = color_info[index];
-    } else if (type == ColorType::TrueColor) {
-        const auto [r, g, b] = color.data();
-        rgb = RGB(r, g, b);
-    }
-
-    int closest = (256 * 256) * 3; // max distance
-    uint8_t closest_idx = 0;
-    for (uint8_t i = 0; i < 16; ++i) {
-        int distance = rgb_distance(rgb, color_info[i]);
-        if (distance < closest) {
-            closest = distance;
-            closest_idx = i;
-        }
-    }
-
-    return {closest_idx};
-}
-
-constexpr auto fallback_to_256(Color color) -> Color {
-    // TODO:
-    return color;
-}
-
-constexpr auto fallback(Style style, color_fallback_fn fallback_fn) -> Style {
-    return Style(
-        style.emphasis(), fallback_fn(style.fg()), fallback_fn(style.bg()));
-}
-
-constexpr auto fallback(AbsoluteStyle abstyle, color_fallback_fn fallback_fn)
-    -> AbsoluteStyle {
-    return abs(fallback(abstyle.inner(), fallback_fn));
-}
-
 class StyleContext {
   public:
-    StyleContext() = default;
+    constexpr StyleContext() = default;
 
-    void set_base_style(Style s) {
+    constexpr void set_base_style(Style s) {
         AbsoluteStyle base = abs(s);
         if (stack_.empty()) pending_.merge(base);
         base_style_ = base;
@@ -274,53 +305,53 @@ class StyleContext {
 
     /// @details
     /// This will push `style` to the stack implicitly when the stack is empty.
-    void set_current_style(detail::style_type auto style) {
-        if (stack_.empty()) stack_.push(detail::merge(base_style_, style));
-        else stack_.top() = detail::merge(stack_.top(), style);
+    constexpr void set_current_style(detail::style_type auto style) {
+        if (stack_.empty()) stack_.push_back(detail::merge(base_style_, style));
+        else stack_.back() = detail::merge(stack_.back(), style);
         pending_.merge(style);
     }
 
-    void ensure_style() { pending_.merge(this->current_abstyle()); }
+    constexpr void ensure_style() { pending_.merge(this->current_abstyle()); }
 
-    void push(detail::style_type auto style) {
-        stack_.push(detail::merge(stack_.top_or(base_style_), style));
+    constexpr void push(detail::style_type auto style) {
+        stack_.push_back(detail::merge(stack_.back_or(base_style_), style));
         pending_.merge(style);
     }
 
-    void pop() {
-        stack_.pop();
+    constexpr void pop() {
+        stack_.pop_back();
         pending_.merge(this->current_abstyle());
     }
 
-    void reset() {
+    constexpr void reset() {
         stack_.clear();
         pending_.merge(this->current_abstyle());
     }
 
-    [[nodiscard]] auto consume_pending() -> AnyStyle {
+    [[nodiscard]] constexpr auto consume_pending() -> AnyStyle {
         auto pending = pending_;
         pending_ = null_style;
         return pending;
     }
 
-    [[nodiscard]] auto base_style() const -> Style {
+    [[nodiscard]] constexpr auto base_style() const -> Style {
         return base_style_.inner();
     }
 
-    [[nodiscard]] auto pending() const -> AnyStyle { return pending_; }
+    [[nodiscard]] constexpr auto pending() const -> AnyStyle { return pending_; }
 
-    [[nodiscard]] auto has_pending() const -> bool {
+    [[nodiscard]] constexpr auto has_pending() const -> bool {
         return !pending_.is_null();
     }
 
-    [[nodiscard]] auto current_abstyle() const -> AbsoluteStyle {
-        return stack_.top_or(base_style_);
+    [[nodiscard]] constexpr auto current_abstyle() const -> AbsoluteStyle {
+        return stack_.back_or(base_style_);
     }
 
   private:
     AbsoluteStyle base_style_;
 
-    StyleStack<3> stack_;
+    Buffer<AbsoluteStyle, 3> stack_;
     AnyStyle pending_;
 };
 
@@ -337,12 +368,9 @@ struct Pop {};
 // ║                      OutputConfig                       ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// Terminal color capability levels.
-enum class ColorMode : uint8_t { Color16 = 0, Color256, TrueColor };
-
 class OutputConfig {
   public:
-    constexpr OutputConfig() = default;
+    OutputConfig() = default;
 
     auto enable_style(bool enable = true) -> OutputConfig& {
         style_enabled_.store(enable, std::memory_order_relaxed);
@@ -403,7 +431,7 @@ class Ostream {
         auto os_ptr = &(out.ostream() << std::forward<T>(value));
         if (os_ptr != out.ostream_)
             throw std::logic_error(
-                "Ostream: std::ostream output operator returned a "
+                "deco::Ostream: std::ostream output operator returned a "
                 "different ostream object");
         return out;
     }
@@ -495,16 +523,7 @@ class Ostream {
     template <detail::style_type StyleT>
     void output_style(StyleT style) {
         if (!cfg_->style_enabled()) return;
-        switch (cfg_->color_mode()) {
-            case ColorMode::Color16:
-                style = detail::fallback(style, detail::fallback_to_16);
-                break;
-            case ColorMode::Color256:
-                style = detail::fallback(style, detail::fallback_to_256);
-                break;
-            default:
-                break;
-        }
+        detail::fallback_color(style, cfg_->color_mode());
         this->ostream() << style;
     }
 
