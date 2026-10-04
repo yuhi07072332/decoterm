@@ -330,6 +330,7 @@ TEST_CASE("OStream merges styles" * test_suite("OStream")) {
 
 TEST_CASE("OStream follows OutputConfig" * test_suite("OStream")) {
     std::ostringstream os;
+    std::ostringstream expected;
 
     OutputConfig ocfg;
     OStream out(ocfg, os);
@@ -344,8 +345,20 @@ TEST_CASE("OStream follows OutputConfig" * test_suite("OStream")) {
         CHECK(os.str() == "texttexttext");
     }
 
+
     SUBCASE("color fallback") {
-        // TODO:
+        SUBCASE("Disable") {
+            ocfg.set_color_mode(ColorMode::Disabled);
+
+            out.set_base_style(dim)
+                << bold << "text" << fg(blue) << "text" << push(italic) << "text" << pop;
+            expected << abs(dim | bold) << "texttext" << italic << "text";
+
+            CHECK(out.current_style() == (dim | bold | fg(blue)));
+            CHECK(os.str() == expected.str());
+        }
+
+        // TODO: Color16, Color256 fallback
     }
 }
 

@@ -182,7 +182,16 @@ TEST_CASE("Printer follows OutputConfig" * test_suite("Printer")) {
     }
 
     SUBCASE("color fallback") {
-        // TODO:
+        SUBCASE("Disable") {
+            ocfg.set_color_mode(ColorMode::Disabled);
+
+            out .set_base_style(dim)
+                .print(bold, "text{}text{}text", fg(blue), italic);
+            expected = std::format("{}texttext{}text{}", abs(dim | bold), italic, abs(dim));
+            CHECK(os.str() == expected);
+        }
+
+        // TODO: Color16, Color256 fallback
     }
 }
 

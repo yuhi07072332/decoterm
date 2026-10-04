@@ -182,7 +182,7 @@ template <std::output_iterator<const char&> OutputIt, detail::style_type StyleT>
 auto write_style(OutputIt out, StyleT style, const OutputConfig& cfg)
     -> OutputIt {
     if (!cfg.style_enabled()) return out;
-    detail::fallback_color(style, cfg.color_mode());
+    style = detail::fallback_color(style, cfg.color_mode());
     return style.to_escape(out);
 }
 
@@ -633,6 +633,16 @@ class Printer {
     detail::NotNull<const OutputConfig*> cfg_;
     Stream stream;
 };
+
+/// Creates a `Printer` links to `stdout` and global output config.
+inline auto stdout_printer() -> Printer {
+    return Printer(global_cfg, stdout);
+}
+
+/// Creates a `Printer` links to `stdout` and global output config.
+inline auto stderr_printer() -> Printer {
+    return Printer(global_cfg, stderr);
+}
 
 #endif // DECO_ENABLE_STD_PRINT
 

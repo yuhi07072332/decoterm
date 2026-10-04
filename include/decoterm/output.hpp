@@ -13,14 +13,14 @@
 #include <atomic>
 #include <cassert>
 #include <memory>
-#include <ostream>
+#include <iostream>
 #include <type_traits>
 #include <utility>
 
 namespace deco {
 
 /// Terminal color capability levels.
-enum class ColorMode : uint8_t { Color16 = 0, Color256, TrueColor };
+enum class ColorMode : uint8_t { Disabled, Color16, Color256, TrueColor };
 
 namespace detail {
 
@@ -209,6 +209,8 @@ constexpr auto fallback_to_256(Color color) -> Color {
 
 constexpr auto fallback_color(Style style, ColorMode mode) -> Style {
     switch (mode) {
+        case ColorMode::Disabled:
+            return Style(style.emphasis());
         case ColorMode::Color16:
             return Style(style.emphasis(),
                          fallback_to_16(style.fg()),
@@ -381,6 +383,8 @@ class OutputConfig {
     std::atomic<ColorMode> color_mode_ = ColorMode::TrueColor;
 };
 
+inline constinit OutputConfig global_cfg;       // NOLINT
+
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         OStream                         ║
 // ╚═════════════════════════════════════════════════════════╝
@@ -515,7 +519,7 @@ class OStream {
     template <detail::style_type StyleT>
     void output_style(StyleT style) {
         if (!cfg_->style_enabled()) return;
-        detail::fallback_color(style, cfg_->color_mode());
+        style = detail::fallback_color(style, cfg_->color_mode());
         this->ostream() << style;
     }
 
@@ -524,6 +528,16 @@ class OStream {
     detail::NotNull<const OutputConfig*> cfg_;
     detail::NotNull<std::ostream*> ostream_;
 };
+
+/// Creates a `OStream` that links to `std::cout` and global output config.
+inline auto stdout_ostream() -> OStream {
+    return OStream(global_cfg, std::cout);
+}
+
+/// Creates a `OStream` that links to `std::err` and global output config.
+inline auto stderr_ostream() -> OStream {
+    return OStream(global_cfg, std::cerr);
+}
 
 /* ----- OStream manipulators ----- */
 

@@ -9,7 +9,7 @@
 #include "output.hpp"
 
 #include <cstdlib>
-#include <iostream>
+#include <stdexcept>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -19,13 +19,6 @@
 #endif
 
 namespace deco {
-
-namespace terminal {
-
-inline auto is_stdout_tty() -> bool;
-inline auto is_stderr_tty() -> bool;
-
-} // namespace terminal
 
 namespace detail {
 
@@ -45,9 +38,18 @@ inline auto enable_virtual_terminal_mode() -> bool {
 }
 #endif // _WIN32
 
+[[nodiscard]]
+inline auto no_color() -> bool {
+    const char* no_color = std::getenv("NO_COLOR");
+    return no_color != nullptr && no_color[0] != '\0';
+}
+
 // Based on https://github.com/termstandard/colors?tab=readme-ov-file
+// and https://no-color.org/
 [[nodiscard]]
 inline auto get_color_support() -> ColorMode {
+    if (no_color()) return ColorMode::Disabled;
+
 #if defined(_WIN32)
     return ColorSupport::true_color;
 #else // POSIX
@@ -63,26 +65,6 @@ inline auto get_color_support() -> ColorMode {
     return ColorMode::Color16;
 #endif
 };
-
-// HACK: Uses the same approach as the termcolor library to detect whether
-// an ostream is stdout or stderr.
-inline auto is_ostream_stdout(const std::ostream& os) -> bool {
-    return &os == &std::cout;
-}
-
-inline auto is_ostream_stderr(const std::ostream& os) -> bool {
-    return (&os == &std::cerr) || (&os == &std::clog);
-}
-
-} // namespace detail
-
-#if defined(_WIN32)
-// Automatically enables Windows virtual terminal processing unless
-// DECOTERM_NO_AUTO_ENABLE_VT is defined.
-#ifndef DECOTERM_NO_AUTO_ENABLE_VT
-inline bool g_virtual_terminal_mode_enabled = enable_virtual_terminal_mode();
-#endif // DECOTERM_NO_AUTO_ENABLE_VT
-#endif // _WIN32
 
 /// Checks whether stdout is pointed to a terminal.
 [[nodiscard]]
@@ -108,24 +90,43 @@ inline auto is_stderr_tty() -> bool {
 #endif
 };
 
-/// Returns the detected color support of teh current terminal.
-[[nodiscard]]
-inline auto color_support() -> ColorMode {
-    static ColorMode s_color_support = detail::get_color_support();
-    return s_color_support;
-}
 
-/// @brief Creates a StyledOstream with TTY-based automatic configuration.
-/// @details
-/// Equivalent to `deco::styled_out(os)`, but style output and context tracking
-/// are enabled only when os is detected as stdout or stderr attached to a
-/// terminal.
-[[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream {
-    bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
-                  || (detail::is_ostream_stderr(os) && is_stderr_tty());
-    return deco::styled_out(os).enable_style(is_tty).enable_context_tracking(
-        is_tty);
+} // namespace detail
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                        terminal                         ║
+// ╚═════════════════════════════════════════════════════════╝
+
+class Terminal {
+  public:
+    explicit Terminal()
+        : color_mode_(detail::get_color_support()),
+          is_stdout_tty_(detail::is_stdout_tty()),
+          is_stderr_tty_(detail::is_stderr_tty()) {}
+
+    [[nodiscard]] auto color_mode() const -> ColorMode { return color_mode_; }
+    [[nodiscard]] auto is_stdout_tty() const -> bool { return is_stdout_tty_; }
+    [[nodiscard]] auto is_stderr_tty() const -> bool { return is_stderr_tty_; }
+
+  private:
+    ColorMode color_mode_;
+    bool is_stdout_tty_;
+    bool is_stderr_tty_;
+};
+
+/// @brief Initializes terminal.
+///
+/// @throws (Windows) `std::runtime_error` if it failed to enable virtual terminal mode
+inline auto init_terminal() -> Terminal {
+#if defined(_WIN32)
+    if (!detail::enable_virtual_terminal_mode())
+        throw std::runtime_error(
+            "deco::init_terminal(): failed to enable virtual terminal mode");
+#endif // _WIN32
+
+    auto term = Terminal();
+    global_cfg.set_color_mode(term.color_mode());
+    return term;
 }
 
 } // namespace deco
