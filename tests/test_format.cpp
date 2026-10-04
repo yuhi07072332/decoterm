@@ -1,5 +1,6 @@
 #include <decoterm/format.hpp>
 
+#include "decoterm/output.hpp"
 #include "unit_test.hpp"
 #include <doctest.h>
 
@@ -12,7 +13,6 @@
 
 using namespace deco;
 using doctest::test_suite;
-
 
 TEST_CASE("BufAppender" * test_suite("BufAppender")) {
     static_assert(std::output_iterator<detail::BufAppender<char, 1>, const char&>);
@@ -60,8 +60,8 @@ TEST_CASE("formatters" * test_suite("formatters")) {
     }
 
     SUBCASE("styled") {
-        result = std::format("{:04}", styled(42, bold));
-        expected << bold << "0042" << reset;
+        result = std::format("{:04}{}", styled(42, bold), styled("hello", italic));
+        expected << bold << "0042" << reset << italic << "hello" << reset;
         CHECK(result == expected.str());
     }
 }
@@ -88,7 +88,7 @@ TEST_CASE("format with style" * test_suite("format")) {
         CHECK(result == expected);
     }
 
-    SUBCASE("styled() restore to style") {
+    SUBCASE("styled() restore to specified style") {
         result = format(fg(blue), "blue, {}, blue", styled("bold blue", bold));
         expected = std::format("{}blue, {}bold blue{}, blue{}",
                              fg(blue),
@@ -102,55 +102,135 @@ TEST_CASE("format with style" * test_suite("format")) {
 }
 
 TEST_CASE("print with style" * test_suite("print")) {
-    std::ostringstream result;
+    std::ostringstream os;
     std::string expected;
 
     SUBCASE("print") {
-        print(result, bold, "bold text");
+        print(os, bold, "bold text");
         expected = std::format("{}bold text{}", bold, reset);
-        CHECK(result.str() == expected);
+        CHECK(os.str() == expected);
     }
 
     SUBCASE("println") {
-        println(result, bold, "bold text");
+        println(os, bold, "bold text");
         expected = std::format("{}bold text{}\n", bold, reset);
-        CHECK(result.str() == expected);
+        CHECK(os.str() == expected);
     }
 }
 
-#if 0
 
-TEST_CASE("StyledPrint" * test_suite("StyledPrint")) {
+TEST_CASE("Printer prints values" * test_suite("Printer")) {
+    OutputConfig ocfg;
     std::ostringstream os;
-    std::ostringstream expected;
-    StyledPrint out;
-    out.set_stream(os).set_base_style(fg(blue));
+    std::string expected;
 
-    SUBCASE("plain values") {
-        out.print("{} {}", "text", 42).print(" {}", "next");
-        expected << abs(fg(blue)) << "text 42 next";
+    const Style base = italic;
+    Printer out(ocfg, os);
+    out.set_base_style(base);
+
+    SUBCASE("values") {
+        out.print("hello, {}!", "world");
+        expected = std::format("{}hello, world!", abs(base));
+        CHECK(os.str() == expected);
+    }
+
+    SUBCASE("restores style") {
+        out
+            .print("base {} bold ", bold)
+            .print(" base");
+        expected = std::format("{}base {} bold {} base", abs(base), bold, abs(base));
+
+        CHECK(out.current_style() == base);
+        CHECK(os.str() == expected);
+    }
+
+    SUBCASE("styled") {
+        out.print("The answer is {}.", fg(blue) | bold | 42);
+        expected = std::format("{}The answer is {}42{}.", abs(base), fg(blue) | bold, abs(base));
+        CHECK(os.str() == expected);
     }
 
     SUBCASE("with style specified") {
-        out.print(bold, "{}", "bold").print("{}", "base");
-        expected << abs(fg(blue)) << bold << "bold" << abs(fg(blue)) << "base";
+        out.println(bg(blue) | fg(black), "TEXT");
+        expected = std::format("{}TEXT{}\n", abs(base | bg(blue) | fg(black)), abs(base));
+        CHECK(out.current_style() == base);
+        CHECK(os.str() == expected);
+
+        os.str("");
+        os.clear();
+
+        out.println(bold, "first {} second", fg(blue));
+        expected = std::format("{}first {} second{}\n", bold, fg(blue), abs(base));
+        CHECK(out.current_style() == base);
+        CHECK(os.str() == expected);
     }
 
-    SUBCASE("writes Styled") {
-        out.print(fg(red), "before{}after", italic("italic"));
-        expected << abs(fg(blue)) << fg(red) << "before" << italic << "italic"
-                 << abs(fg(red)) << "after" << abs(fg(blue));
-    }
-
-    SUBCASE("style disabled") {
-        out.enable_style(false);
-        out.print(fg(red), "A{}B", bold("x"));
-        expected << "AxB";
-    }
-
-    CHECK(os.str() == expected.str());
 }
 
-#endif
+TEST_CASE("Printer follows OutputConfig" * test_suite("Printer")) {
+    OutputConfig ocfg;
+
+    std::ostringstream os;
+    std::string expected;
+    Printer out(ocfg, os);
+    
+    SUBCASE("disable style") {
+        ocfg.enable_style(false);
+        out .set_base_style(dim)
+            .print(bold, "text{}text{}text", fg(blue), italic);
+        CHECK(os.str() == "texttexttext");
+    }
+
+    SUBCASE("color fallback") {
+        // TODO:
+    }
+}
+
+TEST_CASE("Printer style operations" * test_suite("Printer")) {
+    OutputConfig ocfg;
+    std::ostringstream os;
+    Printer out(ocfg, os);
+
+    out.set_base_style(bold);
+    CHECK(out.base_style() == bold);
+    CHECK(out.current_style() == bold);
+
+    out.set(dim);
+    CHECK(out.current_style() == (bold | dim));
+    CHECK(out.base_style() == bold);
+
+    out.push(italic);
+    CHECK(out.current_style() == (bold | dim | italic));
+
+    out.push(fg(red));
+    CHECK(out.current_style() == (bold | dim | italic | fg(red)));
+
+    out.set(underline);
+    CHECK(out.current_style() == (bold | dim | italic | fg(red) | underline));
+
+    out.pop();
+    CHECK(out.current_style() == (bold | dim | italic));
+
+    out.reset();
+    CHECK(out.current_style() == bold);
+
+    CHECK(os.str().empty());
+}
+
+TEST_CASE("Printer merges styles" * test_suite("Printer")) {
+    SUBCASE("merge pending and specified style") {
+        OutputConfig ocfg;
+        std::ostringstream os;
+        Printer out(ocfg, os);
+
+        out.set_base_style(bold)
+           .set(italic).print(fg(red), "text");
+
+        const auto expected = std::format(
+            "{}text{}", abs(bold | italic | fg(red)), abs(bold | italic));
+        CHECK(out.current_style() == (bold | italic));
+        CHECK(os.str() == expected);
+    }
+}
 
 // NOLINTEND

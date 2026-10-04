@@ -285,12 +285,12 @@ class StyleContext {
 
     /// @details
     /// This will push `style` to the stack implicitly when the stack is empty.
-    constexpr void set_current_style(detail::style_type auto style) {
-        this->set_current_style_no_pending(style);
+    constexpr void merge_current_style(detail::style_type auto style) {
+        this->merge_current_style_no_pending(style);
         pending_.merge(style);
     }
 
-    constexpr void set_current_style_no_pending(detail::style_type auto style) {
+    constexpr void merge_current_style_no_pending(detail::style_type auto style) {
         if (stack_.empty()) stack_.push_back(detail::merge(base_style_, style));
         else stack_.back() = detail::merge(stack_.back(), style);
     }
@@ -429,12 +429,12 @@ class OStream {
     }
 
     friend auto operator<<(OStream& out, Style style) -> OStream& {
-        out.ctx().set_current_style(style);
+        out.ctx().merge_current_style(style);
         return out;
     }
 
     friend auto operator<<(OStream& out, AbsoluteStyle abstyle) -> OStream& {
-        out.ctx().set_current_style(abstyle);
+        out.ctx().merge_current_style(abstyle);
         return out;
     }
 

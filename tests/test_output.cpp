@@ -12,9 +12,9 @@
 
 namespace {
 
-struct ReturnDifferentOstream {};
+struct ReturnDifferentOStream {};
 
-auto operator<<(std::ostream& os, ReturnDifferentOstream) -> std::ostream& {
+auto operator<<(std::ostream& os, ReturnDifferentOStream) -> std::ostream& {
     return std::cerr;
 }
 
@@ -176,11 +176,11 @@ TEST_CASE("StyleContext manages pending style" * test_suite("StyleContext")) {
     }
 
     SUBCASE("set_current_style()") {
-        ctx.set_current_style(italic);
+        ctx.merge_current_style(italic);
         CHECK(ctx.current_abstyle() == abs(bold | italic));
         CHECK(pending_escape(ctx) == to_escape(italic));
 
-        ctx.set_current_style(abs(fg(red)));
+        ctx.merge_current_style(abs(fg(red)));
         CHECK(ctx.current_abstyle() == abs(fg(red)));
         CHECK(pending_escape(ctx) == to_escape(abs(fg(red))));
     }
@@ -208,7 +208,7 @@ TEST_CASE("StyleContext manages base style" * test_suite("StyleContext")) {
     }
 }
 
-TEST_CASE("Ostream writes values" * test_suite("Ostream")) {
+TEST_CASE("OStream writes values" * test_suite("OStream")) {
     std::ostringstream os;
     std::ostringstream expected;
 
@@ -252,13 +252,13 @@ TEST_CASE("Ostream writes values" * test_suite("Ostream")) {
 
 }
 
-TEST_CASE("Ostream throws error if output operator returns different std::ostream" * test_suite("Ostream")) {
+TEST_CASE("OStream throws error if output operator returns different std::ostream" * test_suite("OStream")) {
     std::ostringstream os;
     OStream out(ocfg, os);
-    CHECK_THROWS_AS(out << ReturnDifferentOstream {}, std::logic_error);
+    CHECK_THROWS_AS(out << ReturnDifferentOStream {}, std::logic_error);
 }
 
-TEST_CASE("Ostream writes styled" * test_suite("Ostream")) {
+TEST_CASE("OStream writes styled" * test_suite("OStream")) {
     std::ostringstream os;
     std::ostringstream expected;
     OStream out(ocfg, os);
@@ -271,7 +271,38 @@ TEST_CASE("Ostream writes styled" * test_suite("Ostream")) {
     CHECK(os.str() == expected.str());
 }
 
-TEST_CASE("Ostream merges styles" * test_suite("Ostream")) {
+TEST_CASE("OStream style operations" * test_suite("OStream")) {
+    std::ostringstream os;
+    OStream out(ocfg, os);
+
+    out.set_base_style(bold);
+    CHECK(out.base_style() == bold);
+    CHECK(out.current_style() == bold);
+
+    out << dim;
+    CHECK(out.current_style() == (bold | dim));
+    CHECK(out.base_style() == bold);
+
+    out << pop;
+    CHECK(out.current_style() == bold);
+
+    out << push(italic);
+    CHECK(out.current_style() == (bold | italic));
+
+    out << push(fg(red));
+    CHECK(out.current_style() == (bold | italic | fg(red)));
+
+    out << dim;
+    CHECK(out.current_style() == (bold | italic | fg(red) | dim));
+
+    out << pop;
+    CHECK(out.current_style() == (bold | italic));
+
+    out << reset;
+    CHECK(out.current_style() == bold);
+}
+
+TEST_CASE("OStream merges styles" * test_suite("OStream")) {
     std::ostringstream os;
     std::ostringstream expected;
     OStream out(ocfg, os);
@@ -292,25 +323,26 @@ TEST_CASE("Ostream merges styles" * test_suite("Ostream")) {
     }
 }
 
-TEST_CASE("Ostream tracks current style" * test_suite("Ostream")) {
+
+TEST_CASE("OStream follows OutputConfig" * test_suite("OStream")) {
     std::ostringstream os;
+
+    OutputConfig ocfg;
     OStream out(ocfg, os);
 
-    out.set_base_style(bold);
-    CHECK(out.base_style() == bold);
-    CHECK(out.current_style() == bold);
+    SUBCASE("disable style") {
+        ocfg.enable_style(false);
+        CHECK_FALSE(ocfg.style_enabled());
 
-    out << push(italic);
-    CHECK(out.current_style() == (bold | italic));
+        out.set_base_style(dim)
+            << bold << "text" << fg(blue) << "text" << push(italic) << "text" << pop;
+        CHECK(out.current_style() == (dim | bold | fg(blue)));
+        CHECK(os.str() == "texttexttext");
+    }
 
-    out << push(fg(red));
-    CHECK(out.current_style() == (bold | italic | fg(red)));
-
-    out << pop;
-    CHECK(out.current_style() == (bold | italic));
-
-    out << reset;
-    CHECK(out.current_style() == bold);
+    SUBCASE("color fallback") {
+        // TODO:
+    }
 }
 
 // NOLINTEND
