@@ -117,9 +117,9 @@ template <std::output_iterator<const char&> OutputIt,
           style_type StyleT,
           typename... Args>
 inline auto format_to_impl(OutputIt out,
-                      StyleT style,
-                      std::format_string<Args...> fmt,
-                      Args&&... args /* NOLINT */) -> OutputIt {
+                           StyleT style,
+                           std::format_string<Args...> fmt,
+                           Args&&... args /* NOLINT */) -> OutputIt {
     out = style.to_escape(out);
     out = std::vformat_to(
         out, fmt.get(), make_format_args(process_fmt_arg(args, abs(style))...));
@@ -129,11 +129,10 @@ inline auto format_to_impl(OutputIt out,
 
 template <style_type StyleT, typename... Args>
 inline auto format_impl(StyleT style,
-                   std::format_string<Args...> fmt,
-                   Args&&... args /* NOLINT */) -> std::string {
+                        std::format_string<Args...> fmt,
+                        Args&&... args /* NOLINT */) -> std::string {
     auto buf = FormatBuf();
-    format_to_impl(
-        BufAppender(buf), style, fmt, std::forward<Args>(args)...);
+    format_to_impl(BufAppender(buf), style, fmt, std::forward<Args>(args)...);
     return {buf.data(), buf.size()};
 }
 
@@ -166,6 +165,9 @@ template <typename Arg>
 constexpr auto process_fmt_arg_ctx(const Arg& arg,
                                    AbsoluteStyle& current_style,
                                    const OutputConfig& cfg) -> decltype(auto) {
+    static_assert(!std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
+                  "'reset' cannot be used as a format argument with Printer."
+                  "Use the reset() member function instead.");
     if constexpr (style_type<Arg>) {
         current_style = merge(current_style, arg);
         return CtxStyle(arg, cfg);
@@ -188,9 +190,9 @@ auto write_style(OutputIt out, StyleT style, const OutputConfig& cfg)
 
 template <typename Stream, style_type StyleT, typename... Args>
 inline auto print_impl(Stream& stream,
-                  StyleT style,
-                  std::format_string<Args...> fmt,
-                  Args&&... args) {
+                       StyleT style,
+                       std::format_string<Args...> fmt,
+                       Args&&... args) {
     auto buffer = FormatBuf();
     format_to_impl(
         BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
@@ -199,9 +201,9 @@ inline auto print_impl(Stream& stream,
 
 template <typename Stream, style_type StyleT, typename... Args>
 inline auto println_impl(Stream& stream,
-                    StyleT style,
-                    std::format_string<Args...> fmt,
-                    Args&&... args) {
+                         StyleT style,
+                         std::format_string<Args...> fmt,
+                         Args&&... args) {
     auto buffer = FormatBuf();
     format_to_impl(
         BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
@@ -332,7 +334,8 @@ inline auto format_to(OutputIt out,
                       AbsoluteStyle abstyle,
                       std::format_string<Args...> fmt,
                       Args&&... args) -> OutputIt {
-    return detail::format_to_impl(out, abstyle, fmt, std::forward<Args>(args)...);
+    return detail::format_to_impl(
+        out, abstyle, fmt, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
@@ -544,7 +547,7 @@ class Printer {
 
   private:
     using Stream = std::variant<detail::NotNull<std::FILE*>,
-                                   detail::NotNull<std::ostream*>>;
+                                detail::NotNull<std::ostream*>>;
 
     template <std::output_iterator<const char&> OutputIt,
               detail::style_type StyleT>
@@ -568,8 +571,7 @@ class Printer {
                    Args&&... args /* NOLINT */) -> OutputIt {
         AbsoluteStyle current_style =
             detail::merge(ctx_.current_abstyle(), style);
-        if (ctx_.has_pending())
-            out = this->write_pending(out, style);
+        if (ctx_.has_pending()) out = this->write_pending(out, style);
         else out = detail::write_style(out, style, *cfg_);
 
         out = std::vformat_to(
@@ -585,7 +587,9 @@ class Printer {
     }
 
     template <detail::style_type StyleT, typename... Args>
-    void print_impl(StyleT style, std::format_string<Args...> fmt, Args&&... args) {
+    void print_impl(StyleT style,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
         auto buffer = detail::FormatBuf();
         this->format_to(detail::BufAppender(buffer),
                         style,
@@ -595,7 +599,9 @@ class Printer {
     }
 
     template <detail::style_type StyleT, typename... Args>
-    void println_impl(StyleT style, std::format_string<Args...> fmt, Args&&... args) {
+    void println_impl(StyleT style,
+                      std::format_string<Args...> fmt,
+                      Args&&... args) {
         auto buffer = detail::FormatBuf();
         this->format_to(detail::BufAppender(buffer),
                         style,
