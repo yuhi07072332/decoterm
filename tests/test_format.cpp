@@ -231,6 +231,31 @@ TEST_CASE("Printer merges styles" * test_suite("Printer")) {
         CHECK(out.current_style() == (bold | italic));
         CHECK(os.str() == expected);
     }
+
+    SUBCASE("merge styles across push, pop, and reset") {
+        OutputConfig ocfg;
+        std::ostringstream os;
+        Printer out(ocfg, os);
+
+        out.set(bold)
+            .set(fg(red))
+            .print("one")
+            .push(underline)
+            .set(bg(blue))
+            .print("two")
+            .pop()
+            .print("three")
+            .reset()
+            .print("four");
+
+        const auto expected = std::format("{}one{}two{}three{}four",
+                                          bold | fg(red),
+                                          underline | bg(blue),
+                                          abs(bold | fg(red)),
+                                          reset);
+        CHECK(out.current_style() == null_style);
+        CHECK(os.str() == expected);
+    }
 }
 
 // NOLINTEND

@@ -307,11 +307,15 @@ TEST_CASE("OStream merges styles" * test_suite("OStream")) {
     std::ostringstream expected;
     OStream out(ocfg, os);
 
-    SUBCASE("merges consecutive styles and pushes") {
-        out << bold << fg(red) << "one" << push(underline) << bg(blue) << "two";
+    SUBCASE("merges styles across push, pop, and reset") {
+        out << bold << fg(red) << "one" << push(underline) << bg(blue) << "two"
+            << pop << "three" << reset;
         expected << (bold | fg(red)) << "one" << (underline | bg(blue))
-                 << "two";
+                 << "two" << abs(bold | fg(red)) << "three";
+        CHECK(os.str() == expected.str());
 
+        out << "four";
+        expected << reset << "four";
         CHECK(os.str() == expected.str());
     }
 
