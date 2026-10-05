@@ -237,12 +237,12 @@ struct formatter<StyleT> {
 
 /// formatter for `deco::reset`
 template <>
-struct formatter<deco::detail::Reset> {
+struct formatter<deco::Reset> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(deco::detail::Reset, std::format_context& ctx) const {
+    auto format(deco::Reset, std::format_context& ctx) const {
         return deco::abs(deco::null_style).to_escape(ctx.out());
     }
 };

@@ -490,7 +490,7 @@ class OStream {
         return out;
     }
 
-    friend auto operator<<(OStream& out, detail::Reset) -> OStream& {
+    friend auto operator<<(OStream& out, Reset) -> OStream& {
         out.ctx().reset();
         return out;
     }
