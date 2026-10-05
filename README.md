@@ -6,22 +6,12 @@ A simple header-only C++20 library for decorating terminal output.
 
 See the full example: [quickstart.cpp](examples/quickstart.cpp)
 
-```cpp
-// combine `Style`s with `|`
-const deco::Style error =
-    deco::bold | deco::invert | deco::fg(deco::bright_red);
-
-std::cout << error << "assertion failed " << deco::reset << "\nat ";
-
-// same as `std::cout << deco::italic << "main.cpp" << deco::reset`
-std::cout << deco::italic % "main.cpp";
-```
+TODO
 
 ## Features
 
 - Cross-platform support for Windows, Linux, macOS and other platforms
 - Simple API syntax
-- Powerful output state management
 - `std::format`, `std::print` support
 
 ## Getting Started
@@ -66,10 +56,6 @@ The library itself requires atleast **C++20**. The examples and tests use `std::
 std::format and std::print support                                          
 [formatters, StyledFormat]                                                  
 ```
-
-> [!NOTE]
-> Currently, `color_info.hpp` only provides color names and is not included by any other header.
-> It will contain terminal color information used by `output.hpp` to implement **Color fallback** in the future.
 
 ## Development
 
