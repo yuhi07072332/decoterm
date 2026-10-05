@@ -345,18 +345,18 @@ TEST_CASE("OStream follows OutputConfig" * test_suite("OStream")) {
         CHECK(os.str() == "texttexttext");
     }
 
+    SUBCASE("disable color") {
+        ocfg.enable_color(false);
+
+        out.set_base_style(dim)
+            << bold << "text" << fg(blue) << "text" << push(italic) << "text" << pop;
+        expected << abs(dim | bold) << "texttext" << italic << "text";
+
+        CHECK(out.current_style() == (dim | bold | fg(blue)));
+        CHECK(os.str() == expected.str());
+    }
 
     SUBCASE("color fallback") {
-        SUBCASE("Disable") {
-            ocfg.set_color_mode(ColorMode::Disabled);
-
-            out.set_base_style(dim)
-                << bold << "text" << fg(blue) << "text" << push(italic) << "text" << pop;
-            expected << abs(dim | bold) << "texttext" << italic << "text";
-
-            CHECK(out.current_style() == (dim | bold | fg(blue)));
-            CHECK(os.str() == expected.str());
-        }
 
         // TODO: Color16, Color256 fallback
     }

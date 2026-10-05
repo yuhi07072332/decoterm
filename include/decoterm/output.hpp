@@ -20,7 +20,7 @@
 namespace deco {
 
 /// Terminal color capability levels.
-enum class ColorMode : uint8_t { Disabled, Color16, Color256, TrueColor };
+enum class ColorSupport : uint8_t { Color16, Color256, TrueColor };
 
 namespace detail {
 
@@ -166,6 +166,7 @@ class Buffer {
 
 /* ----- color fallback ----- */
 
+
 // TODO: replace this with better algorithm
 constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
     const uint8_t dr = lhs.r - rhs.r;
@@ -207,15 +208,13 @@ constexpr auto fallback_to_256(Color color) -> Color {
     return color;
 }
 
-constexpr auto fallback_color(Style style, ColorMode mode) -> Style {
+constexpr auto fallback_color(Style style, ColorSupport mode) -> Style {
     switch (mode) {
-        case ColorMode::Disabled:
-            return Style(style.emphasis());
-        case ColorMode::Color16:
+        case ColorSupport::Color16:
             return Style(style.emphasis(),
                          fallback_to_16(style.fg()),
                          fallback_to_16(style.bg()));
-        case ColorMode::Color256:
+        case ColorSupport::Color256:
             return Style(style.emphasis(),
                          fallback_to_256(style.fg()),
                          fallback_to_256(style.bg()));
@@ -224,9 +223,17 @@ constexpr auto fallback_color(Style style, ColorMode mode) -> Style {
     }
 }
 
-constexpr auto fallback_color(AbsoluteStyle abstyle, ColorMode mode)
+constexpr auto fallback_color(AbsoluteStyle abstyle, ColorSupport mode)
     -> AbsoluteStyle {
     return abs(fallback_color(abstyle.inner(), mode));
+}
+
+constexpr auto disable_color(Style style) -> Style {
+    return Style(style.emphasis());
+}
+
+constexpr auto disable_color(AbsoluteStyle style) -> AbsoluteStyle {
+    return abs(Style(style.inner().emphasis()));
 }
 
 struct AnyStyle {
@@ -360,27 +367,37 @@ class OutputConfig {
   public:
     OutputConfig() = default;
 
+    auto enable_color(bool enable = true) -> OutputConfig& {
+        color_enabled_.store(enable, std::memory_order_relaxed);
+        return *this;
+    }
+
     auto enable_style(bool enable = true) -> OutputConfig& {
         style_enabled_.store(enable, std::memory_order_relaxed);
         return *this;
     }
 
-    auto set_color_mode(ColorMode mode) -> OutputConfig& {
-        color_mode_.store(mode, std::memory_order_relaxed);
+    auto set_color_support(ColorSupport mode) -> OutputConfig& {
+        color_support_.store(mode, std::memory_order_relaxed);
         return *this;
+    }
+
+    [[nodiscard]] auto color_enabled() const -> bool {
+        return color_enabled_.load(std::memory_order_relaxed);
     }
 
     [[nodiscard]] auto style_enabled() const -> bool {
         return style_enabled_.load(std::memory_order_relaxed);
     }
 
-    [[nodiscard]] auto color_mode() const -> ColorMode {
-        return color_mode_.load(std::memory_order_relaxed);
+    [[nodiscard]] auto color_support() const -> ColorSupport {
+        return color_support_.load(std::memory_order_relaxed);
     }
 
   private:
+    std::atomic_bool color_enabled_ = true;
     std::atomic_bool style_enabled_ = true;
-    std::atomic<ColorMode> color_mode_ = ColorMode::TrueColor;
+    std::atomic<ColorSupport> color_support_ = ColorSupport::TrueColor;
 };
 
 inline constinit OutputConfig global_cfg;       // NOLINT
@@ -519,7 +536,8 @@ class OStream {
     template <detail::style_type StyleT>
     void output_style(StyleT style) {
         if (!cfg_->style_enabled()) return;
-        style = detail::fallback_color(style, cfg_->color_mode());
+        if (!cfg_->color_enabled()) style = detail::disable_color(style);
+        else style = detail::fallback_color(style, cfg_->color_support());
         this->ostream() << style;
     }
 

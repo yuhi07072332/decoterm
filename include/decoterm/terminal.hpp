@@ -9,9 +9,9 @@
 #include "output.hpp"
 
 #include <cstdlib>
-#include <stdexcept>
 
 #if defined(_WIN32)
+#include <stdexcept>
 #include <windows.h>
 #else // POSIX
 #include <unistd.h>
@@ -21,11 +21,6 @@
 namespace deco {
 
 namespace detail {
-
-inline constexpr auto contains(std::string_view sv, std::string_view find)
-    -> bool {
-    return sv.find(find) != std::string_view::npos; // NOLINT
-}
 
 #if defined(_WIN32)
 [[nodiscard]]
@@ -45,24 +40,29 @@ inline auto no_color() -> bool {
 }
 
 // Based on https://github.com/termstandard/colors?tab=readme-ov-file
-// and https://no-color.org/
 [[nodiscard]]
-inline auto get_color_support() -> ColorMode {
-    if (no_color()) return ColorMode::Disabled;
+inline auto get_color_support() -> ColorSupport {
+    auto contains = [](const char* lhs, std::string_view rhs) -> bool {
+        std::string_view sv = lhs ? lhs : "";
+        return sv.find(rhs) != std::string_view::npos; // NOLINT
+    };
+
+    const char* colorterm = std::getenv("COLORTERM");
+
+    if (contains(colorterm, "truecolor")
+        || contains(colorterm, "24bit"))
+        return ColorSupport::TrueColor;
+
+    const char* term = std::getenv("TERM");
+    if (contains(colorterm, "256") || contains(term, "256")) 
+        return ColorSupport::Color256;
 
 #if defined(_WIN32)
+    // TODO: 
     return ColorSupport::true_color;
 #else // POSIX
-    const char* colorterm_p = std::getenv("COLORTERM");
 
-    std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
-    if (contains(env_colorterm, "truecolor")
-        || contains(env_colorterm, "24bit"))
-        return ColorMode::TrueColor;
-
-    // TODO:
-
-    return ColorMode::Color16;
+    return ColorSupport::Color16;
 #endif
 };
 
@@ -102,16 +102,19 @@ class Terminal {
     explicit Terminal()
         : color_mode_(detail::get_color_support()),
           is_stdout_tty_(detail::is_stdout_tty()),
-          is_stderr_tty_(detail::is_stderr_tty()) {}
+          is_stderr_tty_(detail::is_stderr_tty()),
+          no_color_(detail::no_color()) {}
 
-    [[nodiscard]] auto color_mode() const -> ColorMode { return color_mode_; }
+    [[nodiscard]] auto color_mode() const -> ColorSupport { return color_mode_; }
     [[nodiscard]] auto is_stdout_tty() const -> bool { return is_stdout_tty_; }
     [[nodiscard]] auto is_stderr_tty() const -> bool { return is_stderr_tty_; }
+    [[nodiscard]] auto no_color() const -> bool { return no_color_; }
 
   private:
-    ColorMode color_mode_;
+    ColorSupport color_mode_;
     bool is_stdout_tty_;
     bool is_stderr_tty_;
+    bool no_color_;
 };
 
 /// @brief Initializes terminal.
@@ -125,7 +128,8 @@ inline auto init_terminal() -> Terminal {
 #endif // _WIN32
 
     auto term = Terminal();
-    global_cfg.set_color_mode(term.color_mode());
+    global_cfg.enable_color(!term.no_color());
+    global_cfg.set_color_support(term.color_mode());
     return term;
 }
 

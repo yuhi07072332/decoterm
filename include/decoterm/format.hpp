@@ -182,7 +182,8 @@ template <std::output_iterator<const char&> OutputIt, detail::style_type StyleT>
 auto write_style(OutputIt out, StyleT style, const OutputConfig& cfg)
     -> OutputIt {
     if (!cfg.style_enabled()) return out;
-    style = detail::fallback_color(style, cfg.color_mode());
+    if (!cfg.color_enabled()) style = detail::disable_color(style);
+    else style = detail::fallback_color(style, cfg.color_support());
     return style.to_escape(out);
 }
 
