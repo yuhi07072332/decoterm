@@ -128,8 +128,9 @@ inline auto init_terminal() -> Terminal {
 #endif // _WIN32
 
     auto term = Terminal();
-    global_cfg.enable_color(!term.no_color());
-    global_cfg.set_color_support(term.color_mode());
+    auto& cfg = config();
+    cfg.enable_color(!term.no_color());
+    cfg.set_color_support(term.color_mode());
     return term;
 }
 

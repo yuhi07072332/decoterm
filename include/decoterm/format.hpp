@@ -637,12 +637,12 @@ class Printer {
 
 /// Creates a `Printer` links to `stdout` and global output config.
 inline auto stdout_printer() -> Printer {
-    return Printer(global_cfg, stdout);
+    return Printer(config(), stdout);
 }
 
 /// Creates a `Printer` links to `stdout` and global output config.
 inline auto stderr_printer() -> Printer {
-    return Printer(global_cfg, stderr);
+    return Printer(config(), stderr);
 }
 
 #endif // DECO_ENABLE_STD_PRINT

@@ -42,22 +42,6 @@ struct NotNull {
     Ptr ptr_;
 };
 
-/* ----- style merge ----- */
-
-constexpr auto merge(Style lhs, Style rhs) -> Style { return lhs | rhs; }
-
-constexpr auto merge(AbsoluteStyle lhs, Style rhs) -> AbsoluteStyle {
-    return abs(lhs.inner() | rhs);
-}
-
-constexpr auto merge(Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
-    return rhs;
-}
-
-constexpr auto merge(AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
-    return rhs;
-}
-
 template <typename T, std::size_t N>
     requires(N > 0 && std::is_copy_assignable_v<T>)
 class Buffer {
@@ -166,7 +150,6 @@ class Buffer {
 
 /* ----- color fallback ----- */
 
-
 // TODO: replace this with better algorithm
 constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
     const uint8_t dr = lhs.r - rhs.r;
@@ -234,6 +217,22 @@ constexpr auto disable_color(Style style) -> Style {
 
 constexpr auto disable_color(AbsoluteStyle style) -> AbsoluteStyle {
     return abs(Style(style.inner().emphasis()));
+}
+
+/* ----- style merge ----- */
+
+constexpr auto merge(Style lhs, Style rhs) -> Style { return lhs | rhs; }
+
+constexpr auto merge(AbsoluteStyle lhs, Style rhs) -> AbsoluteStyle {
+    return abs(lhs.inner() | rhs);
+}
+
+constexpr auto merge(Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+    return rhs;
+}
+
+constexpr auto merge(AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+    return rhs;
 }
 
 struct AnyStyle {
@@ -400,7 +399,10 @@ class OutputConfig {
     std::atomic<ColorSupport> color_support_ = ColorSupport::TrueColor;
 };
 
-inline constinit OutputConfig global_cfg;       // NOLINT
+inline auto config() -> OutputConfig& {
+    static OutputConfig global_cfg;
+    return global_cfg;
+}
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         OStream                         ║
@@ -549,12 +551,12 @@ class OStream {
 
 /// Creates a `OStream` that links to `std::cout` and global output config.
 inline auto stdout_ostream() -> OStream {
-    return OStream(global_cfg, std::cout);
+    return OStream(config(), std::cout);
 }
 
 /// Creates a `OStream` that links to `std::err` and global output config.
 inline auto stderr_ostream() -> OStream {
-    return OStream(global_cfg, std::cerr);
+    return OStream(config(), std::cerr);
 }
 
 /* ----- OStream manipulators ----- */
