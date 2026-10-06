@@ -91,20 +91,24 @@ struct BufAppender {
 
 template <style_type StyleT, typename T>
 struct FStyled {
-    constexpr FStyled(Styled<StyleT, T> styled, AbsoluteStyle current_style)
+    constexpr FStyled(Styled<StyleT, T> styled, AbsoluteStyle current_style, const OutputConfig* cfg)
         : styled(std::move(styled)),
-          restore_style(current_style) {}
+          restore_style(current_style),
+        cfg(cfg) {}
 
     Styled<StyleT, T> styled;
     AbsoluteStyle restore_style;
+    const OutputConfig* cfg;
 };
 
 // Replace `Styled` with `FStyled`
 template <typename Arg>
-constexpr auto process_fmt_arg(Arg& arg, AbsoluteStyle current_style)
+constexpr auto process_fmt_arg(Arg& arg, AbsoluteStyle current_style, const OutputConfig* cfg)
     -> decltype(auto) {
+    static_assert(!style_type<Arg> && !std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
+                  "Style types and 'reset' cannot be used as a format argument.");
     if constexpr (detail::styled<Arg>)
-        return FStyled(std::move(arg), current_style);
+        return FStyled(std::move(arg), current_style, cfg);
     else return arg;
 }
 
@@ -122,7 +126,7 @@ inline auto format_to_impl(OutputIt out,
                            Args&&... args /* NOLINT */) -> OutputIt {
     out = style.to_escape(out);
     out = std::vformat_to(
-        out, fmt.get(), make_format_args(process_fmt_arg(args, abs(style))...));
+        out, fmt.get(), make_format_args(process_fmt_arg(args, abs(style), nullptr)...));
     if (!style.is_null()) out = abs(null_style).to_escape(out);
     return out;
 }
@@ -136,54 +140,13 @@ inline auto format_impl(StyleT style,
     return {buf.data(), buf.size()};
 }
 
-template <style_type StyleT>
-struct CtxStyle {
-    constexpr CtxStyle(StyleT style, const OutputConfig& cfg)
-        : style(style),
-          cfg(&cfg) {}
-
-    StyleT style;
-    NotNull<const OutputConfig*> cfg;
-};
-
-template <style_type StyleT, typename T>
-struct CtxStyled {
-    constexpr CtxStyled(Styled<StyleT, T> styled,
-                        AbsoluteStyle restore_style,
-                        const OutputConfig& cfg)
-        : styled(std::move(styled)),
-          restore_style(restore_style),
-          cfg(&cfg) {}
-
-    Styled<StyleT, T> styled;
-    AbsoluteStyle restore_style;
-    NotNull<const OutputConfig*> cfg;
-};
-
-// Replace Styled<T> and style types
-template <typename Arg>
-constexpr auto process_fmt_arg_ctx(const Arg& arg,
-                                   AbsoluteStyle& current_style,
-                                   const OutputConfig& cfg) -> decltype(auto) {
-    static_assert(!std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
-                  "'reset' cannot be used as a format argument with Printer."
-                  "Use the reset() member function instead.");
-    if constexpr (style_type<Arg>) {
-        current_style = merge(current_style, arg);
-        return CtxStyle(arg, cfg);
-    } else if constexpr (styled<Arg>) {
-        return CtxStyled(std::move(arg), current_style, cfg);
-    } else {
-        return arg;
-    }
-}
-
 template <std::output_iterator<const char&> OutputIt, detail::style_type StyleT>
-auto write_style(OutputIt out, StyleT style, const OutputConfig& cfg)
+auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
     -> OutputIt {
-    if (!cfg.style_enabled()) return out;
-    if (!cfg.color_enabled()) style = detail::disable_color(style);
-    else style = detail::fallback_color(style, cfg.color_support());
+    if (!cfg) return style.to_escape(out);
+    if (!cfg->style_enabled()) return out;
+    if (!cfg->color_enabled()) style = detail::disable_color(style);
+    else style = detail::fallback_color(style, cfg->color_support());
     return style.to_escape(out);
 }
 
@@ -274,41 +237,9 @@ struct formatter<deco::detail::FStyled<StyleT, T>>
 
         const auto& styled = fstyled.styled;
 
-        ctx.advance_to(styled.style().to_escape(ctx.out()));
+        ctx.advance_to(detail::write_style(ctx.out(), styled.style(), fstyled.cfg));
         ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
-        ctx.advance_to(fstyled.restore_style.to_escape(ctx.out()));
-
-        return ctx.out();
-    }
-};
-
-template <deco::detail::style_type StyleT>
-struct formatter<deco::detail::CtxStyle<StyleT>> {
-    constexpr auto parse(std::format_parse_context& ctx) const {
-        return ctx.begin();
-    }
-
-    auto format(deco::detail::CtxStyle<StyleT> ctx_style,
-                std::format_context& ctx) const {
-        return deco::detail::write_style(
-            ctx.out(), ctx_style.style, *ctx_style.cfg);
-    }
-};
-
-template <deco::detail::style_type StyleT, typename T>
-    requires deco::formattable<T>
-struct formatter<deco::detail::CtxStyled<StyleT, T>>
-    : deco::detail::formatter_t<T> {
-    auto format(const deco::detail::CtxStyled<StyleT, T>& ctx_styled,
-                std::format_context& ctx) const {
-        using namespace deco::detail;
-
-        const auto& styled = ctx_styled.styled;
-        const auto& cfg = *ctx_styled.cfg;
-
-        ctx.advance_to(write_style(ctx.out(), styled.style(), cfg));
-        ctx.advance_to(formatter_t<T>::format(styled.value(), ctx));
-        ctx.advance_to(write_style(ctx.out(), ctx_styled.restore_style, cfg));
+        ctx.advance_to(detail::write_style(ctx.out(), fstyled.restore_style, fstyled.cfg));
 
         return ctx.out();
     }
@@ -558,7 +489,7 @@ class Printer {
         if (!with.is_null()) pending.merge(with);
         return pending.visit(
             [this, out](detail::style_type auto style) constexpr {
-                return detail::write_style(out, style, *cfg_);
+                return detail::write_style(out, style, cfg_);
             });
         return out;
     }
@@ -570,19 +501,19 @@ class Printer {
                    StyleT style,
                    std::format_string<Args...> fmt,
                    Args&&... args /* NOLINT */) -> OutputIt {
-        AbsoluteStyle current_style =
-            detail::merge(ctx_.current_abstyle(), style);
         if (ctx_.has_pending()) out = this->write_pending(out, style);
-        else out = detail::write_style(out, style, *cfg_);
+        else out = detail::write_style(out, style, cfg_);
+
+        const AbsoluteStyle current_style = detail::merge(ctx_.current_abstyle(), style);
 
         out = std::vformat_to(
             out,
             fmt.get(),
             detail::make_format_args(
-                detail::process_fmt_arg_ctx(args, current_style, *cfg_)...));
+                detail::process_fmt_arg(args, current_style, cfg_)...));
 
-        if (current_style != ctx_.current_abstyle())
-            out = detail::write_style(out, ctx_.current_abstyle(), *cfg_);
+        if (!style.is_null())
+            out = detail::write_style(out, ctx_.current_abstyle(), cfg_);
 
         return out;
     }

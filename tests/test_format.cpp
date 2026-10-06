@@ -134,16 +134,6 @@ TEST_CASE("Printer prints values" * test_suite("Printer")) {
         CHECK(os.str() == expected);
     }
 
-    SUBCASE("restores style") {
-        out
-            .print("base {} bold ", bold)
-            .print(" base");
-        expected = std::format("{}base {} bold {} base", abs(base), bold, abs(base));
-
-        CHECK(out.current_style() == base);
-        CHECK(os.str() == expected);
-    }
-
     SUBCASE("styled") {
         out.print("The answer is {}.", fg(blue) | bold | 42);
         expected = std::format("{}The answer is {}42{}.", abs(base), fg(blue) | bold, abs(base));
@@ -159,8 +149,8 @@ TEST_CASE("Printer prints values" * test_suite("Printer")) {
         os.str("");
         os.clear();
 
-        out.println(bold, "first {} second", fg(blue));
-        expected = std::format("{}first {} second{}\n", bold, fg(blue), abs(base));
+        out.println(bold, "first {} third", fg(blue) | "second");
+        expected = std::format("{}first {}second{} third{}\n", bold, fg(blue), abs(base | bold), abs(base));
         CHECK(out.current_style() == base);
         CHECK(os.str() == expected);
     }
@@ -173,22 +163,23 @@ TEST_CASE("Printer follows OutputConfig" * test_suite("Printer")) {
     std::ostringstream os;
     std::string expected;
     Printer out(ocfg, os);
+
+    SUBCASE("disable color") {
+        ocfg.enable_color(false);
+
+        out .set_base_style(dim)
+            .print(bold, "text{}text", fg(blue) | italic | "text");
+        expected = std::format("{}text{}text{}text{}", abs(dim | bold), italic, abs(dim | bold), abs(dim));
+        CHECK(os.str() == expected);
+    }
     
     SUBCASE("disable style") {
         ocfg.enable_style(false);
         out .set_base_style(dim)
-            .print(bold, "text{}text{}text", fg(blue), italic);
+            .print(bold, "text{}text", fg(blue) | italic | "text");
         CHECK(os.str() == "texttexttext");
     }
 
-    SUBCASE("Disable") {
-        ocfg.enable_color(false);
-
-        out .set_base_style(dim)
-            .print(bold, "text{}text{}text", fg(blue), italic);
-        expected = std::format("{}texttext{}text{}", abs(dim | bold), italic, abs(dim));
-        CHECK(os.str() == expected);
-    }
 
     SUBCASE("color fallback") {
 
