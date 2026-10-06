@@ -384,13 +384,29 @@ inline void println(std::ostream& os,
 
 class Printer {
   public:
-    explicit Printer(OutputConfig& config, std::ostream& os)
-        : cfg_(&config),
-          stream(&os) {}
+    explicit Printer(std::ostream& os)
+        : cfg_(nullptr),
+          stream(&os) {
+        ctx_.ensure_style();
+    }
 
-    explicit Printer(OutputConfig& config, std::FILE* f = stdout)
+    explicit Printer(std::FILE* f = stdout)
+        : cfg_(nullptr),
+          stream(f) {
+        ctx_.ensure_style();
+    }
+
+    explicit Printer(const OutputConfig& config, std::ostream& os)
         : cfg_(&config),
-          stream(f) {}
+          stream(&os) {
+        ctx_.ensure_style();
+    }
+
+    explicit Printer(const OutputConfig& config, std::FILE* f = stdout)
+        : cfg_(&config),
+          stream(f) {
+        ctx_.ensure_style();
+    }
 
     auto set_base_style(Style s) -> Printer& {
         ctx_.set_base_style(s);
@@ -402,7 +418,7 @@ class Printer {
         return *this;
     }
 
-    auto set(Style s) -> Printer& {
+    auto apply(Style s) -> Printer& {
         ctx_.merge_current_style(s);
         return *this;
     }
@@ -432,6 +448,14 @@ class Printer {
     }
 
     [[nodiscard]] auto base_style() const -> Style { return ctx_.base_style(); }
+
+    [[nodiscard]] auto clone_with(std::ostream& os) const -> Printer {
+        return Printer(cfg_, &os, ctx_);
+    }
+
+    [[nodiscard]] auto clone_with(std::FILE* f) const -> Printer {
+        return Printer(cfg_, f, ctx_);
+    }
 
     /* ----- print ----- */
 
@@ -480,6 +504,13 @@ class Printer {
   private:
     using Stream = std::variant<detail::NotNull<std::FILE*>,
                                 detail::NotNull<std::ostream*>>;
+
+    explicit Printer(const OutputConfig* config, Stream stream, detail::StyleContext ctx)
+        : cfg_(config),
+          stream(stream), ctx_(std::move(ctx)){
+        ctx_.drop_pending();
+        ctx_.ensure_style();
+    }
 
     template <std::output_iterator<const char&> OutputIt,
               detail::style_type StyleT>
@@ -562,7 +593,7 @@ class Printer {
 
     detail::StyleContext ctx_;
 
-    detail::NotNull<const OutputConfig*> cfg_;
+    const OutputConfig* cfg_;
     Stream stream;
 };
 

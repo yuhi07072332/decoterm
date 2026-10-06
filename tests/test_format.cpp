@@ -196,7 +196,7 @@ TEST_CASE("Printer style operations" * test_suite("Printer")) {
     CHECK(out.base_style() == bold);
     CHECK(out.current_style() == bold);
 
-    out.set(dim);
+    out.apply(dim);
     CHECK(out.current_style() == (bold | dim));
     CHECK(out.base_style() == bold);
 
@@ -206,7 +206,7 @@ TEST_CASE("Printer style operations" * test_suite("Printer")) {
     out.push(fg(red));
     CHECK(out.current_style() == (bold | dim | italic | fg(red)));
 
-    out.set(underline);
+    out.apply(underline);
     CHECK(out.current_style() == (bold | dim | italic | fg(red) | underline));
 
     out.pop();
@@ -225,7 +225,7 @@ TEST_CASE("Printer merges styles" * test_suite("Printer")) {
         Printer out(ocfg, os);
 
         out.set_base_style(bold)
-           .set(italic).print(fg(red), "text");
+           .apply(italic).print(fg(red), "text");
 
         const auto expected = std::format(
             "{}text{}", abs(bold | italic | fg(red)), abs(bold | italic));
@@ -238,11 +238,11 @@ TEST_CASE("Printer merges styles" * test_suite("Printer")) {
         std::ostringstream os;
         Printer out(ocfg, os);
 
-        out.set(bold)
-            .set(fg(red))
+        out.apply(bold)
+            .apply(fg(red))
             .print("one")
             .push(underline)
-            .set(bg(blue))
+            .apply(bg(blue))
             .print("two")
             .pop()
             .print("three")

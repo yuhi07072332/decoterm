@@ -324,6 +324,10 @@ class StyleContext {
         pending_.merge(this->current_abstyle());
     }
 
+    constexpr void drop_pending() {
+        pending_ = null_style;
+    }
+
     [[nodiscard]] constexpr auto consume_pending() -> AnyStyle {
         auto pending = pending_;
         pending_ = null_style;
@@ -414,9 +418,17 @@ inline auto config() -> OutputConfig& {
 
 class OStream {
   public:
-    explicit OStream(OutputConfig& config, std::ostream& ostream)
+    explicit OStream(std::ostream& ostream) 
+        : cfg_(nullptr),
+          ostream_(&ostream) {
+        ctx_.ensure_style();
+    }
+
+    explicit OStream(const OutputConfig& config, std::ostream& ostream)
         : cfg_(&config),
-          ostream_(&ostream) {}
+          ostream_(&ostream) {
+        ctx_.ensure_style();
+    }
 
     auto set_base_style(Style s) -> OStream& {
         ctx_.set_base_style(s);
@@ -435,6 +447,10 @@ class OStream {
     [[nodiscard]] auto base_style() const -> Style { return ctx_.base_style(); }
 
     [[nodiscard]] auto ostream() const -> std::ostream& { return *ostream_; }
+
+    [[nodiscard]] auto clone_with(std::ostream& new_ostream) const -> OStream {
+        return OStream(cfg_, new_ostream, ctx_);
+    }
 
     /* ----- output operators ----- */
 
@@ -528,6 +544,15 @@ class OStream {
     }
 
   private:
+
+    explicit OStream(const OutputConfig* config, std::ostream& ostream, detail::StyleContext ctx)
+        : cfg_(config),
+          ostream_(&ostream),
+          ctx_(std::move(ctx)){
+        ctx_.drop_pending();
+        ctx_.ensure_style();
+    }
+
     auto ctx() -> detail::StyleContext& { return ctx_; }
 
     void output_pending() {
@@ -541,15 +566,19 @@ class OStream {
 
     template <detail::style_type StyleT>
     void output_style(StyleT style) {
+        if (!cfg_) {
+            *ostream_ << style;
+            return;
+        }
         if (!cfg_->style_enabled()) return;
         if (!cfg_->color_enabled()) style = detail::disable_color(style);
         else style = detail::fallback_color(style, cfg_->color_support());
-        this->ostream() << style;
+        *ostream_ << style;
     }
 
     detail::StyleContext ctx_;
 
-    detail::NotNull<const OutputConfig*> cfg_;
+    const OutputConfig* cfg_;
     detail::NotNull<std::ostream*> ostream_;
 };
 
