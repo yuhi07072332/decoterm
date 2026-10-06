@@ -216,7 +216,7 @@ TEST_CASE("OStream writes values" * test_suite("OStream")) {
 
     SUBCASE("plain values") {
         out << "answer=" << 42 << ' ' << true;
-        expected << "answer=" << 42 << ' ' << true;
+        expected << abs(null_style) << "answer=" << 42 << ' ' << true;
         CHECK(os.str() == expected.str());
     }
 
@@ -310,7 +310,7 @@ TEST_CASE("OStream merges styles" * test_suite("OStream")) {
     SUBCASE("merges styles across push, pop, and reset") {
         out << bold << fg(red) << "one" << push(underline) << bg(blue) << "two"
             << pop << "three" << reset;
-        expected << (bold | fg(red)) << "one" << (underline | bg(blue))
+        expected << abs(bold | fg(red)) << "one" << (underline | bg(blue))
                  << "two" << abs(bold | fg(red)) << "three";
         CHECK(os.str() == expected.str());
 
@@ -321,10 +321,40 @@ TEST_CASE("OStream merges styles" * test_suite("OStream")) {
 
     SUBCASE("merges pending style with styled value") {
         out << bold << styled("text", italic);
-        expected << (bold | italic) << "text" << abs(bold);
+        expected << abs(bold | italic) << "text" << abs(bold);
 
         CHECK(os.str() == expected.str());
     }
+}
+
+TEST_CASE("OStream without OutputConfig writes styles directly" * test_suite("OStream")) {
+    std::ostringstream os;
+    OStream out(os);
+
+    out.set_base_style(dim)
+        << bold << fg(blue) << "text" << push(italic) << "styled";
+
+    std::ostringstream expected;
+    expected << abs(dim | bold | fg(blue)) << "text" << italic << "styled";
+    CHECK(os.str() == expected.str());
+}
+
+TEST_CASE("OStream clone_with starts from the cloned style state" * test_suite("OStream")) {
+    std::ostringstream source_os;
+    std::ostringstream clone_os;
+    OStream source(source_os);
+
+    source.set_base_style(bold) << push(italic);
+    auto clone = source.clone_with(clone_os);
+
+    clone << "nested" << pop << "base";
+
+    std::ostringstream expected;
+    expected << abs(bold | italic) << "nested" << abs(bold) << "base";
+    CHECK(source_os.str().empty());
+    CHECK(clone_os.str() == expected.str());
+    CHECK(source.current_style() == (bold | italic));
+    CHECK(clone.current_style() == bold);
 }
 
 

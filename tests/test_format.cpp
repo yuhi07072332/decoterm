@@ -187,6 +187,40 @@ TEST_CASE("Printer follows OutputConfig" * test_suite("Printer")) {
     }
 }
 
+TEST_CASE("Printer without OutputConfig writes styles directly" * test_suite("Printer")) {
+    std::ostringstream os;
+    Printer out(os);
+
+    out.set_base_style(dim)
+        .print(bold, "text{}text", fg(blue) | italic | "styled");
+
+    const auto expected = std::format("{}text{}styled{}text{}",
+                                      abs(dim | bold),
+                                      fg(blue) | italic,
+                                      abs(dim | bold),
+                                      abs(dim));
+    CHECK(os.str() == expected);
+}
+
+TEST_CASE("Printer clone_with starts from the cloned style state" * test_suite("Printer")) {
+    std::ostringstream source_os;
+    std::ostringstream clone_os;
+    Printer source(source_os);
+
+    source.set_base_style(bold).push(italic);
+    auto clone = source.clone_with(clone_os);
+
+    clone.print("nested").pop().print("base");
+
+    const auto expected = std::format("{}nested{}base",
+                                      abs(bold | italic),
+                                      abs(bold));
+    CHECK(source_os.str().empty());
+    CHECK(clone_os.str() == expected);
+    CHECK(source.current_style() == (bold | italic));
+    CHECK(clone.current_style() == bold);
+}
+
 TEST_CASE("Printer style operations" * test_suite("Printer")) {
     OutputConfig ocfg;
     std::ostringstream os;
@@ -250,8 +284,8 @@ TEST_CASE("Printer merges styles" * test_suite("Printer")) {
             .print("four");
 
         const auto expected = std::format("{}one{}two{}three{}four",
-                                          bold | fg(red),
-                                          underline | bg(blue),
+                                           abs(bold | fg(red)),
+                                           underline | bg(blue),
                                           abs(bold | fg(red)),
                                           reset);
         CHECK(out.current_style() == null_style);
