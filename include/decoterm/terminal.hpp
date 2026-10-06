@@ -59,7 +59,7 @@ inline auto get_color_support() -> ColorSupport {
 
 #if defined(_WIN32)
     // TODO: 
-    return ColorSupport::true_color;
+    return ColorSupport::TrueColor;
 #else // POSIX
 
     return ColorSupport::Color16;

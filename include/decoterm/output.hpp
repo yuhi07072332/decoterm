@@ -99,7 +99,7 @@ class Buffer {
     [[nodiscard]] constexpr auto empty() const -> bool { return !size_; }
 
   private:
-    constexpr auto is_heap() const noexcept -> bool { return size_ > N; }
+    constexpr auto is_heap() const noexcept -> bool { return data_ == heap_.get(); }
 
     constexpr void copy_from(const Buffer& other) {
         if (other.is_heap()) {
@@ -128,10 +128,14 @@ class Buffer {
         capacity_ = other.capacity_;
 
         other.size_ = 0;
+        other.capacity_ = N;
+        other.data_ = other.store_.data();
     }
 
     constexpr void grow() {
-        const std::size_t new_capacity = capacity_ + (capacity_ / 2);
+        const std::size_t new_capacity = capacity_ / 2 == 0
+            ? capacity_ * 2
+            : capacity_ + (capacity_ / 2);
         auto new_heap = std::make_unique_for_overwrite<T[]>(new_capacity);
         for (std::size_t i = 0; i < size_; ++i)
             new_heap[i] = data_[i];
@@ -152,9 +156,9 @@ class Buffer {
 
 // TODO: replace this with better algorithm
 constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
-    const uint8_t dr = lhs.r - rhs.r;
-    const uint8_t dg = lhs.g - rhs.g;
-    const uint8_t db = lhs.b - rhs.b;
+    const int dr = lhs.r - rhs.r;
+    const int dg = lhs.g - rhs.g;
+    const int db = lhs.b - rhs.b;
     return (2 * (dr * dr)) + (4 * (db * db)) + (3 * (dg * dg));
 }
 
@@ -410,7 +414,7 @@ inline auto config() -> OutputConfig& {
 
 class OStream {
   public:
-    explicit OStream(const OutputConfig& config, std::ostream& ostream)
+    explicit OStream(OutputConfig& config, std::ostream& ostream)
         : cfg_(&config),
           ostream_(&ostream) {}
 
@@ -473,7 +477,7 @@ class OStream {
         } else {
             out.output_style(styled.style());
         }
-        out.ostream() << styled.value();
+        out << styled.value();
         if (!styled.style().is_null()) out.output_style(ctx.current_abstyle());
         return out;
     }

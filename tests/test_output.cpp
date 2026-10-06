@@ -23,7 +23,7 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
     return ios;
 }
 
-const deco::OutputConfig ocfg;
+deco::OutputConfig ocfg; // NOLINT
 
 auto pending_escape(const deco::detail::StyleContext& ctx) -> EscapeSeq {
     return ctx.pending().visit(

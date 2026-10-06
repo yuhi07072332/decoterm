@@ -101,7 +101,7 @@ struct FStyled {
 
 // Replace `Styled` with `FStyled`
 template <typename Arg>
-constexpr auto process_fmt_arg(const Arg& arg, AbsoluteStyle current_style)
+constexpr auto process_fmt_arg(Arg& arg, AbsoluteStyle current_style)
     -> decltype(auto) {
     if constexpr (detail::styled<Arg>)
         return FStyled(std::move(arg), current_style);
@@ -453,11 +453,11 @@ inline void println(std::ostream& os,
 
 class Printer {
   public:
-    explicit Printer(const OutputConfig& config, std::ostream& os)
+    explicit Printer(OutputConfig& config, std::ostream& os)
         : cfg_(&config),
           stream(&os) {}
 
-    explicit Printer(const OutputConfig& config, std::FILE* f = stdout)
+    explicit Printer(OutputConfig& config, std::FILE* f = stdout)
         : cfg_(&config),
           stream(f) {}
 
