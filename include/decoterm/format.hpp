@@ -602,7 +602,7 @@ inline auto stdout_printer() -> Printer {
     return Printer(config(), stdout);
 }
 
-/// Creates a `Printer` links to `stdout` and global output config.
+/// Creates a `Printer` links to `stderr` and global output config.
 inline auto stderr_printer() -> Printer {
     return Printer(config(), stderr);
 }

@@ -472,12 +472,12 @@ class OStream {
     }
 
     friend auto operator<<(OStream& out, Style style) -> OStream& {
-        out.ctx().merge_current_style(style);
+        out.ctx_.merge_current_style(style);
         return out;
     }
 
     friend auto operator<<(OStream& out, AbsoluteStyle abstyle) -> OStream& {
-        out.ctx().merge_current_style(abstyle);
+        out.ctx_.merge_current_style(abstyle);
         return out;
     }
 
@@ -485,7 +485,7 @@ class OStream {
     friend auto operator<<(OStream& out,
                            const detail::Styled<StyleT, T>& styled)
         -> OStream& {
-        auto& ctx = out.ctx();
+        auto& ctx = out.ctx_;
         if (ctx.has_pending()) {
             auto pending = ctx.consume_pending();
             pending.merge(styled.style());
@@ -501,17 +501,17 @@ class OStream {
     template <detail::style_type StyleT>
     friend auto operator<<(OStream& out, detail::Push<StyleT> push)
         -> OStream& {
-        out.ctx().push(push.style);
+        out.ctx_.push(push.style);
         return out;
     }
 
     friend auto operator<<(OStream& out, detail::Pop) -> OStream& {
-        out.ctx().pop();
+        out.ctx_.pop();
         return out;
     }
 
     friend auto operator<<(OStream& out, Reset) -> OStream& {
-        out.ctx().reset();
+        out.ctx_.reset();
         return out;
     }
 
@@ -553,8 +553,6 @@ class OStream {
         ctx_.ensure_style();
     }
 
-    auto ctx() -> detail::StyleContext& { return ctx_; }
-
     void output_pending() {
         if (ctx_.has_pending()) {
             const auto pending = ctx_.consume_pending();
@@ -587,7 +585,7 @@ inline auto stdout_ostream() -> OStream {
     return OStream(config(), std::cout);
 }
 
-/// Creates a `OStream` that links to `std::err` and global output config.
+/// Creates a `OStream` that links to `std::cerr` and global output config.
 inline auto stderr_ostream() -> OStream {
     return OStream(config(), std::cerr);
 }
