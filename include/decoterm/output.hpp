@@ -544,7 +544,6 @@ class OStream {
     }
 
   private:
-
     explicit OStream(const OutputConfig* config, std::ostream& ostream, detail::StyleContext ctx)
         : cfg_(config),
           ostream_(&ostream),

@@ -9,6 +9,7 @@
 #include "output.hpp"
 
 #include <cstdlib>
+#include <string_view>
 
 #if defined(_WIN32)
 #include <stdexcept>
@@ -24,12 +25,23 @@ namespace detail {
 
 #if defined(_WIN32)
 [[nodiscard]]
-inline auto enable_virtual_terminal_mode() -> bool {
+inline auto enable_stdout_vt() -> bool {
     HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h_stdout == INVALID_HANDLE_VALUE) return false;
     DWORD mode;
     if (!GetConsoleMode(h_stdout, &mode)) return false;
     mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     return SetConsoleMode(h_stdout, mode);
+}
+
+[[nodiscard]]
+inline auto enable_stderr_vt() -> bool {
+    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
+    if (h_stderr == INVALID_HANDLE_VALUE) return false;
+    DWORD mode;
+    if (!GetConsoleMode(h_stderr, &mode)) return false;
+    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    return SetConsoleMode(h_stderr, mode);
 }
 #endif // _WIN32
 
@@ -66,7 +78,6 @@ inline auto get_color_support() -> ColorSupport {
 #endif
 };
 
-/// Checks whether stdout is pointed to a terminal.
 [[nodiscard]]
 inline auto is_stdout_tty() -> bool {
 #if defined(_WIN32)
@@ -78,7 +89,6 @@ inline auto is_stdout_tty() -> bool {
 #endif
 };
 
-/// Check whether stderr is pointed to a terminal.
 [[nodiscard]]
 inline auto is_stderr_tty() -> bool {
 #if defined(_WIN32)
@@ -97,41 +107,44 @@ inline auto is_stderr_tty() -> bool {
 // ║                        terminal                         ║
 // ╚═════════════════════════════════════════════════════════╝
 
-class Terminal {
-  public:
-    explicit Terminal()
-        : color_mode_(detail::get_color_support()),
-          is_stdout_tty_(detail::is_stdout_tty()),
-          is_stderr_tty_(detail::is_stderr_tty()),
-          no_color_(detail::no_color()) {}
-
-    [[nodiscard]] auto color_mode() const -> ColorSupport { return color_mode_; }
-    [[nodiscard]] auto is_stdout_tty() const -> bool { return is_stdout_tty_; }
-    [[nodiscard]] auto is_stderr_tty() const -> bool { return is_stderr_tty_; }
-    [[nodiscard]] auto no_color() const -> bool { return no_color_; }
-
-  private:
-    ColorSupport color_mode_;
-    bool is_stdout_tty_;
-    bool is_stderr_tty_;
-    bool no_color_;
+struct TerminalInfo {
+    ColorSupport color_support;
+    bool is_stdout_tty;
+    bool is_stderr_tty;
+    bool no_color;
 };
 
-/// @brief Initializes terminal.
+[[nodiscard]]
+inline auto terminal_info() -> TerminalInfo {
+    return {
+        .color_support = detail::get_color_support(),
+        .is_stdout_tty = detail::is_stdout_tty(),
+        .is_stderr_tty = detail::is_stderr_tty(),
+        .no_color = detail::no_color(),
+    };
+}
+
+/// @brief Configures the global output based on the terminal environment.
 ///
 /// @throws (Windows) `std::runtime_error` if it failed to enable virtual terminal mode
-inline auto init_terminal() -> Terminal {
+inline auto init() -> TerminalInfo {
+    auto info = terminal_info();
+    auto& cfg = config();
+
+    cfg.enable_color(!info.no_color);
+    cfg.set_color_support(info.color_support);
+
 #if defined(_WIN32)
-    if (!detail::enable_virtual_terminal_mode())
+    if (!detail::enable_stdout_vt() && !info.is_stdout_tty)
         throw std::runtime_error(
-            "deco::init_terminal(): failed to enable virtual terminal mode");
+            "deco::init(): failed to enable virtual terminal mode");
+
+    if (!detail::enable_stderr_vt() && !info.is_stderr_tty)
+        throw std::runtime_error(
+            "deco::init(): failed to enable virtual terminal mode");
 #endif // _WIN32
 
-    auto term = Terminal();
-    auto& cfg = config();
-    cfg.enable_color(!term.no_color());
-    cfg.set_color_support(term.color_mode());
-    return term;
+    return info;
 }
 
 } // namespace deco
