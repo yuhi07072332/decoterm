@@ -384,7 +384,7 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     -> Color {
     // clang-format off
 
-    if (h < 0 || h >= 360) throw std::invalid_argument(
+    if (h >= 360) throw std::invalid_argument(
         "deco::hsv(): h is not in range [0, 360)");
 
     float hp = h / 60.f;                               //NOLINT

@@ -231,11 +231,11 @@ constexpr auto merge(AbsoluteStyle lhs, Style rhs) -> AbsoluteStyle {
     return abs(lhs.inner() | rhs);
 }
 
-constexpr auto merge(Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+constexpr auto merge([[maybe_unused]] Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
     return rhs;
 }
 
-constexpr auto merge(AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+constexpr auto merge([[maybe_unused]] AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
     return rhs;
 }
 
