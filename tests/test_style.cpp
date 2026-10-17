@@ -81,7 +81,7 @@ TEST_CASE("Color construct" * test_suite("Color")) {
 
 TEST_CASE("Color generates escape sequence" * test_suite("Color")) {
     SUBCASE("system colors") {
-        for (std::size_t i = 0; i < 16; ++i) {
+        for (uint8_t i = 0; i < 16; ++i) {
             CAPTURE(i);
             const Color color = Color(i);
             CHECK(EscapeSeq(color.to_escape_fg())

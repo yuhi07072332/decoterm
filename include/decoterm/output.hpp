@@ -167,7 +167,7 @@ constexpr auto fallback_to_16(Color color) -> Color {
     if (type == ColorType::Null || type == ColorType::DefaultColor)
         return color;
 
-    RGB rgb; // NOLINT
+	RGB rgb = { 0, 0, 0 };
     if (type == ColorType::TerminalColor) {
         const uint8_t index = color.data()[0];
         if (index < 16) return color;

@@ -522,7 +522,6 @@ class Printer {
             [this, out](detail::style_type auto style) constexpr {
                 return detail::write_style(out, style, cfg_);
             });
-        return out;
     }
 
     template <std::output_iterator<const char&> OutputIt,

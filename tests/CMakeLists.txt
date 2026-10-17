@@ -16,4 +16,9 @@ target_link_libraries(decoterm_test PRIVATE
 
 target_compile_features(decoterm_test PRIVATE cxx_std_23)
 
+target_compile_options(decoterm_test PRIVATE
+    "$<$<CXX_COMPILER_FRONTEND_VARIANT:GNU>:-Wall;-Wextra;-Wpedantic>"
+    "$<$<CXX_COMPILER_FRONTEND_VARIANT:MSVC>:/W4;/permissive->"
+)
+
 add_test(NAME decoterm_test COMMAND decoterm_test)

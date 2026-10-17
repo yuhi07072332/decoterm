@@ -4,6 +4,7 @@
 #include <array>
 #include <iostream>
 #include <string_view>
+#include <cstdint>
 
 constexpr std::array<std::string_view, 16> color_names {
     "black",
@@ -24,7 +25,7 @@ constexpr std::array<std::string_view, 16> color_names {
     "bright_white",
 };
 
-void print_color_cell(int index, bool is_fg_white) {
+void print_color_cell(uint8_t index, bool is_fg_white) {
     const auto bg_color = deco::Color(index);
     const auto fg_color = is_fg_white ? deco::white : deco::black;
 
@@ -40,7 +41,7 @@ auto main() -> int {
 
     std::cout << (h2 | "ANSI 16 colors:\n") << '\n';
 
-    for (int i = 0; i < 8; ++i) {
+    for (uint8_t i = 0; i < 8; ++i) {
         const Color fg_color = i == 0 ? white : black;
         std::println("[{:0>2}]{:15}{:15}   [{:0>2}]{:15}{:15}",
                      i,

@@ -14,7 +14,7 @@ namespace {
 
 struct ReturnDifferentOStream {};
 
-auto operator<<(std::ostream& os, ReturnDifferentOStream) -> std::ostream& {
+auto operator<<([[maybe_unused]] std::ostream& os, ReturnDifferentOStream) -> std::ostream& {
     return std::cerr;
 }
 

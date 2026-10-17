@@ -394,9 +394,9 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     float vp = v / 255.0f;                             //NOLINT
 
     float f = hp - std::floor(hp);
-    uint8_t p = std::round(vp * (1 - sp) * 255);             //NOLINT
-    uint8_t q = std::round(vp * (1 - (f * sp)) * 255);       //NOLINT
-    uint8_t t = std::round(vp * (1 - ((1 - f) * sp)) * 255); //NOLINT
+    uint8_t p = static_cast<uint8_t>(std::round(vp * (1 - sp) * 255));             //NOLINT
+    uint8_t q = static_cast<uint8_t>(std::round(vp * (1 - (f * sp)) * 255));       //NOLINT
+    uint8_t t = static_cast<uint8_t>(std::round(vp * (1 - ((1 - f) * sp)) * 255)); //NOLINT
 
     switch (h / 60) {
         case 0 : return Color(v, t, p);
