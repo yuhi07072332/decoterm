@@ -10,6 +10,10 @@ function(decoterm_check_std_print result_var)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)
 
+    if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        set(CMAKE_REQUIRED_LIBRARIES stdc++exp)
+    endif()
+
     check_cxx_source_compiles([=[
     #include <print>
     int main() { std::print("{}",42); return 0; }

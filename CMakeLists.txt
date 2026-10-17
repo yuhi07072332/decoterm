@@ -15,6 +15,7 @@ target_include_directories(decoterm
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+
 target_compile_features(decoterm INTERFACE cxx_std_20)
 
 #check <print> support
@@ -23,10 +24,15 @@ if(DECOTERM_BUILD_TESTS OR DECOTERM_BUILD_EXAMPLES)
     decoterm_check_std_print(DECOTERM_HAS_STD_PRINT)
     if (NOT DECOTERM_HAS_STD_PRINT)
         message(FATAL_ERROR 
-        "Building decoterm tests / examples / benchmarks requires std::print,"
+        "Building decoterm tests / examples requires std::print,"
         "but your compiler doesn't support!")
     endif()
 endif()
+
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_libraries(decoterm INTERFACE stdc++exp)
+endif()
+
 
 if(DECOTERM_BUILD_TESTS)
     enable_testing()

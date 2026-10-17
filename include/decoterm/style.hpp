@@ -167,6 +167,7 @@ constexpr auto color_to_sgr_params(OutputIt out, ColorType type, ColorData data)
         }
     }
     assert(false);
+    return out; // unreachable
 }
 
 /// A wrapper that stores rvalue or references lvalue.
@@ -345,6 +346,7 @@ struct Color {
             }
         }
         assert(false);
+        return ""; // unreachable
     }
 
   private:
@@ -704,7 +706,7 @@ inline constexpr Reset reset;
 inline auto operator<<(std::ostream& os, Style style) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = style.to_escape(buf.begin()) - buf.begin();
-    os.write(buf.begin(), len);
+    os.write(buf.data(), len);
     return os;
 }
 
@@ -713,7 +715,7 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
     -> std::ostream& {
     std::array<char, AbsoluteStyle::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = abstyle.to_escape(buf.begin()) - buf.begin();
-    os.write(buf.begin(), len);
+    os.write(buf.data(), len);
     return os;
 }
 
@@ -721,7 +723,7 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
 inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
-    os.write(buf.begin(), len);
+    os.write(buf.data(), len);
     return os;
 }
 

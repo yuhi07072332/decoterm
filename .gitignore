@@ -5,8 +5,7 @@
 /.vs
 /.vscode
 /.cache
+/out
 
 __pycache__/
 
-# My personal garbages ;)
-./temp

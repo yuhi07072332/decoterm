@@ -266,6 +266,7 @@ struct AnyStyle {
                 return visitor(abs(inner_));
         }
         assert(false);
+		return visitor(inner_); // unreachable
     }
 
     constexpr auto is_null() const -> bool {
