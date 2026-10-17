@@ -153,7 +153,7 @@ auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
 #ifdef DECO_ENABLE_STD_PRINT
 
 template <typename Stream, style_type StyleT, typename... Args>
-inline auto print_impl(Stream& stream,
+inline auto print_impl(Stream&& stream/* NOLINT */,
                        StyleT style,
                        std::format_string<Args...> fmt,
                        Args&&... args) {
@@ -164,7 +164,7 @@ inline auto print_impl(Stream& stream,
 }
 
 template <typename Stream, style_type StyleT, typename... Args>
-inline auto println_impl(Stream& stream,
+inline auto println_impl(Stream&& stream /* NOLINT */,
                          StyleT style,
                          std::format_string<Args...> fmt,
                          Args&&... args) {
