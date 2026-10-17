@@ -21,7 +21,7 @@ auto main() -> int {
                      | "Styles");
     std::println();
 
-    for (int i = 0; i < style_names.size(); ++i) {
+    for (std::size_t i = 0; i < style_names.size(); ++i) {
         std::println("{}", deco::Style(1 << i) | style_names[i]);
     }
 }

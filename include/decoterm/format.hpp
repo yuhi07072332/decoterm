@@ -506,8 +506,8 @@ class Printer {
                                 detail::NotNull<std::ostream*>>;
 
     explicit Printer(const OutputConfig* config, Stream stream, detail::StyleContext ctx)
-        : cfg_(config),
-          stream(stream), ctx_(std::move(ctx)){
+        : ctx_(std::move(ctx)),
+          cfg_(config), stream(stream){
         ctx_.drop_pending();
         ctx_.ensure_style();
     }
@@ -534,6 +534,7 @@ class Printer {
         if (ctx_.has_pending()) out = this->write_pending(out, style);
         else out = detail::write_style(out, style, cfg_);
 
+        [[maybe_unused]] // For some reason, GCC reports this variable as unused.
         const AbsoluteStyle current_style = detail::merge(ctx_.current_abstyle(), style);
 
         out = std::vformat_to(

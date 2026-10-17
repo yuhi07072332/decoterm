@@ -164,10 +164,11 @@ constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
 
 constexpr auto fallback_to_16(Color color) -> Color {
     const ColorType type = color.type();
-    if (type == ColorType::Null || type == ColorType::DefaultColor)
+    if (type == ColorType::Null || type == ColorType::DefaultColor) {
         return color;
+    }
 
-	RGB rgb = { 0, 0, 0 };
+	RGB rgb = { .r=0, .g=0, .b=0 };
     if (type == ColorType::TerminalColor) {
         const uint8_t index = color.data()[0];
         if (index < 16) return color;
@@ -546,9 +547,9 @@ class OStream {
 
   private:
     explicit OStream(const OutputConfig* config, std::ostream& ostream, detail::StyleContext ctx)
-        : cfg_(config),
-          ostream_(&ostream),
-          ctx_(std::move(ctx)){
+        : ctx_(std::move(ctx)),
+          cfg_(config),
+          ostream_(&ostream){
         ctx_.drop_pending();
         ctx_.ensure_style();
     }
