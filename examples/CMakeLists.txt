@@ -1,5 +1,6 @@
 set(EXAMPLE_SRCS
-    quickstart.cpp
+    quickstart-ostream.cpp
+    quickstart-fmt.cpp
     colors.cpp
     styles.cpp
     terminal-info.cpp

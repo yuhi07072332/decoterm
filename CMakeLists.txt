@@ -4,7 +4,7 @@ option(DECOTERM_BUILD_TESTS "build tests" ON)
 option(DECOTERM_BUILD_EXAMPLES "build examples" ON)
 
 project(decoterm
-    VERSION 0.1.0
+    VERSION 0.2.0
     LANGUAGES CXX
 )
 
