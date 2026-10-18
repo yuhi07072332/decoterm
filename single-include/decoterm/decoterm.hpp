@@ -35,13 +35,11 @@
 #include <concepts>
 #include <cstdint>
 #include <iterator>
-#include <memory>
 #include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <utility>
 #include <version>
 
 #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
@@ -91,7 +89,6 @@ concept style_type = (std::is_same_v<std::remove_cvref_t<S>, Style>
 // clang-format on
 
 using ColorData = std::array<uint8_t, 3>;
-
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
@@ -174,58 +171,19 @@ constexpr auto color_to_sgr_params(OutputIt out, ColorType type, ColorData data)
     return out; // unreachable
 }
 
-/// A wrapper that stores rvalue or references lvalue.
-template <typename T>
-struct ValueOrRef {
-    explicit constexpr ValueOrRef(T value)
-        requires std::move_constructible<T>
-        : value(std::move(value)) {}
-
-    explicit constexpr ValueOrRef(const T& value)
-        requires(!std::move_constructible<T>
-                 && std::constructible_from<T, const T&>)
-        : value(value) {}
-
-    constexpr auto get() const -> T& { return value; }
-
-  private:
-    mutable T value;
-};
-
-template <typename T>
-struct ValueOrRef<T&> {
-    explicit constexpr ValueOrRef(T& ref) : ptr(std::addressof(ref)) {}
-
-    constexpr auto get() const -> T& { return *ptr; }
-
-  private:
-    mutable T* ptr;
-};
-
-template <typename T>
-    requires(!std::is_lvalue_reference_v<T>)
-ValueOrRef(T&& value) -> ValueOrRef<std::remove_cvref_t<T>>;
-
-template <typename T>
-ValueOrRef(T& ref) -> ValueOrRef<T&>;
-
-template <typename Ret, typename... Args>
-ValueOrRef(Ret(Args...)) -> ValueOrRef<std::decay_t<Ret(Args...)>>;
-
-/// A `ValueOrRef` with a style.
 template <style_type StyleT, typename T>
 struct Styled {
     using value_type = T;
 
-    constexpr Styled(ValueOrRef<T> value, StyleT style)
-        : store_(std::move(value)),
+    constexpr Styled(const T& value, StyleT style)
+        : value_(value),
           style_(style) {}
 
-    constexpr auto value() const -> T& { return store_.get(); }
+    constexpr auto value() const -> const T& { return value_; }
     constexpr auto style() const -> StyleT { return style_; }
 
   private:
-    ValueOrRef<T> store_;
+    const T& value_; // NOLINT
     StyleT style_;
 };
 
@@ -244,6 +202,7 @@ concept styled = is_styled<std::remove_cvref_t<T>>::value;
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief Represents a nullable terminal color.
+///
 /// @details
 /// A `Color` is similar to a tagged union with 4 color types.
 /// It stores a `ColorType` and a `uint8_t[3]` containing the data.
@@ -296,6 +255,7 @@ struct Color {
     constexpr auto type() const -> ColorType { return type_; }
 
     /// @brief Returns the raw data(`uint8_t[3]`) stored in this Color.
+    ///
     /// @details
     /// Usage:
     /// ```cpp
@@ -364,12 +324,13 @@ struct Color {
     detail::ColorData data_;
 };
 
-/// @brief Create a color from RGB
+/// Creates a color from RGB.
 constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
     return Color(r, g, b);
 }
 
-/// @brief Create a color from 0xRRGGBB
+/// @brief Creates a color from 0xRRGGBB.
+///
 /// @pre rgb <= 0xFFFFFF
 constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
@@ -381,7 +342,8 @@ constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format on
 }
 
-/// @brief Create a color from HSV
+/// @brief Creates a color from HSV.
+///
 /// @param h [0, 360): Hue of the color
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
@@ -445,6 +407,7 @@ inline constexpr Color bright_white    = Color(15);
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief Represents a nullable terminal style.
+///
 /// @details
 /// * It contains 8 emphasis flags and 2 `Color`s for foreground color and
 /// background color.
@@ -481,6 +444,7 @@ struct Style {
     // ----- operators -----
 
     /// @brief Combines two styles.
+    ///
     /// @details
     /// It works like applying 2 ANSI escape sequences, meaning that
     /// `std::cout << style1 << style2` is roughly equivalent to
@@ -633,6 +597,7 @@ struct Style {
 };
 
 /// @brief A Style wrapper that represents an absolute style.
+///
 /// @details
 /// Style output normally has *additive semantics*, but this does't have.
 ///
@@ -682,6 +647,7 @@ struct AbsoluteStyle {
 };
 
 /// @brief Creates an AbsoluteStyle from a Style.
+///
 /// @details equivalent to `AbsoluteStyle(style)`
 constexpr auto abs(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
@@ -751,34 +717,51 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 // ║                         styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Creates a styled wrapper of a value.
-/// @details
-/// `std::cout << styled(s, v)` is equivalent to
-/// `std::cout << s << v << deco::reset;`.
+/// @brief Creates a styled wrapper aroune a value.
 ///
-/// @return An implementation-defined object that associates `value` with
-/// `style`. Lvalues are stored by reference and rvalues are stored by value.
+/// @details
+/// `std::cout << styled(value, style)` is equivalent to
+/// `std::cout << style << value << deco::reset;`.
+///
+/// @warning
+/// The returned object has **reference semantics** and must not outlive value.
+///
+/// **Example**
+/// ```cpp
+/// auto styled_int = styled(42, bold);  // BAD: dangling reference
+/// std::cout << styled(42, bold);       // OK
+/// ```
 template <typename T>
-constexpr auto styled(T&& value, Style style) {
-    return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), style);
+    requires(!detail::style_type<T>)
+constexpr auto styled(const T& value, Style style) {
+    return detail::Styled(value, style);
 }
 
 /// `AbsoluteStyle` version of `styled()`
 template <typename T>
-constexpr auto styled(T&& value, AbsoluteStyle abstyle) {
-    return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), abstyle);
+    requires(!detail::style_type<T>)
+constexpr auto styled(const T& value, AbsoluteStyle abstyle) {
+    return detail::Styled(value, abstyle);
 }
 
 /// shorthand for `styled(value, style)`
 template <typename T>
-constexpr auto operator|(Style style, T&& value) {
-    return styled(std::forward<T>(value), style);
+    requires(!detail::style_type<T> && !detail::styled<T>)
+constexpr auto operator|(const T& value, Style style) {
+    return styled(value, style);
 }
 
 /// shorthand for `styled(value, abstyle)`
 template <typename T>
-constexpr auto operator|(AbsoluteStyle abstyle, T&& value) {
-    return styled(std::forward<T>(value), abstyle);
+    requires(!detail::style_type<T> && !detail::styled<T>)
+constexpr auto operator|(const T& value, AbsoluteStyle abstyle) {
+    return styled(value, abstyle);
+}
+
+template <typename T>
+constexpr auto operator|(const detail::Styled<Style, T>& styled, Style style)
+    -> detail::Styled<Style, T> {
+    return detail::Styled(styled.value(), styled.style() | style);
 }
 
 /// output operator for `styled()`
@@ -1167,8 +1150,8 @@ inline constexpr std::array<RGB, 256> color_info {
 #include <array>
 #include <atomic>
 #include <cassert>
-#include <memory>
 #include <iostream>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -1203,7 +1186,7 @@ class Buffer {
   public:
     using value_type = T;
 
-    constexpr Buffer() = default;       // NOLINT
+    constexpr Buffer() = default; // NOLINT
 
     constexpr Buffer(const Buffer& other) { this->copy_from(other); }
     constexpr Buffer(Buffer&& other) noexcept {
@@ -1254,7 +1237,9 @@ class Buffer {
     [[nodiscard]] constexpr auto empty() const -> bool { return !size_; }
 
   private:
-    constexpr auto is_heap() const noexcept -> bool { return data_ == heap_.get(); }
+    constexpr auto is_heap() const noexcept -> bool {
+        return data_ == heap_.get();
+    }
 
     constexpr void copy_from(const Buffer& other) {
         if (other.is_heap()) {
@@ -1288,9 +1273,8 @@ class Buffer {
     }
 
     constexpr void grow() {
-        const std::size_t new_capacity = capacity_ / 2 == 0
-            ? capacity_ * 2
-            : capacity_ + (capacity_ / 2);
+        const std::size_t new_capacity =
+            capacity_ / 2 == 0 ? capacity_ * 2 : capacity_ + (capacity_ / 2);
         auto new_heap = std::make_unique_for_overwrite<T[]>(new_capacity);
         for (std::size_t i = 0; i < size_; ++i)
             new_heap[i] = data_[i];
@@ -1323,7 +1307,7 @@ constexpr auto fallback_to_16(Color color) -> Color {
         return color;
     }
 
-	RGB rgb = { .r=0, .g=0, .b=0 };
+    RGB rgb = {.r = 0, .g = 0, .b = 0};
     if (type == ColorType::TerminalColor) {
         const uint8_t index = color.data()[0];
         if (index < 16) return color;
@@ -1387,11 +1371,13 @@ constexpr auto merge(AbsoluteStyle lhs, Style rhs) -> AbsoluteStyle {
     return abs(lhs.inner() | rhs);
 }
 
-constexpr auto merge([[maybe_unused]] Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+constexpr auto merge([[maybe_unused]] Style lhs, AbsoluteStyle rhs)
+    -> AbsoluteStyle {
     return rhs;
 }
 
-constexpr auto merge([[maybe_unused]] AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+constexpr auto merge([[maybe_unused]] AbsoluteStyle lhs, AbsoluteStyle rhs)
+    -> AbsoluteStyle {
     return rhs;
 }
 
@@ -1422,7 +1408,7 @@ struct AnyStyle {
                 return visitor(abs(inner_));
         }
         assert(false);
-		return visitor(inner_); // unreachable
+        return visitor(inner_); // unreachable
     }
 
     constexpr auto is_null() const -> bool {
@@ -1459,7 +1445,8 @@ class StyleContext {
         pending_.merge(style);
     }
 
-    constexpr void merge_current_style_no_pending(detail::style_type auto style) {
+    constexpr void merge_current_style_no_pending(
+        detail::style_type auto style) {
         if (stack_.empty()) stack_.push_back(detail::merge(base_style_, style));
         else stack_.back() = detail::merge(stack_.back(), style);
     }
@@ -1481,9 +1468,7 @@ class StyleContext {
         pending_.merge(this->current_abstyle());
     }
 
-    constexpr void drop_pending() {
-        pending_ = null_style;
-    }
+    constexpr void drop_pending() { pending_ = null_style; }
 
     [[nodiscard]] constexpr auto consume_pending() -> AnyStyle {
         auto pending = pending_;
@@ -1530,8 +1515,9 @@ struct Pop {};
 /// @brief Configures how styles and colors are emitted.
 ///
 /// @details
-/// - This class is **thread-safe**. If an object holds a reference to an 
-///   `OutputConfig`, modifying the configuration concurrently does not cause a data race.
+/// - This class is **thread-safe**. If an object holds a reference to an
+///   `OutputConfig`, modifying the configuration concurrently does not cause a
+///   data race.
 class OutputConfig {
   public:
     OutputConfig() = default;
@@ -1593,12 +1579,15 @@ inline auto config() -> OutputConfig& {
 ///
 /// - After writing a `styled` value, the previous style is restored instead of
 ///   resetting the style entirely.
+///
 /// - Writing `reset` restores the `base_style` and also clears the entire style
 ///   context.
+///
 /// - Styles are not emitted immediately. Instead, pending style changes are
 ///   emitted together with subsequent output when needed. This allows
 ///   consecutive style changes to be combined and reduces the amount of
 ///   generated output.
+///
 /// - The style stack can be controlled with the `push(style)` and `pop`
 ///   manipulators.
 ///
@@ -1626,13 +1615,15 @@ inline auto config() -> OutputConfig& {
 /// - The internal style context is valid only as long as styles are not written
 ///   to the underlying stream by other means during the lifetime of the
 ///   `OStream`. Call `ensure_style()` to restore consistency if this happens.
+///
 /// - This class is intended for single-threaded use. Concurrent access to the
 ///   same `OStream` object may cause data races.
+///
 /// - The `OStream` object must not outlive the underlying `std::ostream` or the
 ///   referenced `OutputConfig`, if any.
 class OStream {
   public:
-    explicit OStream(std::ostream& ostream) 
+    explicit OStream(std::ostream& ostream)
         : cfg_(nullptr),
           ostream_(&ostream) {
         ctx_.ensure_style();
@@ -1761,10 +1752,12 @@ class OStream {
     }
 
   private:
-    explicit OStream(const OutputConfig* config, std::ostream& ostream, detail::StyleContext ctx)
+    explicit OStream(const OutputConfig* config,
+                     std::ostream& ostream,
+                     detail::StyleContext ctx)
         : ctx_(std::move(ctx)),
           cfg_(config),
-          ostream_(&ostream){
+          ostream_(&ostream) {
         ctx_.drop_pending();
         ctx_.ensure_style();
     }
@@ -1797,14 +1790,10 @@ class OStream {
 };
 
 /// Creates a `OStream` that links to `std::cout` and global output config.
-inline auto stdout_ostream() -> OStream {
-    return OStream(config(), std::cout);
-}
+inline auto stdout_ostream() -> OStream { return OStream(config(), std::cout); }
 
 /// Creates a `OStream` that links to `std::cerr` and global output config.
-inline auto stderr_ostream() -> OStream {
-    return OStream(config(), std::cerr);
-}
+inline auto stderr_ostream() -> OStream { return OStream(config(), std::cerr); }
 
 /* ----- OStream manipulators ----- */
 
@@ -2069,10 +2058,12 @@ struct BufAppender {
 
 template <style_type StyleT, typename T>
 struct FStyled {
-    constexpr FStyled(Styled<StyleT, T> styled, AbsoluteStyle current_style, const OutputConfig* cfg)
+    constexpr FStyled(Styled<StyleT, T> styled,
+                      AbsoluteStyle current_style,
+                      const OutputConfig* cfg)
         : styled(std::move(styled)),
           restore_style(current_style),
-        cfg(cfg) {}
+          cfg(cfg) {}
 
     Styled<StyleT, T> styled;
     AbsoluteStyle restore_style;
@@ -2081,10 +2072,12 @@ struct FStyled {
 
 // Replace `Styled` with `FStyled`
 template <typename Arg>
-constexpr auto process_fmt_arg(Arg& arg, AbsoluteStyle current_style, const OutputConfig* cfg)
-    -> decltype(auto) {
-    static_assert(!style_type<Arg> && !std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
-                  "Style types and 'reset' cannot be used as a format argument.");
+constexpr auto process_fmt_arg(Arg& arg,
+                               AbsoluteStyle current_style,
+                               const OutputConfig* cfg) -> decltype(auto) {
+    static_assert(
+        !style_type<Arg> && !std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
+        "Style types and 'reset' cannot be used as a format argument.");
     if constexpr (detail::styled<Arg>)
         return FStyled(std::move(arg), current_style, cfg);
     else return arg;
@@ -2104,7 +2097,9 @@ inline auto format_to_impl(OutputIt out,
                            Args&&... args /* NOLINT */) -> OutputIt {
     out = style.to_escape(out);
     out = std::vformat_to(
-        out, fmt.get(), make_format_args(process_fmt_arg(args, abs(style), nullptr)...));
+        out,
+        fmt.get(),
+        make_format_args(process_fmt_arg(args, abs(style), nullptr)...));
     if (!style.is_null()) out = abs(null_style).to_escape(out);
     return out;
 }
@@ -2131,7 +2126,7 @@ auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
 #ifdef DECO_ENABLE_STD_PRINT
 
 template <typename Stream, style_type StyleT, typename... Args>
-inline auto print_impl(Stream&& stream/* NOLINT */,
+inline auto print_impl(Stream&& stream /* NOLINT */,
                        StyleT style,
                        std::format_string<Args...> fmt,
                        Args&&... args) {
@@ -2215,9 +2210,11 @@ struct formatter<deco::detail::FStyled<StyleT, T>>
 
         const auto& styled = fstyled.styled;
 
-        ctx.advance_to(detail::write_style(ctx.out(), styled.style(), fstyled.cfg));
+        ctx.advance_to(
+            detail::write_style(ctx.out(), styled.style(), fstyled.cfg));
         ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
-        ctx.advance_to(detail::write_style(ctx.out(), fstyled.restore_style, fstyled.cfg));
+        ctx.advance_to(
+            detail::write_style(ctx.out(), fstyled.restore_style, fstyled.cfg));
 
         return ctx.out();
     }
@@ -2372,15 +2369,11 @@ inline void println(std::ostream& os,
 ///   context instead.
 class Printer {
   public:
-    explicit Printer(std::ostream& os)
-        : cfg_(nullptr),
-          stream(&os) {
+    explicit Printer(std::ostream& os) : cfg_(nullptr), stream(&os) {
         ctx_.ensure_style();
     }
 
-    explicit Printer(std::FILE* f = stdout)
-        : cfg_(nullptr),
-          stream(f) {
+    explicit Printer(std::FILE* f = stdout) : cfg_(nullptr), stream(f) {
         ctx_.ensure_style();
     }
 
@@ -2497,9 +2490,12 @@ class Printer {
     using Stream = std::variant<detail::NotNull<std::FILE*>,
                                 detail::NotNull<std::ostream*>>;
 
-    explicit Printer(const OutputConfig* config, Stream stream, detail::StyleContext ctx)
+    explicit Printer(const OutputConfig* config,
+                     Stream stream,
+                     detail::StyleContext ctx)
         : ctx_(std::move(ctx)),
-          cfg_(config), stream(stream){
+          cfg_(config),
+          stream(stream) {
         ctx_.drop_pending();
         ctx_.ensure_style();
     }
@@ -2526,14 +2522,14 @@ class Printer {
         if (ctx_.has_pending()) out = this->write_pending(out, style);
         else out = detail::write_style(out, style, cfg_);
 
-        [[maybe_unused]] // For some reason, GCC reports this variable as unused.
-        const AbsoluteStyle current_style = detail::merge(ctx_.current_abstyle(), style);
+        // For some reason, GCC reports this variable as unused.
+        [[maybe_unused]] const AbsoluteStyle current_style =
+            detail::merge(ctx_.current_abstyle(), style);
 
-        out = std::vformat_to(
-            out,
-            fmt.get(),
-            detail::make_format_args(
-                detail::process_fmt_arg(args, current_style, cfg_)...));
+        out = std::vformat_to(out,
+                              fmt.get(),
+                              detail::make_format_args(detail::process_fmt_arg(
+                                  args, current_style, cfg_)...));
 
         if (!style.is_null())
             out = detail::write_style(out, ctx_.current_abstyle(), cfg_);
@@ -2590,14 +2586,10 @@ class Printer {
 };
 
 /// Creates a `Printer` links to `stdout` and global output config.
-inline auto stdout_printer() -> Printer {
-    return Printer(config(), stdout);
-}
+inline auto stdout_printer() -> Printer { return Printer(config(), stdout); }
 
 /// Creates a `Printer` links to `stderr` and global output config.
-inline auto stderr_printer() -> Printer {
-    return Printer(config(), stderr);
-}
+inline auto stderr_printer() -> Printer { return Printer(config(), stderr); }
 
 #endif // DECO_ENABLE_STD_PRINT
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.30)
 
-option(DECOTERM_BUILD_TESTS "build tests" OFF)
-option(DECOTERM_BUILD_EXAMPLES "build examples" OFF)
+option(DECOTERM_BUILD_TESTS "build tests" ON)
+option(DECOTERM_BUILD_EXAMPLES "build examples" ON)
 
 project(decoterm
     VERSION 0.1.0
@@ -33,6 +33,7 @@ if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_link_libraries(decoterm INTERFACE stdc++exp)
 endif()
 
+include(cmake/DevCompileOptions.cmake)
 
 if(DECOTERM_BUILD_TESTS)
     enable_testing()
