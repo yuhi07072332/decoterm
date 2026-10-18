@@ -198,6 +198,7 @@ concept styled = is_styled<std::remove_cvref_t<T>>::value;
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief Represents a nullable terminal color.
+///
 /// @details
 /// A `Color` is similar to a tagged union with 4 color types.
 /// It stores a `ColorType` and a `uint8_t[3]` containing the data.
@@ -250,6 +251,7 @@ struct Color {
     constexpr auto type() const -> ColorType { return type_; }
 
     /// @brief Returns the raw data(`uint8_t[3]`) stored in this Color.
+    ///
     /// @details
     /// Usage:
     /// ```cpp
@@ -318,12 +320,13 @@ struct Color {
     detail::ColorData data_;
 };
 
-/// @brief Create a color from RGB
+/// Creates a color from RGB.
 constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
     return Color(r, g, b);
 }
 
-/// @brief Create a color from 0xRRGGBB
+/// @brief Creates a color from 0xRRGGBB.
+///
 /// @pre rgb <= 0xFFFFFF
 constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
@@ -335,7 +338,8 @@ constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format on
 }
 
-/// @brief Create a color from HSV
+/// @brief Creates a color from HSV.
+///
 /// @param h [0, 360): Hue of the color
 /// @param s [0, 255]: Saturation of the color
 /// @param v [0, 255]: Value (brightness) of the color
@@ -399,6 +403,7 @@ inline constexpr Color bright_white    = Color(15);
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief Represents a nullable terminal style.
+///
 /// @details
 /// * It contains 8 emphasis flags and 2 `Color`s for foreground color and
 /// background color.
@@ -435,6 +440,7 @@ struct Style {
     // ----- operators -----
 
     /// @brief Combines two styles.
+    ///
     /// @details
     /// It works like applying 2 ANSI escape sequences, meaning that
     /// `std::cout << style1 << style2` is roughly equivalent to
@@ -587,6 +593,7 @@ struct Style {
 };
 
 /// @brief A Style wrapper that represents an absolute style.
+///
 /// @details
 /// Style output normally has *additive semantics*, but this does't have.
 ///
@@ -636,6 +643,7 @@ struct AbsoluteStyle {
 };
 
 /// @brief Creates an AbsoluteStyle from a Style.
+///
 /// @details equivalent to `AbsoluteStyle(style)`
 constexpr auto abs(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
@@ -705,13 +713,20 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 // ║                         styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Creates a styled wrapper of a value.
-/// @details
-/// `std::cout << styled(s, v)` is equivalent to
-/// `std::cout << s << v << deco::reset;`.
+/// @brief Creates a styled wrapper aroune a value.
 ///
-/// @return An implementation-defined object that associates `value` with
-/// `style`. Lvalues are stored by reference and rvalues are stored by value.
+/// @details
+/// `std::cout << styled(value, style)` is equivalent to
+/// `std::cout << style << value << deco::reset;`.
+///
+/// @warning
+/// The returned object has **reference semantics** and must not outlive value.
+///
+/// **Example**
+/// ```cpp
+/// auto styled_int = styled(42, bold);  // BAD: dangling reference
+/// std::cout << styled(42, bold);       // OK
+/// ```
 template <typename T>
     requires(!detail::style_type<T>)
 constexpr auto styled(const T& value, Style style) {

@@ -441,12 +441,15 @@ inline auto config() -> OutputConfig& {
 ///
 /// - After writing a `styled` value, the previous style is restored instead of
 ///   resetting the style entirely.
+///
 /// - Writing `reset` restores the `base_style` and also clears the entire style
 ///   context.
+///
 /// - Styles are not emitted immediately. Instead, pending style changes are
 ///   emitted together with subsequent output when needed. This allows
 ///   consecutive style changes to be combined and reduces the amount of
 ///   generated output.
+///
 /// - The style stack can be controlled with the `push(style)` and `pop`
 ///   manipulators.
 ///
@@ -474,8 +477,10 @@ inline auto config() -> OutputConfig& {
 /// - The internal style context is valid only as long as styles are not written
 ///   to the underlying stream by other means during the lifetime of the
 ///   `OStream`. Call `ensure_style()` to restore consistency if this happens.
+///
 /// - This class is intended for single-threaded use. Concurrent access to the
 ///   same `OStream` object may cause data races.
+///
 /// - The `OStream` object must not outlive the underlying `std::ostream` or the
 ///   referenced `OutputConfig`, if any.
 class OStream {
