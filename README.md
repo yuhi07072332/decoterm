@@ -4,51 +4,50 @@ A simple header-only C++20 library for decorating terminal output.
 
 ## Quick Start
 
-See the full example: [quickstart.cpp](examples/quickstart.cpp)
+[std::print version](examples/quickstart-fmt.cpp)  
 
 ```cpp
-// -- 1. Basic Style Output
+// combine styles using `|`
+constexpr deco::Style info = deco::bold | deco::fg(deco::bright_cyan);
+constexpr deco::Style warning = deco::bold | deco::fg(deco::yellow);
+constexpr deco::Style error = deco::bold | deco::fg(deco::rgb(255, 85, 85));
 
-std::cout << bold << "Hello ,"
-          << fg(bright_green) << "world!"
-          << reset << "\n\n";
+// Output `Style`
+std::cout << info << "[INFO]" << deco::reset << " server started\n";
 
-// Style composition
-const Style warning_style = bold | fg(rgb(0xfff2b2));
+// Styled values similar to {fmt} library.
+// You can also use `value | style` instead of `styled(value, style)`.
+std::cout << deco::styled("[WARN]", warning) << " cache is nearly full\n";
+std::cout << ("[ERROR]" | error) << " request failed: " << (503 | deco::bold) << '\n';
 
-// Similar to fmt::styled() from fmtlib
-std::cout << styled("warning: ", warning_style)
-          << "Unused variable 'x'"
-          << styled("[-Wunused-variable]", warning_style)
-          << '\n';
+// `init()` will detect terminal environment and initialize the global config.
+deco::TerminalInfo term = deco::init();
 
-// -- 2. Advanced stateful output
+// Modify the global config to disable style output if stdout is redirected.
+deco::config().enable_style(term.is_stdout_tty);
 
-// StyledOstream: ostream wrapper with style output states.
-StyledOstream sout = styled_out(std::cout)
-    .set_base_style(bg(rgb(32, 32, 32)))
-    //Enable style output only when stdout is a TTY.
-    .enable_style(terminal::is_stdout_tty())
-    .enable_nesting();
+// `OStream`: a `std::ostream` wrapper that tracks style context and uses
+//  the global config.
+// `stdout_ostream()` wraps `std::cout` with the global config.
+deco::OStream log = deco::stdout_ostream();
 
-// Style nesting
-sout << "base style "
-          << fg(bright_blue) << "{ blue "
-              << italic << "{ italic blue "
-                  << fg(bright_red) << "{ italic red } "
-              << pop << "italic blue } "
-          << pop << "blue } "
-     << pop << "base style";
-
+// nested style
+log << deco::push(info)
+    << "[INFO] processed "
+    << (128 | deco::bold | deco::fg(deco::bright_green))
+    << " records in "
+    << deco::push(deco::underline | deco::fg(deco::yellow))
+    << 42 << " ms"
+    << deco::pop
+    << '\n'
+    << deco::pop;
 ```
 
 ## Features
 
 - Cross-platform support for Windows, Linux, macOS and other platforms
-- Simple API inspired by [{fmt}](https://github.com/fmtlib/fmt)
-- Powerful output state management
-- `std::format`, `std::print`(C++23) support
-- Performance comparable to raw ANSI escape code output
+- Simple API syntax
+- `std::format`, `std::print` support
 
 ## Getting Started
 
@@ -93,10 +92,6 @@ std::format and std::print support
 [formatters, StyledFormat]                                                  
 ```
 
-> [!NOTE]
-> Currently, `color_info.hpp` only provides color names and is not included by any other header.
-> It will contain terminal color information used by `output.hpp` to implement **Color fallback** in the future.
-
 ## Development
 
 ### Building examples and tests
@@ -131,5 +126,4 @@ pre-commit install
 - [ ] Color fallback
 - [ ] Hyperlink
 - [ ] Cmake package(maybe)
-- [ ] `fmtlib` support (maybe)
 - [ ] Windows API fallback for Windows 8 or lower (maybe)

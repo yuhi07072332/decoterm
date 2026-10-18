@@ -1,230 +1,307 @@
 #include <decoterm/format.hpp>
+
+#include "decoterm/output.hpp"
+#include "unit_test.hpp"
 #include <doctest.h>
 
 #include <format>
-#include <iterator>
 #include <sstream>
 #include <string>
 #include <version>
 
-
 // NOLINTBEGIN
 
-TEST_CASE("format: formatters") {
-    using namespace deco;
+using namespace deco;
+using doctest::test_suite;
 
-    CHECK(std::format("{}text{}", bold, reset)
-          == bold.to_escape() + std::string("text")
-                 + abs(null_style).to_escape());
-    CHECK(std::format("{}", styled(std::string("text"), fg(red)))
-          == fg(red).to_escape() + std::string("text")
-                 + abs(null_style).to_escape());
-    CHECK(std::format("{:04}", styled(42, bold))
-          == bold.to_escape() + std::string("0042")
-                 + abs(null_style).to_escape());
+TEST_CASE("BufAppender" * test_suite("BufAppender")) {
+    static_assert(
+        std::output_iterator<detail::BufAppender<char, 1>, const char&>);
+
+    detail::Buffer<char, 5> buf;
+
+    SUBCASE("without grow") {
+        detail::write_to(detail::BufAppender(buf), "hello");
+        CHECK(buf.size() == 5);
+        CHECK(std::string_view(buf.data(), buf.size())
+              == std::string_view("hello"));
+    }
+
+    SUBCASE("grow") {
+        detail::write_to(detail::BufAppender(buf), "hello world");
+        CHECK(buf.size() == 11);
+        CHECK(std::string_view(buf.data(), buf.size())
+              == std::string_view("hello world"));
+    }
 }
 
-TEST_CASE("format: StyledFormat: format_to()") {
-    using namespace deco;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+TEST_CASE("formatters" * test_suite("formatters")) {
+    static_assert(std::is_same_v<detail::formatter_t<const char (&)[5]>,
+                                 std::formatter<std::string_view>>);
+    static_assert(std::is_same_v<detail::formatter_t<int (&)[5]>,
+                                 std::formatter<int[5]>>);
 
-    std::string out;
+    std::string result;
+    std::ostringstream expected;
 
-    sfmt.format_to(std::back_inserter(out), "{} {}", "value", 42);
-    sfmt.format_to(std::back_inserter(out), " {}", "next");
+    SUBCASE("Style") {
+        result = std::format("{}text", bold | fg(yellow));
+        expected << (bold | fg(yellow)) << "text";
+        CHECK(result == expected.str());
+    }
 
-    CHECK(out
-          == abs(fg(white)).to_escape() + std::string("value 42 next"));
+    SUBCASE("AbsoluteStyle") {
+        result = std::format("{}text", abs(bold | fg(yellow)));
+        expected << abs(bold | fg(yellow)) << "text";
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("reset") {
+        result = std::format("{}text{}", bold, reset);
+        expected << bold << "text" << reset;
+        CHECK(result == expected.str());
+    }
+
+    SUBCASE("styled") {
+        result =
+            std::format("{:04}{}", styled(42, bold), styled("hello", italic));
+        expected << bold << "0042" << reset << italic << "hello" << reset;
+        CHECK(result == expected.str());
+    }
 }
 
-TEST_CASE("format: StyledFormat: format_to() with style") {
-    using namespace deco;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+TEST_CASE("format with style" * test_suite("format")) {
+    std::string result;
+    std::string expected;
 
-    std::string out;
+    SUBCASE("Style") {
+        result = format(bold, "bold text");
+        expected = std::format("{}bold text{}", bold, reset);
+        CHECK(result == expected);
+    }
 
-    sfmt.format_to(std::back_inserter(out), bold, "{}", "bold");
-    sfmt.format_to(std::back_inserter(out), "{}", "base");
+    SUBCASE("AbsoluteStyle") {
+        result = format(abs(bold), "abs bold text");
+        expected = std::format("{}abs bold text{}", abs(bold), reset);
+        CHECK(result == expected);
+    }
 
-    CHECK(out
-          == abs(fg(white)).to_escape() + bold.to_escape()
-                 + std::string("bold") + abs(fg(white)).to_escape()
-                 + std::string("base"));
+    SUBCASE("format with null style won't reset") {
+        result = format(null_style, "text");
+        expected = std::format("text");
+        CHECK(result == expected);
+    }
+
+    SUBCASE("styled() restore to specified style") {
+        result = format(fg(blue), "blue, {}, blue", styled("bold blue", bold));
+        expected = std::format("{}blue, {}bold blue{}, blue{}",
+                               fg(blue),
+                               bold,
+                               abs(fg(blue)),
+                               reset);
+        CAPTURE(result);
+        CAPTURE(expected);
+        CHECK(result == expected);
+    }
 }
 
-TEST_CASE("format: StyledFormat: format()") {
-    using namespace deco;
+TEST_CASE("print with style" * test_suite("print")) {
+    std::ostringstream os;
+    std::string expected;
 
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+    SUBCASE("print") {
+        print(os, bold, "bold text");
+        expected = std::format("{}bold text{}", bold, reset);
+        CHECK(os.str() == expected);
+    }
 
-    CHECK(sfmt.format("{}", "base")
-          == abs(fg(white)).to_escape() + std::string("base"));
-    CHECK(sfmt.format(italic, "{}", "italic")
-          == italic.to_escape() + std::string("italic")
-                 + abs(fg(white)).to_escape());
+    SUBCASE("println") {
+        println(os, bold, "bold text");
+        expected = std::format("{}bold text{}\n", bold, reset);
+        CHECK(os.str() == expected);
+    }
 }
 
-TEST_CASE("format: StyledFormat: format() with StyledRef") {
-    using namespace deco;
+TEST_CASE("Printer prints values" * test_suite("Printer")) {
+    OutputConfig ocfg;
+    std::ostringstream os;
+    std::string expected;
 
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
+    const Style base = italic;
+    Printer out(ocfg, os);
+    out.set_base_style(base);
 
-    CHECK(sfmt.format("base{}base", styled(std::string("bold"), bold))
-          == abs(fg(white)).to_escape() + std::string("base")
-                 + bold.to_escape() + std::string("bold")
-                 + abs(fg(white)).to_escape() + std::string("base"));
+    SUBCASE("values") {
+        out.print("hello, {}!", "world");
+        expected = std::format("{}hello, world!", abs(base));
+        CHECK(os.str() == expected);
+    }
+
+    SUBCASE("styled") {
+        out.print("The answer is {}.", 42 | fg(blue) | bold);
+        expected = std::format(
+            "{}The answer is {}42{}.", abs(base), fg(blue) | bold, abs(base));
+        CHECK(os.str() == expected);
+    }
+
+    SUBCASE("with style specified") {
+        out.println(bg(blue) | fg(black), "TEXT");
+        expected = std::format(
+            "{}TEXT{}\n", abs(base | bg(blue) | fg(black)), abs(base));
+        CHECK(out.current_style() == base);
+        CHECK(os.str() == expected);
+
+        os.str("");
+        os.clear();
+
+        out.println(bold, "first {} third", "second" | fg(blue));
+        expected = std::format("{}first {}second{} third{}\n",
+                               bold,
+                               fg(blue),
+                               abs(base | bold),
+                               abs(base));
+        CHECK(out.current_style() == base);
+        CHECK(os.str() == expected);
+    }
 }
 
-TEST_CASE("format: StyledFormat: StyledRef restores call style") {
-    using namespace deco;
-
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-
-    CHECK(
-        sfmt.format(fg(red), "before{}after", styled(std::string("bold"), bold))
-        == abs(fg(white)).to_escape() + fg(red).to_escape()
-               + std::string("before") + bold.to_escape() + std::string("bold")
-               + abs(fg(red)).to_escape() + std::string("after")
-               + abs(fg(white)).to_escape());
-}
-
-TEST_CASE("format: StyledFormat: StyledRef restores absolute call style") {
-    using namespace deco;
-
-    const Style base = fg(white) | bold;
-    StyledFormat sfmt = StyledFormat().set_base_style(base);
-
-    CHECK(sfmt.format(abs(fg(red)),
-                      "before{}after",
-                      styled(std::string("italic"), italic))
-          == abs(base).to_escape() + abs(fg(red)).to_escape()
-                 + std::string("before") + italic.to_escape()
-                 + std::string("italic") + abs(fg(red)).to_escape()
-                 + std::string("after") + abs(base).to_escape());
-}
-
-TEST_CASE("format: StyledFormat: disabled style with StyledRef") {
-    using namespace deco;
-
-    StyledFormat sfmt;
-    sfmt.enable_style(false);
-
-    CHECK(sfmt.format(fg(red), "A{}B", styled(std::string("x"), bold))
-          == "AxB");
-}
-
-TEST_CASE("format: StyledFormat: print()") {
-    using namespace deco;
+TEST_CASE("Printer follows OutputConfig" * test_suite("Printer")) {
+    OutputConfig ocfg;
 
     std::ostringstream os;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-    sfmt.set_stream(os);
+    std::string expected;
+    Printer out(ocfg, os);
 
-    sfmt.print("{} {}", "value", 42).print(" {}", "next");
+    SUBCASE("disable color") {
+        ocfg.enable_color(false);
 
-    CHECK(os.str()
-          == abs(fg(white)).to_escape() + std::string("value 42 next"));
+        out.set_base_style(dim).print(
+            bold, "text{}text", "text" | fg(blue) | italic);
+        expected = std::format("{}text{}text{}text{}",
+                               abs(dim | bold),
+                               italic,
+                               abs(dim | bold),
+                               abs(dim));
+        CHECK(os.str() == expected);
+    }
+
+    SUBCASE("disable style") {
+        ocfg.enable_style(false);
+        out.set_base_style(dim).print(
+            bold, "text{}text", "text" | fg(blue) | italic);
+        CHECK(os.str() == "texttexttext");
+    }
+
+    SUBCASE("color fallback") {
+
+        // TODO: Color16, Color256 fallback
+    }
 }
 
-TEST_CASE("format: StyledFormat: print() with style") {
-    using namespace deco;
-
+TEST_CASE("Printer without OutputConfig writes styles directly"
+          * test_suite("Printer")) {
     std::ostringstream os;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-    sfmt.set_stream(os);
+    Printer out(os);
 
-    sfmt.print(bold, "{}", "bold").print("{}", "base");
+    out.set_base_style(dim).print(
+        bold, "text{}text", "styled" | fg(blue) | italic);
 
-    CHECK(os.str()
-          == abs(fg(white)).to_escape() + bold.to_escape()
-                 + std::string("bold") + abs(fg(white)).to_escape()
-                 + std::string("base"));
+    const auto expected = std::format("{}text{}styled{}text{}",
+                                      abs(dim | bold),
+                                      fg(blue) | italic,
+                                      abs(dim | bold),
+                                      abs(dim));
+    CHECK(os.str() == expected);
 }
 
-TEST_CASE("format: StyledFormat: print() with StyledRef") {
-    using namespace deco;
+TEST_CASE("Printer clone_with starts from the cloned style state"
+          * test_suite("Printer")) {
+    std::ostringstream source_os;
+    std::ostringstream clone_os;
+    Printer source(source_os);
 
+    source.set_base_style(bold).push(italic);
+    auto clone = source.clone_with(clone_os);
+
+    clone.print("nested").pop().print("base");
+
+    const auto expected =
+        std::format("{}nested{}base", abs(bold | italic), abs(bold));
+    CHECK(source_os.str().empty());
+    CHECK(clone_os.str() == expected);
+    CHECK(source.current_style() == (bold | italic));
+    CHECK(clone.current_style() == bold);
+}
+
+TEST_CASE("Printer style operations" * test_suite("Printer")) {
+    OutputConfig ocfg;
     std::ostringstream os;
-    StyledFormat sfmt = StyledFormat().set_base_style(fg(white));
-    sfmt.set_stream(os);
+    Printer out(ocfg, os);
 
-    sfmt.print("base{}base", styled(std::string("bold"), bold));
+    out.set_base_style(bold);
+    CHECK(out.base_style() == bold);
+    CHECK(out.current_style() == bold);
 
-    CHECK(os.str()
-          == abs(fg(white)).to_escape() + std::string("base")
-                 + bold.to_escape() + std::string("bold")
-                 + abs(fg(white)).to_escape() + std::string("base"));
+    out.apply(dim);
+    CHECK(out.current_style() == (bold | dim));
+    CHECK(out.base_style() == bold);
+
+    out.push(italic);
+    CHECK(out.current_style() == (bold | dim | italic));
+
+    out.push(fg(red));
+    CHECK(out.current_style() == (bold | dim | italic | fg(red)));
+
+    out.apply(underline);
+    CHECK(out.current_style() == (bold | dim | italic | fg(red) | underline));
+
+    out.pop();
+    CHECK(out.current_style() == (bold | dim | italic));
+
+    out.reset();
+    CHECK(out.current_style() == bold);
+
+    CHECK(os.str().empty());
 }
 
-TEST_CASE("format: StyledFormat: print StyledRef context") {
-    using namespace deco;
+TEST_CASE("Printer merges styles" * test_suite("Printer")) {
+    SUBCASE("merge pending and specified style") {
+        OutputConfig ocfg;
+        std::ostringstream os;
+        Printer out(ocfg, os);
 
-    const Style base = fg(white) | bold;
-    std::ostringstream os;
-    StyledFormat sfmt = StyledFormat().set_base_style(base);
-    sfmt.set_stream(os);
+        out.set_base_style(bold).apply(italic).print(fg(red), "text");
 
-    sfmt.print(abs(fg(red)),
-               "before{}after",
-               styled(std::string("italic"), italic));
+        const auto expected = std::format(
+            "{}text{}", abs(bold | italic | fg(red)), abs(bold | italic));
+        CHECK(out.current_style() == (bold | italic));
+        CHECK(os.str() == expected);
+    }
 
-    CHECK(os.str()
-          == abs(base).to_escape() + abs(fg(red)).to_escape()
-                 + std::string("before") + italic.to_escape()
-                 + std::string("italic") + abs(fg(red)).to_escape()
-                 + std::string("after") + abs(base).to_escape());
-}
+    SUBCASE("merge styles across push, pop, and reset") {
+        OutputConfig ocfg;
+        std::ostringstream os;
+        Printer out(ocfg, os);
 
-TEST_CASE("format: StyledFormat: print disabled style with StyledRef") {
-    using namespace deco;
+        out.apply(bold)
+            .apply(fg(red))
+            .print("one")
+            .push(underline)
+            .apply(bg(blue))
+            .print("two")
+            .pop()
+            .print("three")
+            .reset()
+            .print("four");
 
-    std::ostringstream os;
-    StyledFormat sfmt;
-    sfmt.enable_style(false).set_stream(os);
-
-    sfmt.print(fg(red), "A{}B", styled(std::string("x"), bold));
-
-    CHECK(os.str() == "AxB");
-}
-
-TEST_CASE("format: StyledFormat: set stream(std::ostream)") {
-    using namespace deco;
-
-    std::ostringstream os1;
-    std::ostringstream os2;
-    StyledFormat sfmt;
-    sfmt.enable_style(false);
-
-    sfmt.set_stream(os1).print("{}", "one");
-    sfmt.set_stream(os2).print("{}", "two");
-
-    CHECK(os1.str() == "one");
-    CHECK(os2.str() == "two");
-}
-
-TEST_CASE("format: StyledFormat: style nesting") {
-    using namespace deco;
-
-    StyledFormat sfmt =
-        StyledFormat().set_base_style(fg(white)).enable_nesting(true);
-    std::string out;
-
-    sfmt.format_to(std::back_inserter(out), "{}", "base");
-    sfmt.push(bold).format_to(std::back_inserter(out), "{}", "bold");
-    sfmt.push(italic).format_to(std::back_inserter(out), fg(red), "{}", "red");
-    sfmt.pop().format_to(std::back_inserter(out), "{}", "bold2");
-    sfmt.reset().format_to(std::back_inserter(out), "{}", "base2");
-
-    const Style bold_white = fg(white) | bold;
-    const Style italic_bold_white = fg(white) | bold | italic;
-
-    CHECK(out
-          == abs(fg(white)).to_escape() + std::string("base")
-                 + abs(bold_white).to_escape() + std::string("bold")
-                 + abs(italic_bold_white).to_escape() + fg(red).to_escape()
-                 + std::string("red") + abs(italic_bold_white).to_escape()
-                 + abs(bold_white).to_escape() + std::string("bold2")
-                 + abs(fg(white)).to_escape() + std::string("base2"));
+        const auto expected = std::format("{}one{}two{}three{}four",
+                                          abs(bold | fg(red)),
+                                          underline | bg(blue),
+                                          abs(bold | fg(red)),
+                                          reset);
+        CHECK(out.current_style() == null_style);
+        CHECK(os.str() == expected);
+    }
 }
 
 // NOLINTEND

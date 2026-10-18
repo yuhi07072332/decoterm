@@ -5,3 +5,7 @@
 /.vs
 /.vscode
 /.cache
+/out
+
+__pycache__/
+

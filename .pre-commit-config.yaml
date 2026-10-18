@@ -4,7 +4,7 @@ repos:
 -   repo: local
     hooks:
     -   id: make-single-header
-        name: make single-header/decoterm.hpp
+        name: make "single-header/decoterm.hpp"
         language: python
-        entry: python scripts/make-single-header.py
+        entry: python scripts/make_single_header.py
         pass_filenames: false

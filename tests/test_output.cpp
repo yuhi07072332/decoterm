@@ -1,32 +1,20 @@
 #include <decoterm/style.hpp>
 #include <decoterm/output.hpp>
+
+#include "unit_test.hpp"
 #include <doctest.h>
 
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <string>
+#include <stdexcept>
+#include <utility>
 
 namespace {
 
-struct TestStyleOutputState
-    : public deco::StyleState,
-      public deco::StyleStateOption<TestStyleOutputState> {
-    using deco::StyleState::pop_style;
-    using deco::StyleState::push_style;
-    using deco::StyleState::reset_style;
+struct ReturnDifferentOStream {};
 
-    TestStyleOutputState() = default; // NOLINT
-
-    TestStyleOutputState(const StyleState& other)
-        : StyleState(other) {}
-};
-
-
-struct return_dirrerent_ostream_t {};
-
-auto operator<<(std::ostream& os, return_dirrerent_ostream_t) //NOLINT
-    -> std::ostream& { // NOLINT
+auto operator<<([[maybe_unused]] std::ostream& os, ReturnDifferentOStream) -> std::ostream& {
     return std::cerr;
 }
 
@@ -35,283 +23,373 @@ auto set_width_4(std::basic_ios<char>& ios) -> std::basic_ios<char>& {
     return ios;
 }
 
+deco::OutputConfig ocfg; // NOLINT
+
+auto pending_escape(const deco::detail::StyleContext& ctx) -> EscapeSeq {
+    return ctx.pending().visit(
+        [](deco::detail::style_type auto style) { return style.to_escape(); });
+}
+
 } // namespace
 
 // NOLINTBEGIN
 
-TEST_CASE("styled_out: StyleOutputState: copy from other type") {
-    using namespace deco;
+using namespace deco;
+using doctest::test_suite;
 
-    auto styled_os = StyledOstream(std::cout)
-                         .enable_style(false)
-                         .set_base_style(fg(blue))
-                         .enable_nesting(true);
-    styled_os << bold;
+TEST_CASE("Buffer opeartions" * test_suite("Buffer")) {
+    detail::Buffer<char, 3> buf;
 
-    TestStyleOutputState teststate(styled_os); // NOLINT
+    SUBCASE("push and pop") {
+        CHECK(buf.empty());
 
-    CHECK_FALSE(teststate.style_enabled());
-    CHECK_FALSE(teststate.context_tracking_enabled());
-    CHECK(teststate.nesting_enabled());
-    CHECK(teststate.base_style() == fg(blue));
-    CHECK(teststate.current_style().style == (fg(blue) | bold));
+        buf.push_back('a');
+        buf.push_back('b');
+        CHECK_FALSE(buf.empty());
+        CHECK(buf.back() == 'b');
+        CHECK(buf.size() == 2);
+
+        buf.pop_back();
+        CHECK(buf.back() == 'a');
+        buf.pop_back();
+        CHECK(buf.empty());
+    }
+
+    SUBCASE("pop empty buffer") {
+        buf.pop_back();
+        CHECK(buf.empty());
+    }
+
+    SUBCASE("clear") {
+        buf.push_back('a');
+        buf.push_back('b');
+        buf.clear();
+        CHECK(buf.empty());
+
+        buf.push_back('a');
+        CHECK(buf.back() == 'a');
+        buf.pop_back();
+        CHECK(buf.empty());
+    }
 }
 
-TEST_CASE("styled_out: StyleOutputState: options") {
-    using namespace deco;
+TEST_CASE("Buffer grows to heap" * test_suite("StyleStack")) {
+    detail::Buffer<char, 2> buf;
 
-    StyledOstream state(std::cout);
+    SUBCASE("grow once") {
+        for (char c : std::string_view("abc"))
+            buf.push_back(c);
+        CHECK(buf.back() == 'c');
 
-    CHECK(state.style_enabled());
-    CHECK_FALSE(state.context_tracking_enabled());
-    CHECK_FALSE(state.nesting_enabled());
-    CHECK(state.base_style() == null_style);
-    CHECK(state.current_style().style == null_style);
+        buf.pop_back();
+        CHECK(buf.back() == 'b');
+        buf.pop_back();
+        CHECK(buf.back() == 'a');
+        buf.pop_back();
+        CHECK(buf.empty());
+    }
+    SUBCASE("grow more than once") {
+        for (char c : "hello, world")
+            buf.push_back(c);
 
-    state.enable_style(false).enable_context_tracking(true).set_base_style(fg(blue));
-
-    CHECK_FALSE(state.style_enabled());
-    CHECK(state.context_tracking_enabled());
-    CHECK(state.base_style() == fg(blue));
-    CHECK(state.current_style().style == fg(blue));
-
-    state.enable_nesting(true);
-    CHECK(state.nesting_enabled());
-    CHECK(state.current_style().style == fg(blue));
-
-    state.enable_nesting(false);
-    CHECK_FALSE(state.nesting_enabled());
-    CHECK(state.current_style().style == fg(blue));
+        CHECK(std::string_view(buf.data()) == "hello, world");
+    }
 }
 
-TEST_CASE("styled_out: StyleOutputState: options after chained construction") {
-    using namespace deco;
+TEST_CASE("Buffer copy and move" * test_suite("StyleStack")) {
+    detail::Buffer<AbsoluteStyle, 3> local;
+    local.push_back(abs(bold));
+    local.push_back(abs(italic));
 
-    auto state = styled_out(std::cout)
-                     .enable_style(false)
-                     .set_base_style(fg(blue))
-                     .enable_nesting(true);
+    detail::Buffer<AbsoluteStyle, 2> heap;
+    heap.push_back(abs(bold));
+    heap.push_back(abs(italic));
+    heap.push_back(abs(underline));
 
-    state.enable_style(true)
-        .enable_context_tracking(false)
-        .set_base_style(fg(red))
-        .enable_nesting(false);
+    SUBCASE("copy") {
+        const auto local_copy = local;
+        local.back() = abs(underline);
+        CHECK(local_copy.back() == abs(italic));
 
-    CHECK(state.style_enabled());
-    CHECK_FALSE(state.context_tracking_enabled());
-    CHECK_FALSE(state.nesting_enabled());
-    CHECK(state.base_style() == fg(red));
-    CHECK(state.current_style().style == fg(red));
+        const auto heap_copy = heap;
+        heap.back() = abs(blink);
+        CHECK(heap_copy.back() == abs(underline));
+    }
+
+    SUBCASE("move") {
+        auto moved_local = std::move(local);
+        CHECK(moved_local.back() == abs(italic));
+        CHECK(local.empty());
+        local.push_back(abs(underline));
+        CHECK(local.back() == abs(underline));
+
+        auto moved_heap = std::move(heap);
+        CHECK(moved_heap.back() == abs(underline));
+        CHECK(heap.empty());
+        heap.push_back(abs(blink));
+        CHECK(heap.back() == abs(blink));
+    }
 }
 
-TEST_CASE("styled_out: StyleOutputState: single style state") {
-    using namespace deco;
+TEST_CASE("StyleContext manages pending style" * test_suite("StyleContext")) {
+    detail::StyleContext ctx;
+    ctx.set_base_style(bold);
+    CHECK(pending_escape(ctx) == to_escape(abs(bold)));
 
-    TestStyleOutputState state;
-    state.set_base_style(fg(blue));
+    static_cast<void>(ctx.consume_pending());
 
-    state.push_style(bold);
-    CHECK(state.current_style().style == (fg(blue) | bold));
+    SUBCASE("push()") {
+        ctx.push(italic);
+        ctx.push(fg(blue));
+        CHECK(ctx.current_abstyle() == abs(bold | italic | fg(blue)));
+        CHECK(pending_escape(ctx) == to_escape(italic | fg(blue)));
+    }
 
-    state.push_style(fg(red));
-    CHECK(state.current_style().style == (fg(red) | bold));
+    SUBCASE("pop() restores previous style") {
+        ctx.push(abs(italic));
+        ctx.push(fg(red));
+        CHECK(pending_escape(ctx) == to_escape(abs(italic | fg(red))));
 
-    state.pop_style();
-    CHECK(state.current_style().style == fg(blue));
+        ctx.pop();
+        CHECK(ctx.current_abstyle() == abs(italic));
+        CHECK(pending_escape(ctx) == to_escape(abs(italic)));
 
-    state.push_style(abs(fg(green)));
-    CHECK(state.current_style().style == fg(green));
+        ctx.pop();
+        CHECK(ctx.current_abstyle() == abs(bold));
+        CHECK(pending_escape(ctx) == to_escape(abs(bold)));
+    }
 
-    state.reset_style();
-    CHECK(state.current_style().style == fg(blue));
+    SUBCASE("reset() merges base style") {
+        ctx.push(italic);
+        CHECK(pending_escape(ctx) == to_escape(italic));
+
+        ctx.reset();
+        CHECK(ctx.current_abstyle() == abs(bold));
+        CHECK(pending_escape(ctx) == to_escape(abs(bold)));
+    }
+
+    SUBCASE("ensure_style()") {
+        ctx.push(italic);
+
+        ctx.ensure_style();
+        CHECK(pending_escape(ctx) == to_escape(abs(bold | italic)));
+    }
+
+    SUBCASE("set_current_style()") {
+        ctx.merge_current_style(italic);
+        CHECK(ctx.current_abstyle() == abs(bold | italic));
+        CHECK(pending_escape(ctx) == to_escape(italic));
+
+        ctx.merge_current_style(abs(fg(red)));
+        CHECK(ctx.current_abstyle() == abs(fg(red)));
+        CHECK(pending_escape(ctx) == to_escape(abs(fg(red))));
+    }
 }
 
-TEST_CASE("styled_out: StyleOutputState: nested style state") {
-    using namespace deco;
+TEST_CASE("StyleContext manages base style" * test_suite("StyleContext")) {
+    detail::StyleContext ctx;
+    ctx.set_base_style(bold);
 
-    TestStyleOutputState state;
-    state.set_base_style(fg(blue)).enable_nesting(true);
+    SUBCASE("merges when stack is empty") {
+        CHECK(ctx.base_style() == bold);
+        CHECK(ctx.current_abstyle() == abs(bold));
+        CHECK(pending_escape(ctx) == to_escape(abs(bold)));
+    }
 
-    state.push_style(bold);
-    CHECK(state.current_style().style == (fg(blue) | bold));
+    SUBCASE("don't merge when stack is not empty") {
+        ctx.push(italic);
 
-    state.push_style(italic);
-    CHECK(state.current_style().style == (fg(blue) | bold | italic));
+        static_cast<void>(ctx.consume_pending());
 
-    state.push_style(fg(red));
-    CHECK(state.current_style().style == (fg(red) | bold | italic));
-
-    state.pop_style();
-    CHECK(state.current_style().style == (fg(blue) | bold | italic));
-
-    state.pop_style();
-    CHECK(state.current_style().style == (fg(blue) | bold));
-
-    state.pop_style();
-    CHECK(state.current_style().style == fg(blue));
-
-    state.pop_style();
-    CHECK(state.current_style().style == fg(blue));
-
-    state.push_style(bold);
-    state.reset_style();
-    CHECK(state.current_style().style == fg(blue));
+        ctx.set_base_style(fg(red));
+        CHECK(ctx.base_style() == fg(red));
+        CHECK(ctx.current_abstyle() == abs(bold | italic));
+        CHECK_FALSE(ctx.has_pending());
+    }
 }
 
-TEST_CASE("styled_out: StyledOstream: write plain values") {
-    using namespace deco;
-
-    std::ostringstream os;
-    StyledOstream styled_os(os);
-
-    double d = 1.5;
-
-    styled_os << "value=" << 42 << ' ' << d;
-
-    CHECK(os.str()
-          == abs(null_style).to_escape() + std::string("value=42 1.5"));
-}
-
-TEST_CASE("styled_out: StyledOstream: call IO manipulator") {
-    using namespace deco;
-
+TEST_CASE("OStream writes values" * test_suite("OStream")) {
     std::ostringstream os;
     std::ostringstream expected;
-    StyledOstream styled_os(os);
 
-    styled_os << std::boolalpha << true << ' ' << std::noboolalpha << false
-              << ' ' << std::showbase << std::hex << 42 << ' '
-              << std::noshowbase << std::dec << 42 << ' ' << std::uppercase
-              << std::scientific << std::setprecision(3) << 1.5 << ' '
-              << std::nouppercase << std::fixed << std::setprecision(2) << 1.5
-              << ' ' << std::defaultfloat << std::showpos << 7 << ' '
-              << std::noshowpos << std::showpoint << 2.0 << ' '
-              << std::noshowpoint << std::setfill('.') << std::left
-              << std::setw(5) << 12 << ' ' << std::right << std::setw(5) << 12
-              << ' ' << std::internal << std::showpos << std::setw(5) << 12
-              << std::noshowpos << ' ' << set_width_4 << 9 << std::endl
-              << std::flush << std::ends;
+    OStream out(ocfg, os);
 
-    expected << std::boolalpha << true << ' ' << std::noboolalpha << false
-             << ' ' << std::showbase << std::hex << 42 << ' ' << std::noshowbase
-             << std::dec << 42 << ' ' << std::uppercase << std::scientific
-             << std::setprecision(3) << 1.5 << ' ' << std::nouppercase
-             << std::fixed << std::setprecision(2) << 1.5 << ' '
-             << std::defaultfloat << std::showpos << 7 << ' ' << std::noshowpos
-             << std::showpoint << 2.0 << ' ' << std::noshowpoint
-             << std::setfill('.') << std::left << std::setw(5) << 12 << ' '
-             << std::right << std::setw(5) << 12 << ' ' << std::internal
-             << std::showpos << std::setw(5) << 12 << std::noshowpos << ' '
-             << set_width_4 << 9 << std::endl
-             << std::flush << std::ends;
+    SUBCASE("plain values") {
+        out << "answer=" << 42 << ' ' << true;
+        expected << abs(null_style) << "answer=" << 42 << ' ' << true;
+        CHECK(os.str() == expected.str());
+    }
 
-    CHECK(os.str() == abs(null_style).to_escape() + expected.str());
+    SUBCASE("IO manipulators") {
+        out.ensure_style();
+        out << std::boolalpha << true << ' ' << std::noboolalpha << false << ' '
+            << std::showbase << std::hex << 42 << ' ' << std::noshowbase
+            << std::dec << 42 << ' ' << std::uppercase << std::scientific
+            << std::setprecision(3) << 1.5 << ' ' << std::nouppercase
+            << std::fixed << std::setprecision(2) << 1.5 << ' '
+            << std::defaultfloat << std::showpos << 7 << ' ' << std::noshowpos
+            << std::showpoint << 2.0 << ' ' << std::noshowpoint
+            << std::setfill('.') << std::left << std::setw(5) << 12 << ' '
+            << std::right << std::setw(5) << 12 << ' ' << std::internal
+            << std::showpos << std::setw(5) << 12 << std::noshowpos << ' '
+            << set_width_4 << 9 << std::endl
+            << std::flush << std::ends;
+        expected << abs(null_style) << std::boolalpha << true << ' '
+                 << std::noboolalpha << false << ' ' << std::showbase
+                 << std::hex << 42 << ' ' << std::noshowbase << std::dec << 42
+                 << ' ' << std::uppercase << std::scientific
+                 << std::setprecision(3) << 1.5 << ' ' << std::nouppercase
+                 << std::fixed << std::setprecision(2) << 1.5 << ' '
+                 << std::defaultfloat << std::showpos << 7 << ' '
+                 << std::noshowpos << std::showpoint << 2.0 << ' '
+                 << std::noshowpoint << std::setfill('.') << std::left
+                 << std::setw(5) << 12 << ' ' << std::right << std::setw(5)
+                 << 12 << ' ' << std::internal << std::showpos << std::setw(5)
+                 << 12 << std::noshowpos << ' ' << set_width_4 << 9 << std::endl
+                 << std::flush << std::ends;
+        CHECK(os.str() == expected.str());
+    }
+
 }
 
-TEST_CASE("styled_out: StyledOstream: throws if output operator returns different "
-          "ostream object") {
-    using namespace deco;
-
-    StyledOstream styled_os(std::cout);
-    CHECK_THROWS_AS(styled_os << return_dirrerent_ostream_t {},
-                    std::logic_error);
-}
-
-TEST_CASE("styled_out: StyledOstream: write styles") {
-    using namespace deco;
-
+TEST_CASE("OStream throws error if output operator returns different std::ostream" * test_suite("OStream")) {
     std::ostringstream os;
-    StyledOstream styled_os(os);
-
-    styled_os << fg(red) << "error" << reset;
-
-    CHECK(os.str()
-          == abs(null_style).to_escape() + fg(red).to_escape()
-                 + std::string("error") + abs(null_style).to_escape());
+    OStream out(ocfg, os);
+    CHECK_THROWS_AS(out << ReturnDifferentOStream {}, std::logic_error);
 }
 
-TEST_CASE("styled_out: StyledOstream: disable style output") {
-    using namespace deco;
-
+TEST_CASE("OStream writes styled" * test_suite("OStream")) {
     std::ostringstream os;
-    StyledOstream styled_os(os);
-    styled_os.enable_style(false);
+    std::ostringstream expected;
+    OStream out(ocfg, os);
 
-    styled_os << fg(red) << "error" << reset;
+    out.set_base_style(bold);
+    out << "before" << styled("inside", italic) << "after";
+    expected << abs(bold) << "before" << italic << "inside" << abs(bold)
+             << "after";
 
-    CHECK(os.str() == "error");
-    CHECK(styled_os.current_style().style == null_style);
+    CHECK(os.str() == expected.str());
 }
 
-TEST_CASE("styled_out: StyledOstream: restores nested styles") {
-    using namespace deco;
-
+TEST_CASE("OStream style operations" * test_suite("OStream")) {
     std::ostringstream os;
-    StyledOstream styled_os =
-        styled_out(os).set_base_style(fg(blue)).enable_nesting(true);
+    OStream out(ocfg, os);
 
-    styled_os << bold << "bold" << fg(red) << "red bold" << pop << "blue bold"
-              << pop << "blue";
+    out.set_base_style(bold);
+    CHECK(out.base_style() == bold);
+    CHECK(out.current_style() == bold);
 
-    CHECK(os.str()
-          == abs(fg(blue)).to_escape() + bold.to_escape()
-                 + std::string("bold") + fg(red).to_escape()
-                 + std::string("red bold")
-                 + abs(fg(blue) | bold).to_escape()
-                 + std::string("blue bold") + abs(fg(blue)).to_escape()
-                 + std::string("blue"));
+    out << dim;
+    CHECK(out.current_style() == (bold | dim));
+    CHECK(out.base_style() == bold);
+
+    out << pop;
+    CHECK(out.current_style() == bold);
+
+    out << push(italic);
+    CHECK(out.current_style() == (bold | italic));
+
+    out << push(fg(red));
+    CHECK(out.current_style() == (bold | italic | fg(red)));
+
+    out << dim;
+    CHECK(out.current_style() == (bold | italic | fg(red) | dim));
+
+    out << pop;
+    CHECK(out.current_style() == (bold | italic));
+
+    out << reset;
+    CHECK(out.current_style() == bold);
 }
 
-TEST_CASE("styled_out: StyledOstream: reset returns to base style") {
-    using namespace deco;
-
+TEST_CASE("OStream merges styles" * test_suite("OStream")) {
     std::ostringstream os;
-    StyledOstream styled_os =
-        styled_out(os).set_base_style(fg(blue)).enable_nesting(true);
+    std::ostringstream expected;
+    OStream out(ocfg, os);
 
-    styled_os << bold << "bold" << reset << "base";
+    SUBCASE("merges styles across push, pop, and reset") {
+        out << bold << fg(red) << "one" << push(underline) << bg(blue) << "two"
+            << pop << "three" << reset;
+        expected << abs(bold | fg(red)) << "one" << (underline | bg(blue))
+                 << "two" << abs(bold | fg(red)) << "three";
+        CHECK(os.str() == expected.str());
 
-    CHECK(os.str()
-          == abs(fg(blue)).to_escape() + bold.to_escape()
-                 + std::string("bold") + abs(fg(blue)).to_escape()
-                 + std::string("base"));
+        out << "four";
+        expected << reset << "four";
+        CHECK(os.str() == expected.str());
+    }
+
+    SUBCASE("merges pending style with styled value") {
+        out << bold << styled("text", italic);
+        expected << abs(bold | italic) << "text" << abs(bold);
+
+        CHECK(os.str() == expected.str());
+    }
 }
 
-TEST_CASE("styled_out: StyledOstream: context tracking") {
-    using namespace deco;
-
-    std::ostringstream os1;
-    std::ostringstream os2;
-    auto out1 = styled_out(os1).set_base_style(fg(blue));
-    auto out2 = styled_out(os2).set_base_style(fg(red));
-
-    out1 << "a" << "b";
-    out2 << "c";
-    out1 << "d" << styled("e", bold) << "f";
-
-    CHECK(os1.str()
-          == abs(fg(blue)).to_escape() + std::string("ab")
-                 + abs(fg(blue)).to_escape() + std::string("d")
-                 + bold.to_escape() + std::string("e")
-                 + abs(fg(blue)).to_escape() + std::string("f"));
-    CHECK(os2.str() == abs(fg(red)).to_escape() + std::string("c"));
-}
-
-TEST_CASE("styled_out: StyledOstream: only output base style first time if context "
-          "tracking is off") {
-    using namespace deco;
-
+TEST_CASE("OStream without OutputConfig writes styles directly" * test_suite("OStream")) {
     std::ostringstream os;
-    auto out =
-        StyledOstream(os).set_base_style(fg(blue));
+    OStream out(os);
 
-    out << "a" << "b" << bold << "c" << pop << "d" << reset << "e";
+    out.set_base_style(dim)
+        << bold << fg(blue) << "text" << push(italic) << "styled";
 
-    CHECK(os.str()
-          == abs(fg(blue)).to_escape() + std::string("ab")
-                 + bold.to_escape() + std::string("c")
-                 + abs(fg(blue)).to_escape() + std::string("d")
-                 + abs(fg(blue)).to_escape() + std::string("e"));
+    std::ostringstream expected;
+    expected << abs(dim | bold | fg(blue)) << "text" << italic << "styled";
+    CHECK(os.str() == expected.str());
+}
+
+TEST_CASE("OStream clone_with starts from the cloned style state" * test_suite("OStream")) {
+    std::ostringstream source_os;
+    std::ostringstream clone_os;
+    OStream source(source_os);
+
+    source.set_base_style(bold) << push(italic);
+    auto clone = source.clone_with(clone_os);
+
+    clone << "nested" << pop << "base";
+
+    std::ostringstream expected;
+    expected << abs(bold | italic) << "nested" << abs(bold) << "base";
+    CHECK(source_os.str().empty());
+    CHECK(clone_os.str() == expected.str());
+    CHECK(source.current_style() == (bold | italic));
+    CHECK(clone.current_style() == bold);
+}
+
+
+TEST_CASE("OStream follows OutputConfig" * test_suite("OStream")) {
+    std::ostringstream os;
+    std::ostringstream expected;
+
+    OutputConfig ocfg;
+    OStream out(ocfg, os);
+
+    SUBCASE("disable style") {
+        ocfg.enable_style(false);
+        CHECK_FALSE(ocfg.style_enabled());
+
+        out.set_base_style(dim)
+            << bold << "text" << fg(blue) << "text" << push(italic) << "text" << pop;
+        CHECK(out.current_style() == (dim | bold | fg(blue)));
+        CHECK(os.str() == "texttexttext");
+    }
+
+    SUBCASE("disable color") {
+        ocfg.enable_color(false);
+
+        out.set_base_style(dim)
+            << bold << "text" << fg(blue) << "text" << push(italic) << "text" << pop;
+        expected << abs(dim | bold) << "texttext" << italic << "text";
+
+        CHECK(out.current_style() == (dim | bold | fg(blue)));
+        CHECK(os.str() == expected.str());
+    }
+
+    SUBCASE("color fallback") {
+
+        // TODO: Color16, Color256 fallback
+    }
 }
 
 // NOLINTEND
