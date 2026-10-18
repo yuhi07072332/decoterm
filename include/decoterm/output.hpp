@@ -372,20 +372,29 @@ struct Pop {};
 // ║                      OutputConfig                       ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief Configures how styles and colors are emitted.
+///
+/// @details
+/// - This class is **thread-safe**. If an object holds a reference to an 
+///   `OutputConfig`, modifying the configuration concurrently does not cause a data race.
 class OutputConfig {
   public:
     OutputConfig() = default;
 
+    /// @brief Enables or disables color output. Default: `true`
+    /// @details When disabled, styles still emit their emphasis attributes.
     auto enable_color(bool enable = true) -> OutputConfig& {
         color_enabled_.store(enable, std::memory_order_relaxed);
         return *this;
     }
 
+    /// Enables or disables all style output. Default: `true`
     auto enable_style(bool enable = true) -> OutputConfig& {
         style_enabled_.store(enable, std::memory_order_relaxed);
         return *this;
     }
 
+    /// Sets the color capability of the output terminal. Default: `TrueColor`
     auto set_color_support(ColorSupport mode) -> OutputConfig& {
         color_support_.store(mode, std::memory_order_relaxed);
         return *this;
@@ -409,6 +418,7 @@ class OutputConfig {
     std::atomic<ColorSupport> color_support_ = ColorSupport::TrueColor;
 };
 
+/// Returns the global output config.
 inline auto config() -> OutputConfig& {
     static OutputConfig global_cfg;
     return global_cfg;
@@ -418,6 +428,53 @@ inline auto config() -> OutputConfig& {
 // ║                         OStream                         ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief A wrapper around `std::ostream` that tracks style context and can be
+/// configured through `OutputConfig`.
+///
+/// @details
+/// Unlike writing styles directly to a `std::ostream`, an `OStream` keeps track
+/// of the current style and related context internally. This results in several
+/// behavioral differences:
+///
+/// - After writing a `styled` value, the previous style is restored instead of
+///   resetting the style entirely.
+/// - Writing `reset` restores the `base_style` and also clears the entire style
+///   context.
+/// - Styles are not emitted immediately. Instead, pending style changes are
+///   emitted together with subsequent output when needed. This allows
+///   consecutive style changes to be combined and reduces the amount of
+///   generated output.
+/// - The style stack can be controlled with the `push(style)` and `pop`
+///   manipulators.
+///
+/// **Example**
+///
+/// ```cpp
+/// OStream os(std::cout);
+///
+/// // fg(blue) and bold is merged to fg(blue) | bold
+/// os << fg(blue) << bold << "text";
+///
+/// // same as `os << italic << "Hello" << abs(fg(blue) | bold) << "World"`
+/// os << styled("Hello", italic) << "World";
+///
+/// // nested style
+/// // same as `os << italic << "Hello" << abs(fg(blue) | bold) << "World`
+/// os << push(italic) << "Hello" << pop << "World";
+/// ```
+///
+/// An `OStream` may also reference an `OutputConfig` object to control how
+/// styles and colors are emitted. This includes enabling or disabling style
+/// and color output, as well as color fallback behavior.
+///
+/// @warning
+/// - The internal style context is valid only as long as styles are not written
+///   to the underlying stream by other means during the lifetime of the
+///   `OStream`. Call `ensure_style()` to restore consistency if this happens.
+/// - This class is intended for single-threaded use. Concurrent access to the
+///   same `OStream` object may cause data races.
+/// - The `OStream` object must not outlive the underlying `std::ostream` or the
+///   referenced `OutputConfig`, if any.
 class OStream {
   public:
     explicit OStream(std::ostream& ostream) 
@@ -437,6 +494,7 @@ class OStream {
         return *this;
     }
 
+    /// Emits the current style.
     auto ensure_style() -> OStream& {
         ctx_.ensure_style();
         return *this;
@@ -448,8 +506,10 @@ class OStream {
 
     [[nodiscard]] auto base_style() const -> Style { return ctx_.base_style(); }
 
+    /// Returns the underlying `std::ostream`.
     [[nodiscard]] auto ostream() const -> std::ostream& { return *ostream_; }
 
+    /// Clones this `OStream` with different underlying `std::ostream`.
     [[nodiscard]] auto clone_with(std::ostream& new_ostream) const -> OStream {
         return OStream(cfg_, new_ostream, ctx_);
     }

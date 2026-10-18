@@ -114,6 +114,7 @@ struct TerminalInfo {
     bool no_color;
 };
 
+/// Detects the current terminal environment and returns the result as a `TerminalInfo`.
 [[nodiscard]]
 inline auto terminal_info() -> TerminalInfo {
     return {
@@ -124,9 +125,20 @@ inline auto terminal_info() -> TerminalInfo {
     };
 }
 
-/// @brief Configures the global output based on the terminal environment.
+/// @brief Configures the global output config based on the current terminal
+/// environment.
 ///
-/// @throws (Windows) `std::runtime_error` if it failed to enable virtual terminal mode
+/// @details
+/// - If the `NO_COLOR` environment variable is set, color output is disabled.
+///   (Style output remains enabled)
+/// -  `color_support` are set according to the detected `ColorSupport`.
+///
+/// On Windows, this function also attempts to enable Virtual Terminal (VT)
+/// processing for `stdout` and `stderr` if they are attached to a terminal.
+///
+/// @return The detected `TerminalInfo`.
+///
+/// @throws std::runtime_error If enabling VT processing fails on Windows.
 inline auto init() -> TerminalInfo {
     auto info = terminal_info();
     auto& cfg = config();

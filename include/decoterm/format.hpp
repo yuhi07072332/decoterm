@@ -382,6 +382,16 @@ inline void println(std::ostream& os,
 // ║                         Printer                         ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief Provides functionality similar to `deco::OStream`, but uses a
+/// `std::print`-style API instead of stream insertion.
+///
+/// @details
+/// - Use the `push()` and `pop()` member functions to manage the style stack,
+///   rather than manipulators.
+/// - `style` and `reset` cannot be used as format arguments because `Printer`
+///   cannot track them and update its internal style context accordingly.
+///   Use `apply()` to modify the current style and `reset()` to reset the style
+///   context instead.
 class Printer {
   public:
     explicit Printer(std::ostream& os)
@@ -413,11 +423,13 @@ class Printer {
         return *this;
     }
 
+    /// Emits the current style.
     auto ensure_style() -> Printer& {
         ctx_.ensure_style();
         return *this;
     }
 
+    /// Changes the current style.
     auto apply(Style s) -> Printer& {
         ctx_.merge_current_style(s);
         return *this;
@@ -449,10 +461,12 @@ class Printer {
 
     [[nodiscard]] auto base_style() const -> Style { return ctx_.base_style(); }
 
+    /// Clones this `Printer` with different underlying stream.
     [[nodiscard]] auto clone_with(std::ostream& os) const -> Printer {
         return Printer(cfg_, &os, ctx_);
     }
 
+    /// Clones this `Printer` with different underlying stream.
     [[nodiscard]] auto clone_with(std::FILE* f) const -> Printer {
         return Printer(cfg_, f, ctx_);
     }
