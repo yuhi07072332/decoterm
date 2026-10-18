@@ -2,7 +2,7 @@
 // │        THIS FILE IS AUTO GENERATED, DO NOT EDIT!        │
 // └                                                         ┘
 
-// Terminal styling library for C++20
+// C++20 Terminal styling library
 //
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Yuhi0707
@@ -32,16 +32,16 @@
 #include <cassert>
 #include <charconv>
 #include <cmath>
-#include <cstring>
-#include <memory>
 #include <concepts>
 #include <cstdint>
 #include <iterator>
+#include <memory>
 #include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <version>
 
 #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
@@ -55,66 +55,43 @@ namespace deco {
 struct Style;
 struct AbsoluteStyle;
 
+/// @see Color
 enum class ColorType : uint8_t {
-    null = 0,
-    default_color,
-    terminal_color,
-    true_color
+    Null = 0,
+    DefaultColor,
+    TerminalColor,
+    TrueColor,
 };
 
-namespace concepts {
-
-// clang-format off
-
-// Whether remove_cvref_t<StyleT> is a Style or an AbsoluteStyle.
-// The requires expression describes the common interface of both types.
-template <typename StyleT>
-concept style = 
-    (std::is_same_v<std::remove_cvref_t<StyleT>, Style>
-    || std::is_same_v<std::remove_cvref_t<StyleT>, AbsoluteStyle>)
-    && requires(const std::remove_cvref_t<StyleT>& style,
-                const std::remove_cvref_t<StyleT>& other_style,
-                char* out) {
-    { style.is_null() } -> std::same_as<bool>;
-    { style == other_style } -> std::same_as<bool>;
-    { style != other_style } -> std::same_as<bool>;
-    { style.to_escape(out) } -> std::same_as<char*>;
-};
-
-// clang-format on
-
-// Whether `T` has `operator<<(std::ostream&, const T&)`
 template <typename T>
 concept ostream_outputable = requires(std::ostream& os, const T& value) {
     { os << value } -> std::same_as<std::ostream&>;
 };
 
-} // namespace concepts
-
-template <typename, concepts::style>
-struct StyledRef;
-
 namespace detail {
 
-template <typename T>
-struct is_styled_ref : std::false_type {};
+// clang-format off
 
-template <typename T, concepts::style StyleT>
-struct is_styled_ref<StyledRef<T, StyleT>> : std::true_type {};
+/// Whether remove_cvref_t<StyleT> is a Style or an AbsoluteStyle.
+/// The requires expression describes the common interface of both types.
+template <typename S>
+concept style_type = (std::is_same_v<std::remove_cvref_t<S>, Style>
+        || std::is_same_v<std::remove_cvref_t<S>, AbsoluteStyle>)
+    && requires(
+        const std::remove_cvref_t<S>& style,
+        const std::remove_cvref_t<S>& other_style,
+        char* out
+    ) {
+        { style.is_null() } -> std::same_as<bool>;
+        { style == other_style } -> std::same_as<bool>;
+        { style != other_style } -> std::same_as<bool>;
+        { style.to_escape(out) } -> std::same_as<char*>;
+    };
 
-} // namespace detail
-
-namespace concepts {
-
-// Whether 'remove_cvref_t<T>' is a StyledRef.
-template <typename T>
-concept styled_ref = detail::is_styled_ref<std::remove_cvref_t<T>>::value;
-
-} // namespace concepts
-
-namespace detail {
+// clang-format on
 
 using ColorData = std::array<uint8_t, 3>;
+
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
@@ -123,7 +100,7 @@ inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
     "36", "37", "90",
     "91", "92", "93",
     "94", "95", "96",
-    "97"
+    "97",
 };
 
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_BG {
@@ -132,13 +109,13 @@ inline constexpr std::array<std::string_view, 16> SGR_PARAM_BG {
     "46", "47", "100",
     "101", "102", "103",
     "104", "105", "106",
-    "107"
+    "107",
 };
 
 inline constexpr std::array<std::string_view, 8> SGR_PARAM_STYLE {
     "1" /*bold*/,           "2"  /*dim*/,           "3" /*italic*/,
     "4" /*underline*/,      "5"  /*blink*/,         "7" /*invert*/,
-    "9" /*strikethrough*/,  "21" /*double underline*/
+    "9" /*strikethrough*/,  "21" /*double underline*/,
 };
 // clang-format on
 
@@ -159,56 +136,106 @@ constexpr auto write_to(OutputIt out, uint8_t value) {
     return out;
 }
 
-template <std::output_iterator<const char&> OutputIt>
-constexpr auto color_to_sgr_params(OutputIt out,
-                                   bool is_bg,
-                                   ColorType type,
-                                   ColorData data) -> OutputIt {
+template <bool BG, std::output_iterator<const char&> OutputIt>
+constexpr auto color_to_sgr_params(OutputIt out, ColorType type, ColorData data)
+    -> OutputIt {
     switch (type) {
-    case ColorType::null:
-        return out;
-    case ColorType::default_color: {
-        if (is_bg) out = write_to(out, "49");
-        else out = write_to(out, "39");
-        return out;
-    }
-    case ColorType::terminal_color: {
-        uint8_t index = data[0];
-        if (index < 16) {
-            out = write_to(out,
-                           is_bg ? SGR_PARAM_BG[index] : SGR_PARAM_FG[index]);
-        } else {
-            out = write_to(out, is_bg ? "48;5;" : "38;5;");
-            out = write_to(out, index);
+        case ColorType::Null:
+            return out;
+        case ColorType::DefaultColor: {
+            if constexpr (BG) return write_to(out, "49");
+            else return write_to(out, "39");
         }
-        return out;
+        case ColorType::TerminalColor: {
+            uint8_t index = data[0];
+            if (index < 16) {
+                if constexpr (BG) return write_to(out, SGR_PARAM_BG[index]);
+                else return write_to(out, SGR_PARAM_FG[index]);
+            } else {
+                if constexpr (BG) out = write_to(out, "48;5;");
+                else out = write_to(out, "38;5;");
+                out = write_to(out, index);
+            }
+            return out;
+        }
+        case ColorType::TrueColor: {
+            auto [r, g, b] = data;
+            if constexpr (BG) out = write_to(out, "48;2;");
+            else out = write_to(out, "38;2;");
+            out = write_to(out, r);
+            *out++ = ';';
+            out = write_to(out, g);
+            *out++ = ';';
+            out = write_to(out, b);
+            return out;
+        }
     }
-    case ColorType::true_color: {
-        auto [r, g, b] = data;
-        out = write_to(out, is_bg ? "48;2;" : "38;2;");
-        out = write_to(out, r);
-        *out++ = ';';
-        out = write_to(out, g);
-        *out++ = ';';
-        out = write_to(out, b);
-        return out;
-    }
-    default:
-        return out;
-    }
-    return out;
+    assert(false);
+    return out; // unreachable
 }
 
-/* ----- StyledRef ----- */
+/// A wrapper that stores rvalue or references lvalue.
+template <typename T>
+struct ValueOrRef {
+    explicit constexpr ValueOrRef(T value)
+        requires std::move_constructible<T>
+        : value(std::move(value)) {}
 
+    explicit constexpr ValueOrRef(const T& value)
+        requires(!std::move_constructible<T>
+                 && std::constructible_from<T, const T&>)
+        : value(value) {}
 
-template <concepts::styled_ref StyledRefT>
-consteval void check_styled_ref() {
-    static_assert(!std::is_lvalue_reference_v<StyledRefT>,
-                  "deco::detail::StyledRef: Cannot pass StyledRef as an lvalue "
-                  "reference.");
-}
+    constexpr auto get() const -> T& { return value; }
 
+  private:
+    mutable T value;
+};
+
+template <typename T>
+struct ValueOrRef<T&> {
+    explicit constexpr ValueOrRef(T& ref) : ptr(std::addressof(ref)) {}
+
+    constexpr auto get() const -> T& { return *ptr; }
+
+  private:
+    mutable T* ptr;
+};
+
+template <typename T>
+    requires(!std::is_lvalue_reference_v<T>)
+ValueOrRef(T&& value) -> ValueOrRef<std::remove_cvref_t<T>>;
+
+template <typename T>
+ValueOrRef(T& ref) -> ValueOrRef<T&>;
+
+template <typename Ret, typename... Args>
+ValueOrRef(Ret(Args...)) -> ValueOrRef<std::decay_t<Ret(Args...)>>;
+
+/// A `ValueOrRef` with a style.
+template <style_type StyleT, typename T>
+struct Styled {
+    using value_type = T;
+
+    constexpr Styled(ValueOrRef<T> value, StyleT style)
+        : store_(std::move(value)),
+          style_(style) {}
+
+    constexpr auto value() const -> T& { return store_.get(); }
+    constexpr auto style() const -> StyleT { return style_; }
+
+  private:
+    ValueOrRef<T> store_;
+    StyleT style_;
+};
+
+template <typename T> struct is_styled : std::false_type {};
+
+template <typename S, typename T>
+struct is_styled<Styled<S, T>> : std::true_type {};
+
+template <typename T>
+concept styled = is_styled<std::remove_cvref_t<T>>::value;
 
 } // namespace detail
 
@@ -217,20 +244,21 @@ consteval void check_styled_ref() {
 // ╚═════════════════════════════════════════════════════════╝
 
 /// @brief Represents a nullable terminal color.
-/// @details A `Color` is similar to a tagged union with 4 color types.
+/// @details
+/// A `Color` is similar to a tagged union with 4 color types.
 /// It stores a `ColorType` and a `uint8_t[3]` containing the data.
 ///
-/// The meaning of each type:
-/// * `null` => A null color. It emits no ANSI escape sequence.
+/// Color types:
+/// * `Null` => A null color. It emits no ANSI escape sequence.
 ///
-/// * `default_color` => The terminal's default color.
+/// * `DefaultColor` => The terminal's default color.
 ///
-/// * `terminal_color` => System 16 color or XTerm 256 color.
+/// * `TerminalColor` => System 16 color or XTerm 256 color.
 ///     `data[0]` stores the index [0, 255], with indices 0-15 corresponding
 ///     to the system 16 colors.
 ///     (See https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit)
 ///
-/// * `true_color` => A 24-bit RGB color.
+/// * `TrueColor` => A 24-bit RGB color.
 ///     `data[0]`, `data[1]`, `data[2]` store the red, green and blue components
 ///     respectively.
 struct Color {
@@ -239,79 +267,90 @@ struct Color {
     /* ----- constructors ----- */
 
     static constexpr auto default_color() -> Color {
-        return Color(ColorType::default_color, {0, 0, 0});
+        return Color(ColorType::DefaultColor, {0, 0, 0});
     }
 
     static constexpr auto null_color() -> Color {
-        return Color(ColorType::null, {0, 0, 0});
+        return Color(ColorType::Null, {0, 0, 0});
     }
 
-    /// @brief Create a color implicitly from an index in [0, 255]
+    /// Create a color implicitly from an index in [0, 255]
     constexpr Color(uint8_t index)
-        : type_(ColorType::terminal_color),
+        : type_(ColorType::TerminalColor),
           data_({index, 0, 0}) {}
 
     constexpr explicit Color(uint8_t r, uint8_t g, uint8_t b)
-        : type_(ColorType::true_color),
+        : type_(ColorType::TrueColor),
           data_({r, g, b}) {}
+
+    /* ----- observe ----- */
 
     constexpr auto operator==(const Color&) const -> bool = default;
     constexpr auto operator!=(const Color&) const -> bool = default;
 
     /// equivalent to `!is_null()`
-    constexpr explicit operator bool() const { return !is_null(); }
+    constexpr explicit operator bool() const { return !this->is_null(); }
 
     /// Whether this Color's type is `ColorType::null`
-    constexpr auto is_null() const -> bool { return type_ == ColorType::null; }
+    constexpr auto is_null() const -> bool { return type_ == ColorType::Null; }
     constexpr auto type() const -> ColorType { return type_; }
 
     /// @brief Returns the raw data(`uint8_t[3]`) stored in this Color.
-    /// @details Usage:
+    /// @details
+    /// Usage:
     /// ```cpp
     /// Color col = rgb(32, 64, 128);
-    /// if (col.type() == ColorType::true_color) {
+    /// if (col.type() == ColorType::TrueColor) {
     ///     auto [r, g, b] = col.data();
     ///     /* ... */
-    /// } else if (col.type() == ColorType::terminal_color) {
+    /// } else if (col.type() == ColorType::TerminalColor) {
     ///     uint8_t index = col.data()[0];
     ///     /* ... */
     /// }
     /// ```
     constexpr auto data() const -> const detail::ColorData& { return data_; }
 
-    [[nodiscard]]
-    auto to_escape(bool is_bg) const -> std::string {
+    /* ----- output ----- */
+
+    [[nodiscard]] auto to_escape_fg() const -> std::string {
         std::string esc = "\x1b[";
-        detail::color_to_sgr_params(
-            std::back_inserter(esc), is_bg, type_, data_);
+        detail::color_to_sgr_params<false>(
+            std::back_inserter(esc), type_, data_);
         esc.push_back('m');
         return esc;
     }
 
-    [[nodiscard]]
-    auto debug_string() const -> std::string {
+    [[nodiscard]] auto to_escape_bg() const -> std::string {
+        std::string esc = "\x1b[";
+        detail::color_to_sgr_params<true>(
+            std::back_inserter(esc), type_, data_);
+        esc.push_back('m');
+        return esc;
+    }
+
+    [[nodiscard]] auto debug_string() const -> std::string {
         switch (type_) {
-        case ColorType::null:
-            return "[null color]";
-        case ColorType::default_color:
-            return "[Default]";
-        case ColorType::terminal_color: {
-            std::string debug("[type=TerminalColor");
-            return debug.append(", index=")
-                .append(std::to_string(data_[0]))
-                .append("]");
+            case ColorType::Null:
+                return "[null_color]";
+            case ColorType::DefaultColor:
+                return "[default_color]";
+            case ColorType::TerminalColor: {
+                return std::string("[terminal_color: ")
+                    .append(std::to_string(data_[0]))
+                    .append("]");
+            }
+            case ColorType::TrueColor: {
+                return std::string("[true_color: ")
+                    .append(std::to_string(data_[0]))
+                    .append(", ")
+                    .append(std::to_string(data_[1]))
+                    .append(", ")
+                    .append(std::to_string(data_[2]))
+                    .append("]");
+            }
         }
-        case ColorType::true_color: {
-            std::string debug("[type=TrueColor");
-            return debug.append(", rgb=")
-                .append(std::to_string(data_[0]))
-                .append(", ")
-                .append(std::to_string(data_[1]))
-                .append(", ")
-                .append(std::to_string(data_[2]))
-                .append("]");
-        }
-        }
+        assert(false);
+        return ""; // unreachable
     }
 
   private:
@@ -336,9 +375,9 @@ constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
     if (hex > 0xffffff) 
         throw std::invalid_argument("deco::rgb(): rgb > 0xffffff");
-    return Color((hex >> 16) & 0xFF,
-                    (hex >> 8) & 0xFF,
-                    hex & 0xFF);
+    return Color((hex >> 16u) & 0xFFu,
+                    (hex >> 8u) & 0xFFu,
+                    hex & 0xFFu);
     // clang-format on
 }
 
@@ -351,7 +390,7 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     -> Color {
     // clang-format off
 
-    if (h < 0 || h >= 360) throw std::invalid_argument(
+    if (h >= 360) throw std::invalid_argument(
         "deco::hsv(): h is not in range [0, 360)");
 
     float hp = h / 60.f;                               //NOLINT
@@ -359,9 +398,9 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     float vp = v / 255.0f;                             //NOLINT
 
     float f = hp - std::floor(hp);
-    uint8_t p = std::round(vp * (1 - sp) * 255);             //NOLINT
-    uint8_t q = std::round(vp * (1 - (f * sp)) * 255);       //NOLINT
-    uint8_t t = std::round(vp * (1 - ((1 - f) * sp)) * 255); //NOLINT
+    uint8_t p = static_cast<uint8_t>(std::round(vp * (1 - sp) * 255));             //NOLINT
+    uint8_t q = static_cast<uint8_t>(std::round(vp * (1 - (f * sp)) * 255));       //NOLINT
+    uint8_t t = static_cast<uint8_t>(std::round(vp * (1 - ((1 - f) * sp)) * 255)); //NOLINT
 
     switch (h / 60) {
         case 0 : return Color(v, t, p);
@@ -405,11 +444,6 @@ inline constexpr Color bright_white    = Color(15);
 // ║                          Style                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-struct style_reset_t {};
-
-/// @brief IO manipulator that resets the terminal style.
-inline constexpr style_reset_t reset;
-
 /// @brief Represents a nullable terminal style.
 /// @details
 /// * It contains 8 emphasis flags and 2 `Color`s for foreground color and
@@ -419,35 +453,36 @@ inline constexpr style_reset_t reset;
 struct Style {
     // clang-format off
     enum Emphasis : uint8_t {                              //NOLINT
-        none                = 0,
-        bold                = 1 << 0,
-        dim                 = 1 << 1,
-        italic              = 1 << 2,
-        underline           = 1 << 3,
-        blink               = 1 << 4,
-        invert              = 1 << 5,
-        strikethrough       = 1 << 6,
-        underline_double    = 1 << 7,
+        None                = 0,
+        Bold                = 1u << 0u,
+        Dim                 = 1u << 1u,
+        Italic              = 1u << 2u,
+        Underline           = 1u << 3u,
+        Blink               = 1u << 4u,
+        Invert              = 1u << 5u,
+        Strikethrough       = 1u << 6u,
+        UnderlineDouble     = 1u << 7u,
     };
 
     static constexpr std::size_t MAX_ESCAPE_SEQ_SIZE =
-        ((Color::MAX_ESCAPE_SEQ_SIZE - 3 + 1) * 2) + 14 + 3;
+        ((Color::MAX_ESCAPE_SEQ_SIZE - 3 + 1) * 2) + 16 + 3;
 
     // clang-format on
 
-    constexpr Style(uint8_t emphasis = 0,
-                    Color fg = null_color,
-                    Color bg = null_color)
+    explicit constexpr Style(uint8_t emphasis = 0,
+                             Color fg = null_color,
+                             Color bg = null_color)
         : fg_data_(fg.data()),
           bg_data_(bg.data()),
-          color_types_((static_cast<uint8_t>(fg.type()) << 4)
-                       | static_cast<uint8_t>(bg.type())),
+          color_types_((static_cast<unsigned int>(fg.type()) << 4u)
+                       | static_cast<unsigned int>(bg.type())),
           emphasis_(emphasis) {}
 
     // ----- operators -----
 
     /// @brief Combines two styles.
-    /// @details It works like applying 2 ANSI escape sequences, meaning that
+    /// @details
+    /// It works like applying 2 ANSI escape sequences, meaning that
     /// `std::cout << style1 << style2` is roughly equivalent to
     /// `std::cout << (style1 | style2)`.
     ///
@@ -473,119 +508,118 @@ struct Style {
         return combined;
     }
 
-    /// @brief
     constexpr void operator|=(Style rhs) { *this = *this | rhs; }
 
     constexpr auto operator==(const Style&) const -> bool = default;
     constexpr auto operator!=(const Style&) const -> bool = default;
 
-    /// @brief equivalent to !is_null()
-    constexpr explicit operator bool() const { return !is_null(); }
+    /// equivalent to !is_null()
+    constexpr explicit operator bool() const { return !this->is_null(); }
 
     // ----- observe -----
 
     constexpr auto emphasis() const -> uint8_t { return emphasis_; }
-    constexpr auto fg() const -> Color { return {fg_type(), fg_data_}; }
-    constexpr auto bg() const -> Color { return {bg_type(), bg_data_}; }
+    constexpr auto fg() const -> Color { return {this->fg_type(), fg_data_}; }
+    constexpr auto bg() const -> Color { return {this->bg_type(), bg_data_}; }
 
+    /// Will `to_escape()` return a empty string?
     constexpr auto is_null() const -> bool {
-        return emphasis_ == none && fg_null() && bg_null();
+        return emphasis_ == None && this->fg_null() && this->bg_null();
     }
 
     // ----- output -----
 
-    /// @brief Writes SGR parameters to the output iterator.
-    /// @details format: "P1;P2;...;Pn"
+    /// Writes SGR parameters to the output iterator in the form "P1;P2;...;Pn".
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_sgr_params(OutputIt out) const -> OutputIt {
         using namespace detail;
-        if (is_null()) return out;
         bool needs_separate = false;
 
-        if (!fg_null()) {
-            out = detail::color_to_sgr_params(out, false, fg_type(), fg_data_);
+        if (!this->fg_null()) {
+            out = color_to_sgr_params<false>(out, this->fg_type(), fg_data_);
             needs_separate = true;
         }
-        if (!bg_null()) {
+        if (!this->bg_null()) {
             if (needs_separate) *out++ = ';';
-            out = detail::color_to_sgr_params(out, true, bg_type(), bg_data_);
+            out = color_to_sgr_params<true>(out, this->bg_type(), bg_data_);
             needs_separate = true;
         }
 
-        if (!emphasis_) return out;
         uint8_t current_flag = emphasis_;
         int count = 0;
         do {
-            if (current_flag & 1) {
+            if (current_flag & 1u) {
                 if (needs_separate) *out++ = ';';
                 out = write_to(out, SGR_PARAM_STYLE[count]);
                 needs_separate = true;
             }
             count++;
-            current_flag >>= 1;
+            current_flag >>= 1u;
         } while (current_flag);
         return out;
     }
 
-    /// @brief Writes ANSI escape sequence to the output iterator.
+    /// Writes ANSI escape sequence to the output iterator.
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
-        if (is_null()) return out;
+        if (this->is_null()) return out;
 
         out = detail::write_to(out, "\x1b[");
-        out = to_sgr_params(out);
+        out = this->to_sgr_params(out);
         *out++ = 'm';
         return out;
     }
 
-    /// @brief Writes ANSI escape sequence to a string.
-    [[nodiscard]]
-    auto to_escape() const -> std::string {
+    /// Writes ANSI escape sequence to a string.
+    [[nodiscard]] auto to_escape() const -> std::string {
         std::string esc;
-        to_escape(std::back_inserter(esc));
+        this->to_escape(std::back_inserter(esc));
         return esc;
     }
 
-    [[nodiscard]]
-    auto debug_string() const -> std::string {
+    [[nodiscard]] auto debug_string() const -> std::string {
         std::string debug = "[flags=";
         std::array<char, 8> buf {};
-        for (std::size_t i = 0; i < buf.size(); ++i) {
-            uint8_t bit = 1 << (buf.size() - i - 1);
-            buf[i] = (emphasis_ & bit) ? '1' : '0';
+
+        for (unsigned int i = 0; i < 8; i++) {
+            if ((static_cast<unsigned int>(emphasis_) >> (7u - i)) & 1u)
+                buf[i] = '1';
+            else buf[i] = '0';
         }
+
         return debug.append(buf.data(), 8)
             .append(", fg=")
-            .append(fg().debug_string())
+            .append(this->fg().debug_string())
             .append(", bg=")
-            .append(bg().debug_string())
+            .append(this->bg().debug_string())
             .append("]");
     }
 
   private:
     constexpr auto fg_type() const -> ColorType {
-        return static_cast<ColorType>((color_types_ >> 4) & 0x0F);
+        return static_cast<ColorType>(
+            (static_cast<unsigned int>(color_types_) >> 4u) & 0x0Fu);
     }
 
     constexpr auto bg_type() const -> ColorType {
-        return static_cast<ColorType>(color_types_ & 0x0F);
+        return static_cast<ColorType>(color_types_ & 0x0Fu);
     }
 
     constexpr void set_fg_type(ColorType type) {
         color_types_ =
-            (static_cast<uint8_t>(type) << 4) | (color_types_ & 0x0F);
+            (static_cast<unsigned int>(type) << 4u) | (color_types_ & 0x0Fu);
     }
 
     constexpr void set_bg_type(ColorType type) {
         color_types_ =
-            (static_cast<uint8_t>(type) & 0x0F) | (color_types_ & 0xF0);
+            (static_cast<unsigned int>(type) & 0x0Fu) | (color_types_ & 0xF0u);
     }
 
     constexpr auto fg_null() const -> bool {
-        return fg_type() == ColorType::null;
+        return this->fg_type() == ColorType::Null;
     }
     constexpr auto bg_null() const -> bool {
-        return bg_type() == ColorType::null;
+        return this->bg_type() == ColorType::Null;
     }
 
     detail::ColorData fg_data_ = {0, 0, 0};
@@ -595,12 +629,12 @@ struct Style {
     // fg uses the upper 4 bits and bg uses the lower 4 bits.
     uint8_t color_types_ = 0;
 
-    uint8_t emphasis_ = none;
+    uint8_t emphasis_ = None;
 };
 
 /// @brief A Style wrapper that represents an absolute style.
-/// @details Style output normally has *additive semantics*, but this does't
-/// have.
+/// @details
+/// Style output normally has *additive semantics*, but this does't have.
 ///
 /// Example for `std::cout`:
 /// ```cpp
@@ -612,30 +646,39 @@ struct AbsoluteStyle {
     static constexpr std::size_t MAX_ESCAPE_SEQ_SIZE =
         Style::MAX_ESCAPE_SEQ_SIZE + 1;
 
-    Style style;
-
-    constexpr explicit AbsoluteStyle(Style style = Style()) : style(style) {}
+    constexpr explicit AbsoluteStyle(Style style = Style()) : style_(style) {}
 
     constexpr auto operator==(const AbsoluteStyle&) const -> bool = default;
     constexpr auto operator!=(const AbsoluteStyle&) const -> bool = default;
 
+    constexpr auto inner() const -> Style { return style_; }
+
+    /// This is always `false` since `to_escape()` will never be empty.
     constexpr auto is_null() const -> bool { return false; }
 
+    /// Writes ANSI escape sequence to the output iterator.
     template <std::output_iterator<const char&> OutputIt>
     constexpr auto to_escape(OutputIt out) const -> OutputIt {
         out = detail::write_to(out, "\x1b[");
-        if (style) *out++ = ';';
-        out = style.to_sgr_params(out);
+        if (style_) *out++ = ';';
+        out = style_.to_sgr_params(out);
         *out++ = 'm';
         return out;
     }
 
-    [[nodiscard]]
-    auto to_escape() const -> std::string {
+    /// Writes ANSI escape sequence to a string.
+    [[nodiscard]] auto to_escape() const -> std::string {
         std::string esc;
-        to_escape(std::back_inserter(esc));
+        this->to_escape(std::back_inserter(esc));
         return esc;
     }
+
+    [[nodiscard]] auto debug_string() const -> std::string {
+        return std::string("[absolute:") + style_.debug_string() + "]";
+    }
+
+  private:
+    Style style_;
 };
 
 /// @brief Creates an AbsoluteStyle from a Style.
@@ -644,33 +687,47 @@ constexpr auto abs(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
-/// @brief Creates a Style with foreground and background colors.
+/// Creates a Style with foreground and background colors.
 constexpr auto color(Color fg, Color bg) -> Style {
-    return {Style::Emphasis::none, fg, bg};
+    return Style(Style::Emphasis::None, fg, bg);
 }
 
-/// @brief Create a Style with foreground color.
-constexpr auto fg(Color fg) -> Style { return {Style::Emphasis::none, fg}; }
+/// Create a Style with foreground color.
+constexpr auto fg(Color fg) -> Style {
+    return Style(Style::Emphasis::None, fg);
+}
 
-/// @brief Create a Style with background color.
+/// Create a Style with background color.
 constexpr auto bg(Color bg) -> Style {
-    return {Style::Emphasis::none, null_color, bg};
+    return Style(Style::Emphasis::None, null_color, bg);
 }
 
-/// @brief output operator for Style types e.g. Style, AbsoluteStyle
-template <concepts::style StyleT>
-inline auto operator<<(std::ostream& os, StyleT style) -> std::ostream& {
-    std::array<char, StyleT::MAX_ESCAPE_SEQ_SIZE> buf = {0};
+/// IO manipulator that resets the terminal style.
+struct Reset {};
+inline constexpr Reset reset;
+
+/// output operator for `Style`
+inline auto operator<<(std::ostream& os, Style style) -> std::ostream& {
+    std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = style.to_escape(buf.begin()) - buf.begin();
-    os.write(buf.begin(), len);
+    os.write(buf.data(), len);
     return os;
 }
 
-/// @brief output operator for deco::reset
-inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
+/// output operator for `AbsoluteStyle`
+inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
+    -> std::ostream& {
+    std::array<char, AbsoluteStyle::MAX_ESCAPE_SEQ_SIZE> buf = {0};
+    auto len = abstyle.to_escape(buf.begin()) - buf.begin();
+    os.write(buf.data(), len);
+    return os;
+}
+
+/// output operator for deco::reset
+inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
     auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
-    os.write(buf.begin(), len);
+    os.write(buf.data(), len);
     return os;
 }
 
@@ -679,187 +736,56 @@ inline auto operator<<(std::ostream& os, style_reset_t) -> std::ostream& {
 // clang-format off
 
 inline constexpr Style null_style        = Style();
-inline constexpr Style bold              = Style(Style::Emphasis::bold);
-inline constexpr Style dim               = Style(Style::Emphasis::dim);
-inline constexpr Style italic            = Style(Style::Emphasis::italic);
-inline constexpr Style underline         = Style(Style::Emphasis::underline);
-inline constexpr Style blink             = Style(Style::Emphasis::blink);
-inline constexpr Style invert            = Style(Style::Emphasis::invert);
-inline constexpr Style strikethrough     = Style(Style::Emphasis::strikethrough);
-inline constexpr Style underline_double  = Style(Style::Emphasis::underline_double);
+inline constexpr Style bold              = Style(Style::Emphasis::Bold);
+inline constexpr Style dim               = Style(Style::Emphasis::Dim);
+inline constexpr Style italic            = Style(Style::Emphasis::Italic);
+inline constexpr Style underline         = Style(Style::Emphasis::Underline);
+inline constexpr Style blink             = Style(Style::Emphasis::Blink);
+inline constexpr Style invert            = Style(Style::Emphasis::Invert);
+inline constexpr Style strikethrough     = Style(Style::Emphasis::Strikethrough);
+inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDouble);
 
 // clang-format on
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                         Styled                          ║
+// ║                         styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-namespace detail {
-
-/* ----- StyleStack ----- */
-
-/// @brief A stack that can store single or multiple `AbsoluteStyle`.
-/// @details It has inline storage for N `AbsoluteStyle`s and grows to heap
-/// if the size exceeds N.
-class StyleStack {
-  public:
-    static constexpr std::size_t N = 5;
-    static_assert(N > 1);
-
-    StyleStack() = default;
-    StyleStack(const StyleStack& other) { copy_from(other); }
-    StyleStack(StyleStack&& other) noexcept { move_from(std::move(other)); }
-
-    auto operator=(const StyleStack& other) -> StyleStack& {
-        if (this == &other) return *this;
-        copy_from(other);
-        return *this;
-    }
-
-    auto operator=(StyleStack&& other) noexcept -> StyleStack& {
-        if (this == &other) return *this;
-        move_from(std::move(other));
-        return *this;
-    }
-
-    ~StyleStack() = default;
-
-    auto base() const -> AbsoluteStyle { return base_; }
-    auto is_single() const -> bool { return is_single_; }
-
-    auto top() const -> AbsoluteStyle {
-        if (size_) return data_[size_ - 1];
-        return base_;
-    }
-
-    void push(AbsoluteStyle style) {
-        if (size_ == capacity_) {
-            grow();
-        } else if (is_single_) {
-            size_ = 1;
-            data_[0] = style;
-            return;
-        }
-        data_[size_++] = style; // NOLINT
-    }
-
-    void pop() {
-        if (size_) size_--;
-    }
-
-    void clear() { size_ = 0; }
-
-    void set_base(AbsoluteStyle base) { base_ = base; }
-
-    void to_single() {
-        if (size_) {
-            local_[0] = top();
-            size_ = 1;
-        }
-        data_ = local_.data();
-    }
-
-    void to_multiple() { is_single_ = false; }
-
-  private:
-    auto is_heap() const noexcept -> bool { return data_ != local_.data(); }
-
-    void copy_from(const StyleStack& other) {
-        if (other.is_heap()) {
-            heap_ = std::make_unique<AbsoluteStyle[]>(other.capacity_);
-            std::memcpy(heap_.get(),
-                        other.heap_.get(),
-                        sizeof(AbsoluteStyle) * other.size_);
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        base_ = other.base_;
-        is_single_ = other.is_single_;
-    }
-
-    void move_from(StyleStack&& other) noexcept {
-        if (other.is_heap()) {
-            heap_ = std::move(other.heap_);
-            data_ = heap_.get();
-        } else {
-            local_ = other.local_;
-            data_ = local_.data();
-        }
-
-        size_ = other.size_;
-        capacity_ = other.capacity_;
-        base_ = other.base_;
-        is_single_ = other.is_single_;
-
-        other.size_ = 0;
-        other.capacity_ = N;
-        other.data_ = other.local_.data();
-    }
-
-    void grow() {
-        auto new_heap = std::make_unique<AbsoluteStyle[]>(capacity_ * 2);
-        std::memcpy(new_heap.get(), data_, sizeof(AbsoluteStyle) * size_);
-        heap_ = std::move(new_heap);
-        data_ = heap_.get();
-        capacity_ *= 2;
-    }
-
-    std::array<AbsoluteStyle, N> local_;
-    std::unique_ptr<AbsoluteStyle[]> heap_;
-
-    AbsoluteStyle* data_ = local_.data();
-    std::size_t size_ = 0;
-    std::size_t capacity_ = N;
-
-    AbsoluteStyle base_ = AbsoluteStyle();
-    bool is_single_ = true;
-};
-
+/// @brief Creates a styled wrapper of a value.
+/// @details
+/// `std::cout << styled(s, v)` is equivalent to
+/// `std::cout << s << v << deco::reset;`.
+///
+/// @return An implementation-defined object that associates `value` with
+/// `style`. Lvalues are stored by reference and rvalues are stored by value.
+template <typename T>
+constexpr auto styled(T&& value, Style style) {
+    return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), style);
 }
 
-template <typename T, concepts::style StyleT>
-struct StyledRef {
-    using value_type = T;
-
-    constexpr StyledRef(const T& value, StyleT style)
-        : value_(value),
-          style_(style) {}
-
-    constexpr auto value() const -> const T& { return value_; }
-    constexpr auto style() const -> StyleT { return style_; }
-
-  private:
-    const T& value_; // NOLINT
-    StyleT style_;
-};
-
-/// @brief Wraps a value with a style for ostream and format output.
-/// @details The `detail::StyledRef` has **reference semantics** and is intended
-/// to be used only as a temporary.
-///
-/// Example:
-/// ```cpp
-/// std::cout << styled(32, bold);  // OK
-///
-/// auto styled_int = styled(64, italic);
-/// std::cout << styled_int;  // Bad: styled_int holds a dangling reference
-/// ```
-template <typename T, concepts::style StyleT>
-constexpr auto styled(const T& value, StyleT style)
-    -> StyledRef<std::remove_cvref_t<T>, StyleT> {
-    return StyledRef(value, style);
+/// `AbsoluteStyle` version of `styled()`
+template <typename T>
+constexpr auto styled(T&& value, AbsoluteStyle abstyle) {
+    return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), abstyle);
 }
 
-/// @brief output operator for StyledRef
-template <concepts::styled_ref StyledRefT>
-    requires concepts::ostream_outputable<typename StyledRefT::value_type>
-inline auto operator<<(std::ostream& os, StyledRefT&& styled) // NOLINT
+/// shorthand for `styled(value, style)`
+template <typename T>
+constexpr auto operator|(Style style, T&& value) {
+    return styled(std::forward<T>(value), style);
+}
+
+/// shorthand for `styled(value, abstyle)`
+template <typename T>
+constexpr auto operator|(AbsoluteStyle abstyle, T&& value) {
+    return styled(std::forward<T>(value), abstyle);
+}
+
+/// output operator for `styled()`
+template <detail::style_type StyleT, ostream_outputable T>
+inline auto operator<<(std::ostream& os,
+                       const detail::Styled<StyleT, T>& styled)
     -> std::ostream& {
-    detail::check_styled_ref<StyledRefT>();
     os << styled.style() << styled.value() << reset;
     return os;
 }
@@ -1239,62 +1165,170 @@ inline constexpr std::array<RGB, 256> color_info {
 
 
 #include <array>
+#include <atomic>
+#include <cassert>
+#include <memory>
 #include <iostream>
-#include <optional>
-#include <ostream>
 #include <type_traits>
 #include <utility>
 
 namespace deco {
 
+/// Terminal color capability levels.
+enum class ColorSupport : uint8_t { Color16, Color256, TrueColor };
+
 namespace detail {
 
-template <concepts::style StyleT>
-constexpr auto apply_style(AbsoluteStyle current, StyleT style)
-    -> AbsoluteStyle {
-    using style_type = std::remove_cvref_t<StyleT>;
-    if constexpr (std::is_same_v<style_type, Style>)
-        return abs(current.style | style);
-    else if constexpr (std::is_same_v<style_type, AbsoluteStyle>) return style;
-}
+template <typename Ptr>
+    requires std::is_pointer_v<Ptr>
+struct NotNull {
+    NotNull(Ptr ptr) : ptr_(ptr) {
+        assert(ptr != nullptr && "deco::detail::NotNull(): null pointer");
+    }
 
-/* ----- global style output context ----- */
+    auto operator->() const -> Ptr { return ptr_; }
+    auto operator*() const -> decltype(auto) { return *ptr_; }
 
-// NOLINTBEGIN
+    operator Ptr() const { return ptr_; }
 
-struct style_output_context_t {};
+    auto get() const -> Ptr { return ptr_; }
 
-/// @brief global style output context for `StyleState`.
-/// @details Used to determine whether `StyleOutputState` needs to output the
-/// current style before outputting a value.
-inline const style_output_context_t* g_style_output_context = nullptr;
+  private:
+    Ptr ptr_;
+};
 
-// NOLINTEND
+template <typename T, std::size_t N>
+    requires(N > 0 && std::is_copy_assignable_v<T>)
+class Buffer {
+  public:
+    using value_type = T;
 
+    constexpr Buffer() = default;       // NOLINT
+
+    constexpr Buffer(const Buffer& other) { this->copy_from(other); }
+    constexpr Buffer(Buffer&& other) noexcept {
+        this->move_from(std::move(other));
+    }
+
+    constexpr auto operator=(const Buffer& other) -> Buffer& {
+        if (this == &other) return *this;
+        this->copy_from(other);
+        return *this;
+    }
+
+    constexpr auto operator=(Buffer&& other) noexcept -> Buffer& {
+        if (this == &other) return *this;
+        this->move_from(std::move(other));
+        return *this;
+    }
+
+    constexpr ~Buffer() = default;
+
+    [[nodiscard]] constexpr auto data() -> T* { return data_; }
+
+    [[nodiscard]] constexpr auto back() -> T& {
+        assert(!this->empty());
+        return data_[size_ - 1];
+    }
+
+    constexpr void clear() { size_ = 0; }
+
+    constexpr void push_back(T v) {
+        if (size_ == capacity_) this->grow();
+        data_[size_++] = v; // NOLINT
+    }
+
+    constexpr void pop_back() {
+        if (size_ > 0) size_--;
+    }
+
+    [[nodiscard]] constexpr auto data() const -> const T* { return data_; }
+    [[nodiscard]] constexpr auto back() const -> T {
+        assert(!this->empty());
+        return data_[size_ - 1];
+    }
+    [[nodiscard]] constexpr auto back_or(T v) const -> T {
+        return this->empty() ? v : this->back();
+    }
+    [[nodiscard]] constexpr auto size() const -> std::size_t { return size_; }
+    [[nodiscard]] constexpr auto empty() const -> bool { return !size_; }
+
+  private:
+    constexpr auto is_heap() const noexcept -> bool { return data_ == heap_.get(); }
+
+    constexpr void copy_from(const Buffer& other) {
+        if (other.is_heap()) {
+            heap_ = std::make_unique_for_overwrite<T[]>(other.capacity_);
+            for (std::size_t i = 0; i < other.size_; ++i)
+                heap_[i] = other.heap_[i];
+            data_ = heap_.get();
+        } else {
+            store_ = other.store_;
+            data_ = store_.data();
+        }
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+    }
+
+    constexpr void move_from(Buffer&& other) noexcept {
+        if (other.is_heap()) {
+            heap_ = std::move(other.heap_);
+            data_ = heap_.get();
+        } else {
+            store_ = other.store_;
+            data_ = store_.data();
+        }
+
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+
+        other.size_ = 0;
+        other.capacity_ = N;
+        other.data_ = other.store_.data();
+    }
+
+    constexpr void grow() {
+        const std::size_t new_capacity = capacity_ / 2 == 0
+            ? capacity_ * 2
+            : capacity_ + (capacity_ / 2);
+        auto new_heap = std::make_unique_for_overwrite<T[]>(new_capacity);
+        for (std::size_t i = 0; i < size_; ++i)
+            new_heap[i] = data_[i];
+        heap_ = std::move(new_heap);
+        data_ = heap_.get();
+        capacity_ = new_capacity;
+    }
+
+    std::array<T, N> store_;
+    std::unique_ptr<T[]> heap_;
+
+    T* data_ = store_.data();
+    std::size_t size_ = 0;
+    std::size_t capacity_ = N;
+};
 
 /* ----- color fallback ----- */
 
-using color_fallback_fn = auto (*)(Color) -> Color;
-
 // TODO: replace this with better algorithm
 constexpr auto rgb_distance(detail::RGB lhs, detail::RGB rhs) -> int {
-    const uint8_t dr = lhs.r - rhs.r;
-    const uint8_t dg = lhs.g - rhs.g;
-    const uint8_t db = lhs.b - rhs.b;
+    const int dr = lhs.r - rhs.r;
+    const int dg = lhs.g - rhs.g;
+    const int db = lhs.b - rhs.b;
     return (2 * (dr * dr)) + (4 * (db * db)) + (3 * (dg * dg));
 }
 
 constexpr auto fallback_to_16(Color color) -> Color {
     const ColorType type = color.type();
-    if (type == ColorType::null || type == ColorType::default_color)
+    if (type == ColorType::Null || type == ColorType::DefaultColor) {
         return color;
+    }
 
-    RGB rgb; // NOLINT
-    if (type == ColorType::terminal_color) {
+	RGB rgb = { .r=0, .g=0, .b=0 };
+    if (type == ColorType::TerminalColor) {
         const uint8_t index = color.data()[0];
         if (index < 16) return color;
         rgb = color_info[index];
-    } else if (type == ColorType::true_color) {
+    } else if (type == ColorType::TrueColor) {
         const auto [r, g, b] = color.data();
         rgb = RGB(r, g, b);
     }
@@ -1317,348 +1351,472 @@ constexpr auto fallback_to_256(Color color) -> Color {
     return color;
 }
 
-constexpr auto fallback(Style style, color_fallback_fn fallback_fn) -> Style {
-    return {style.emphasis(), fallback_fn(style.fg()), fallback_fn(style.bg())};
+constexpr auto fallback_color(Style style, ColorSupport mode) -> Style {
+    switch (mode) {
+        case ColorSupport::Color16:
+            return Style(style.emphasis(),
+                         fallback_to_16(style.fg()),
+                         fallback_to_16(style.bg()));
+        case ColorSupport::Color256:
+            return Style(style.emphasis(),
+                         fallback_to_256(style.fg()),
+                         fallback_to_256(style.bg()));
+        default:
+            return style;
+    }
 }
 
-constexpr auto fallback(AbsoluteStyle style, color_fallback_fn fallback_fn)
+constexpr auto fallback_color(AbsoluteStyle abstyle, ColorSupport mode)
     -> AbsoluteStyle {
-    return abs(fallback(style.style, fallback_fn));
+    return abs(fallback_color(abstyle.inner(), mode));
 }
+
+constexpr auto disable_color(Style style) -> Style {
+    return Style(style.emphasis());
+}
+
+constexpr auto disable_color(AbsoluteStyle style) -> AbsoluteStyle {
+    return abs(Style(style.inner().emphasis()));
+}
+
+/* ----- style merge ----- */
+
+constexpr auto merge(Style lhs, Style rhs) -> Style { return lhs | rhs; }
+
+constexpr auto merge(AbsoluteStyle lhs, Style rhs) -> AbsoluteStyle {
+    return abs(lhs.inner() | rhs);
+}
+
+constexpr auto merge([[maybe_unused]] Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+    return rhs;
+}
+
+constexpr auto merge([[maybe_unused]] AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+    return rhs;
+}
+
+struct AnyStyle {
+    constexpr AnyStyle() : type_(Type::Style) {}
+    constexpr AnyStyle(Style style) : type_(Type::Style), inner_(style) {}
+    constexpr AnyStyle(AbsoluteStyle abstyle)
+        : type_(Type::AbsoluteStyle),
+          inner_(abstyle.inner()) {}
+
+    constexpr void merge(detail::style_type auto s) {
+        switch (type_) {
+            case Type::Style:
+                *this = detail::merge(inner_, s);
+                break;
+            case Type::AbsoluteStyle:
+                *this = detail::merge(abs(inner_), s);
+                break;
+        }
+    }
+
+    template <typename Visitor>
+    constexpr auto visit(Visitor&& visitor) const -> decltype(auto) { // NOLINT
+        switch (type_) {
+            case Type::Style:
+                return visitor(inner_);
+            case Type::AbsoluteStyle:
+                return visitor(abs(inner_));
+        }
+        assert(false);
+		return visitor(inner_); // unreachable
+    }
+
+    constexpr auto is_null() const -> bool {
+        return this->visit(
+            [](detail::style_type auto style) { return style.is_null(); });
+    }
+
+    constexpr auto inner() const -> Style { return inner_; }
+
+  private:
+    enum class Type { Style, AbsoluteStyle };
+
+    Type type_;
+    Style inner_;
+};
+
+template <std::size_t N>
+using StyleStack = Buffer<AbsoluteStyle, N>;
+
+class StyleContext {
+  public:
+    constexpr StyleContext() = default;
+
+    constexpr void set_base_style(Style s) {
+        AbsoluteStyle base = abs(s);
+        if (stack_.empty()) pending_.merge(base);
+        base_style_ = base;
+    }
+
+    /// @details
+    /// This will push `style` to the stack implicitly when the stack is empty.
+    constexpr void merge_current_style(detail::style_type auto style) {
+        this->merge_current_style_no_pending(style);
+        pending_.merge(style);
+    }
+
+    constexpr void merge_current_style_no_pending(detail::style_type auto style) {
+        if (stack_.empty()) stack_.push_back(detail::merge(base_style_, style));
+        else stack_.back() = detail::merge(stack_.back(), style);
+    }
+
+    constexpr void ensure_style() { pending_.merge(this->current_abstyle()); }
+
+    constexpr void push(detail::style_type auto style) {
+        stack_.push_back(detail::merge(stack_.back_or(base_style_), style));
+        pending_.merge(style);
+    }
+
+    constexpr void pop() {
+        stack_.pop_back();
+        pending_.merge(this->current_abstyle());
+    }
+
+    constexpr void reset() {
+        stack_.clear();
+        pending_.merge(this->current_abstyle());
+    }
+
+    constexpr void drop_pending() {
+        pending_ = null_style;
+    }
+
+    [[nodiscard]] constexpr auto consume_pending() -> AnyStyle {
+        auto pending = pending_;
+        pending_ = null_style;
+        return pending;
+    }
+
+    [[nodiscard]] constexpr auto base_style() const -> Style {
+        return base_style_.inner();
+    }
+
+    [[nodiscard]] constexpr auto pending() const -> AnyStyle {
+        return pending_;
+    }
+
+    [[nodiscard]] constexpr auto has_pending() const -> bool {
+        return !pending_.is_null();
+    }
+
+    [[nodiscard]] constexpr auto current_abstyle() const -> AbsoluteStyle {
+        return stack_.back_or(base_style_);
+    }
+
+  private:
+    AbsoluteStyle base_style_;
+
+    StyleStack<3> stack_;
+    AnyStyle pending_;
+};
+
+template <detail::style_type StyleT>
+struct Push {
+    StyleT style;
+};
+
+struct Pop {};
 
 } // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                       StyleState                        ║
+// ║                      OutputConfig                       ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Terminal color capability levels.
-enum class ColorMode : uint8_t { color16 = 0, color256 = 1, true_color = 2 };
-
-/// @brief Represents style output state.
+/// @brief Configures how styles and colors are emitted.
 ///
-/// It manages the current style output state (e.g. style enabled, base
-/// style, etc.) If context tracking is enabled, it will also check
-/// `detail::g_style_output_context` to determine whether it needs to output the
-/// current style before outputting a value.
-///
-/// @see `g_style_output_context`, `StyledOstream`, `StyledFormat`
-class StyleState { // NOLINT
+/// @details
+/// - This class is **thread-safe**. If an object holds a reference to an 
+///   `OutputConfig`, modifying the configuration concurrently does not cause a data race.
+class OutputConfig {
   public:
-    StyleState() = default;
+    OutputConfig() = default;
 
-    StyleState(const StyleState& other) {
-        if (!other.context_tracking_enabled_) try_clean_context();
-        copy_from(other);
-    };
-
-    StyleState(StyleState&& other) noexcept {
-        if (!other.context_tracking_enabled_) try_clean_context();
-        move_from(std::move(other));
-    }
-
-    auto operator=(const StyleState& other) -> StyleState& {
-        if (this == &other) return *this;
-        if (!other.context_tracking_enabled_) try_clean_context();
-        copy_from(other);
-        return *this;
-    };
-
-    auto operator=(StyleState&& other) noexcept -> StyleState& {
-        if (this == &other) return *this;
-        if (!other.context_tracking_enabled_) try_clean_context();
-        move_from(std::move(other));
+    /// @brief Enables or disables color output. Default: `true`
+    /// @details When disabled, styles still emit their emphasis attributes.
+    auto enable_color(bool enable = true) -> OutputConfig& {
+        color_enabled_.store(enable, std::memory_order_relaxed);
         return *this;
     }
 
-    ~StyleState() { try_clean_context(); }
-
-    auto base_style() const -> Style { return stack_.base().style; }
-
-    auto style_enabled() const -> bool { return style_enabled_; }
-
-    auto nesting_enabled() const -> bool { return !stack_.is_single(); }
-
-    auto color_mode() const -> ColorMode { return color_mode_; }
-
-    auto context_tracking_enabled() const -> bool {
-        return context_tracking_enabled_;
+    /// Enables or disables all style output. Default: `true`
+    auto enable_style(bool enable = true) -> OutputConfig& {
+        style_enabled_.store(enable, std::memory_order_relaxed);
+        return *this;
     }
 
-    auto current_style() const -> AbsoluteStyle { return stack_.top(); }
-
-  protected:
-    void pop_style() { stack_.pop(); }
-
-    void reset_style() { stack_.clear(); }
-
-    void push_style(AbsoluteStyle style) { stack_.push(style); }
-
-    void push_style(Style style) {
-        stack_.push(abs(current_style().style | style));
+    /// Sets the color capability of the output terminal. Default: `TrueColor`
+    auto set_color_support(ColorSupport mode) -> OutputConfig& {
+        color_support_.store(mode, std::memory_order_relaxed);
+        return *this;
     }
 
-    /// @brief Updates the context if context tracking is enabled; otherwise
-    /// only checks whether the base style changed.
-    /// @returns The Style to emit when context or base style changed
-    auto update_context() -> std::optional<AbsoluteStyle> {
-        if (!context_tracking_enabled_) {
-            if (base_style_changed_) {
-                base_style_changed_ = false;
-                return abs(base_style());
-            }
-            return std::nullopt;
-        }
-        if (detail::g_style_output_context != &context_) {
-            detail::g_style_output_context = &context_;
-            if (base_style_changed_) {
-                base_style_changed_ = false;
-                return abs(base_style() | current_style().style);
-            }
-            return current_style();
-        }
-        return std::nullopt;
+    [[nodiscard]] auto color_enabled() const -> bool {
+        return color_enabled_.load(std::memory_order_relaxed);
     }
 
-    void try_clean_context() const {
-        if (!context_tracking_enabled_) return;
-        if (detail::g_style_output_context == &context_)
-            detail::g_style_output_context = nullptr;
+    [[nodiscard]] auto style_enabled() const -> bool {
+        return style_enabled_.load(std::memory_order_relaxed);
     }
 
-    template <concepts::style StyleT>
-    auto fallback_style(StyleT style) const -> StyleT {
-        switch (color_mode()) {
-        case ColorMode::color16:
-            return detail::fallback(style, detail::fallback_to_16);
-        case ColorMode::color256:
-            return detail::fallback(style, detail::fallback_to_256);
-        default:
-            return style;
-        }
+    [[nodiscard]] auto color_support() const -> ColorSupport {
+        return color_support_.load(std::memory_order_relaxed);
     }
 
   private:
-    template <typename>
-    friend class StyleStateSetter;
-
-    void copy_from(const StyleState& other) {
-        stack_ = other.stack_;
-        style_enabled_ = other.style_enabled_;
-        color_mode_ = other.color_mode_;
-        context_tracking_enabled_ = other.context_tracking_enabled_;
-        base_style_changed_ = other.base_style_changed_;
-        context_ = other.context_;
-    }
-
-    void move_from(StyleState&& other) noexcept {
-        stack_ = std::move(other.stack_);
-        style_enabled_ = other.style_enabled_;
-        color_mode_ = other.color_mode_;
-        context_tracking_enabled_ = other.context_tracking_enabled_;
-        base_style_changed_ = other.base_style_changed_;
-        context_ = other.context_;
-    }
-
-    // config
-    ColorMode color_mode_ = ColorMode::true_color;
-    bool style_enabled_ = true;
-    bool context_tracking_enabled_ = false;
-
-    // state
-    bool base_style_changed_ = true;
-    detail::style_output_context_t context_;
-    detail::StyleStack stack_;
+    std::atomic_bool color_enabled_ = true;
+    std::atomic_bool style_enabled_ = true;
+    std::atomic<ColorSupport> color_support_ = ColorSupport::TrueColor;
 };
 
-/// @brief CRTP class that provides chainable StyleState options
-template <typename Self>
-class StyleStateSetter {
-  public:
-    /// @brief Enable or disable style output.
-    auto enable_style(bool enable = true) -> Self& {
-        state().style_enabled_ = enable;
-        return self();
-    }
-
-    auto enable_nesting(bool enable = true) -> Self& {
-        if (!state().nesting_enabled() && enable) {
-            state().stack_.to_multiple();
-        } else if (state().nesting_enabled() && !enable) {
-            state().stack_.to_single();
-        }
-        return self();
-    }
-
-    /// @brief Enable or disable context tracking.
-    auto enable_context_tracking(bool enable = true) -> Self& {
-        if (state().context_tracking_enabled_ && !enable) {
-            state().try_clean_context();
-        }
-        state().context_tracking_enabled_ = enable;
-        return self();
-    }
-
-    auto set_color_mode(ColorMode color_mode) -> Self& {
-        state().color_mode_ = color_mode;
-        return self();
-    }
-
-    /// @brief Set the base style for this output state.
-    auto set_base_style(Style base) -> Self& {
-        state().stack_.set_base(abs(base));
-        state().base_style_changed_ = true;
-        return self();
-    }
-
-  private:
-    friend Self;
-
-    StyleStateSetter() = default;
-
-    auto state() -> StyleState& {
-        return static_cast<StyleState&>(static_cast<Self&>(*this));
-    }
-
-    auto self() -> Self& { return static_cast<Self&>(*this); }
-};
+/// Returns the global output config.
+inline auto config() -> OutputConfig& {
+    static OutputConfig global_cfg;
+    return global_cfg;
+}
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                      StyledOstream                      ║
+// ║                         OStream                         ║
 // ╚═════════════════════════════════════════════════════════╝
 
-struct style_pop_t {};
-
-/// @brief StyledOstream manipulator that restores the previous style.
-inline constexpr style_pop_t pop;
-
-/// @brief A stateful lightweight writer over an existing std::ostream.
-/// @warning The passed std::ostream object must outlive this object.
-/// @see `StyleState`
-class StyledOstream : public StyleState,
-                      public StyleStateSetter<StyledOstream> {
+/// @brief A wrapper around `std::ostream` that tracks style context and can be
+/// configured through `OutputConfig`.
+///
+/// @details
+/// Unlike writing styles directly to a `std::ostream`, an `OStream` keeps track
+/// of the current style and related context internally. This results in several
+/// behavioral differences:
+///
+/// - After writing a `styled` value, the previous style is restored instead of
+///   resetting the style entirely.
+/// - Writing `reset` restores the `base_style` and also clears the entire style
+///   context.
+/// - Styles are not emitted immediately. Instead, pending style changes are
+///   emitted together with subsequent output when needed. This allows
+///   consecutive style changes to be combined and reduces the amount of
+///   generated output.
+/// - The style stack can be controlled with the `push(style)` and `pop`
+///   manipulators.
+///
+/// **Example**
+///
+/// ```cpp
+/// OStream os(std::cout);
+///
+/// // fg(blue) and bold is merged to fg(blue) | bold
+/// os << fg(blue) << bold << "text";
+///
+/// // same as `os << italic << "Hello" << abs(fg(blue) | bold) << "World"`
+/// os << styled("Hello", italic) << "World";
+///
+/// // nested style
+/// // same as `os << italic << "Hello" << abs(fg(blue) | bold) << "World`
+/// os << push(italic) << "Hello" << pop << "World";
+/// ```
+///
+/// An `OStream` may also reference an `OutputConfig` object to control how
+/// styles and colors are emitted. This includes enabling or disabling style
+/// and color output, as well as color fallback behavior.
+///
+/// @warning
+/// - The internal style context is valid only as long as styles are not written
+///   to the underlying stream by other means during the lifetime of the
+///   `OStream`. Call `ensure_style()` to restore consistency if this happens.
+/// - This class is intended for single-threaded use. Concurrent access to the
+///   same `OStream` object may cause data races.
+/// - The `OStream` object must not outlive the underlying `std::ostream` or the
+///   referenced `OutputConfig`, if any.
+class OStream {
   public:
-    StyledOstream(std::ostream& os) : ostream_(&os) {}
+    explicit OStream(std::ostream& ostream) 
+        : cfg_(nullptr),
+          ostream_(&ostream) {
+        ctx_.ensure_style();
+    }
 
-    StyledOstream(StyleState state, std::ostream& os)
-        : StyleState(std::move(state)),
-          ostream_(&os) {}
+    explicit OStream(const OutputConfig& config, std::ostream& ostream)
+        : cfg_(&config),
+          ostream_(&ostream) {
+        ctx_.ensure_style();
+    }
+
+    auto set_base_style(Style s) -> OStream& {
+        ctx_.set_base_style(s);
+        return *this;
+    }
+
+    /// Emits the current style.
+    auto ensure_style() -> OStream& {
+        ctx_.ensure_style();
+        return *this;
+    }
+
+    [[nodiscard]] auto current_style() const -> Style {
+        return ctx_.current_abstyle().inner();
+    }
+
+    [[nodiscard]] auto base_style() const -> Style { return ctx_.base_style(); }
+
+    /// Returns the underlying `std::ostream`.
+    [[nodiscard]] auto ostream() const -> std::ostream& { return *ostream_; }
+
+    /// Clones this `OStream` with different underlying `std::ostream`.
+    [[nodiscard]] auto clone_with(std::ostream& new_ostream) const -> OStream {
+        return OStream(cfg_, new_ostream, ctx_);
+    }
+
+    /* ----- output operators ----- */
 
     /// @brief Output operator for any type that can be written to
     /// `std::ostream`.
     ///
     /// @throws `std::logic_error` if `operator<<(std::ostream&, T&&)` returns a
     /// different ostream object.
-    template <concepts::ostream_outputable T>
-        requires(!concepts::style<T> && !concepts::styled_ref<T>)
-    friend auto operator<<(StyledOstream& out, T&& value) -> StyledOstream& {
-        out.ensure_context();
-
-        if (auto os_ptr = &(out.ostream() << std::forward<T>(value));
-            os_ptr != out.ostream_)
+    template <ostream_outputable T>
+        requires(!detail::style_type<T> && !detail::styled<T>)
+    friend auto operator<<(OStream& out, T&& value) -> OStream& {
+        out.output_pending();
+        auto os_ptr = &(out.ostream() << std::forward<T>(value));
+        if (os_ptr != out.ostream_)
             throw std::logic_error(
-                "StyledOstream: std::ostream output operator returned a "
+                "deco::OStream: std::ostream output operator returned a "
                 "different ostream object");
         return out;
     }
 
-    /// @brief output operator for Style types
-    template <concepts::style StyleT>
-    friend auto operator<<(StyledOstream& out, StyleT style) -> StyledOstream& {
-        out.ensure_context();
-
-        if constexpr (std::is_same_v<StyleT, Style>
-                      || std::is_same_v<StyleT, AbsoluteStyle>)
-            out.push_style(style);
-        out.output_style(style);
+    friend auto operator<<(OStream& out, Style style) -> OStream& {
+        out.ctx_.merge_current_style(style);
         return out;
     }
 
-    /// @brief output operator for `reset`
-    friend auto operator<<(StyledOstream& out, style_reset_t)
-        -> StyledOstream& {
-        out.reset_style();
-        out.output_style(out.current_style());
+    friend auto operator<<(OStream& out, AbsoluteStyle abstyle) -> OStream& {
+        out.ctx_.merge_current_style(abstyle);
         return out;
     }
 
-    /// @brief output operator for `pop`
-    friend auto operator<<(StyledOstream& out, style_pop_t) -> StyledOstream& {
-        out.ensure_context();
-        out.pop_style();
-        out.output_style(out.current_style());
+    template <detail::style_type StyleT, ostream_outputable T>
+    friend auto operator<<(OStream& out,
+                           const detail::Styled<StyleT, T>& styled)
+        -> OStream& {
+        auto& ctx = out.ctx_;
+        if (ctx.has_pending()) {
+            auto pending = ctx.consume_pending();
+            pending.merge(styled.style());
+            pending.visit([&out](auto style) { out.output_style(style); });
+        } else {
+            out.output_style(styled.style());
+        }
+        out << styled.value();
+        if (!styled.style().is_null()) out.output_style(ctx.current_abstyle());
         return out;
     }
 
-    /// @brief output operator for styled values
-    template <concepts::styled_ref StyledRefT>
-    friend auto operator<<(StyledOstream& out, StyledRefT&& styled) // NOLINT
-        -> StyledOstream& {
-        detail::check_styled_ref<StyledRefT>();
-        out.ensure_context();
-
-        out.output_style(styled.style());
-        out.ostream() << styled.value();
-        out.ostream() << out.current_style();
+    template <detail::style_type StyleT>
+    friend auto operator<<(OStream& out, detail::Push<StyleT> push)
+        -> OStream& {
+        out.ctx_.push(push.style);
         return out;
     }
 
-    /// @brief output operator for IO manipulators
-    friend auto operator<<(StyledOstream& out,
-                           auto (*fn)(std::ios_base&)->std::ios_base&)
-        -> StyledOstream& {
-        out.ensure_context();
+    friend auto operator<<(OStream& out, detail::Pop) -> OStream& {
+        out.ctx_.pop();
+        return out;
+    }
+
+    friend auto operator<<(OStream& out, Reset) -> OStream& {
+        out.ctx_.reset();
+        return out;
+    }
+
+    /// output operator for IO manipulators
+    friend auto operator<<(OStream& out, std::ios_base& (*fn)(std::ios_base&))
+        -> OStream& {
+        out.output_pending();
         out.ostream() << fn;
         return out;
     }
 
-    /// @brief output operator for IO manipulators
-    friend auto operator<<(
-        StyledOstream& out,
-        auto (*fn)(std::basic_ios<char>&)->std::basic_ios<char>&)
-        -> StyledOstream& {
-        out.ensure_context();
+    /// output operator for IO manipulators
+    friend auto operator<<(OStream& out,
+                           std::basic_ios<char>& (*fn)(std::basic_ios<char>&))
+        -> OStream& {
+        out.output_pending();
         out.ostream() << fn;
         return out;
     }
 
-    /// @brief output operator for IO manipulators
-    friend auto operator<<(StyledOstream& out,
-                           auto (*fn)(std::ostream&)->std::ostream&)
-        -> StyledOstream& {
+    /// output operator for IO manipulators
+    friend auto operator<<(OStream& out, std::ostream& (*fn)(std::ostream&))
+        -> OStream& {
         // `std::operator<<(std::ostream& os,
         // std::ostream&(*fn)(std::ostream&))` returns `fn(os)` instead of `os`,
         // so we should assume that it may return a different std::ostream&.
-        out.ensure_context();
+        out.output_pending();
         out.ostream_ = &(out.ostream() << fn);
         return out;
     }
 
-    /// @brief Swithes the underlying `std::ostream`.
-    void set_stream(std::ostream& os) { ostream_ = &os; }
-
-    /// @brief Returns the underlying `std::ostream`.
-    auto ostream() const -> std::ostream& { return *ostream_; }
-
   private:
-    void ensure_context() {
-        if (auto style = update_context()) output_style(*style);
+    explicit OStream(const OutputConfig* config, std::ostream& ostream, detail::StyleContext ctx)
+        : ctx_(std::move(ctx)),
+          cfg_(config),
+          ostream_(&ostream){
+        ctx_.drop_pending();
+        ctx_.ensure_style();
     }
 
-    void output_style(concepts::style auto style) const {
-        if (!style_enabled()) return;
-        ostream() << fallback_style(style);
+    void output_pending() {
+        if (ctx_.has_pending()) {
+            const auto pending = ctx_.consume_pending();
+            pending.visit([this](detail::style_type auto style) constexpr {
+                this->output_style(style);
+            });
+        }
     }
 
-    std::ostream* ostream_;
+    template <detail::style_type StyleT>
+    void output_style(StyleT style) {
+        if (!cfg_) {
+            *ostream_ << style;
+            return;
+        }
+        if (!cfg_->style_enabled()) return;
+        if (!cfg_->color_enabled()) style = detail::disable_color(style);
+        else style = detail::fallback_color(style, cfg_->color_support());
+        *ostream_ << style;
+    }
+
+    detail::StyleContext ctx_;
+
+    const OutputConfig* cfg_;
+    detail::NotNull<std::ostream*> ostream_;
 };
 
-/// @brief Creates a `StyledOstream` with context tracking enabled.
-/// @details equivalent to `StyledOstream(os).enable_context()`
-[[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream {
-    return StyledOstream(os).enable_context_tracking();
+/// Creates a `OStream` that links to `std::cout` and global output config.
+inline auto stdout_ostream() -> OStream {
+    return OStream(config(), std::cout);
 }
+
+/// Creates a `OStream` that links to `std::cerr` and global output config.
+inline auto stderr_ostream() -> OStream {
+    return OStream(config(), std::cerr);
+}
+
+/* ----- OStream manipulators ----- */
+
+[[nodiscard]] constexpr auto push(Style style) -> detail::Push<Style> {
+    return {style};
+}
+[[nodiscard]] constexpr auto push(AbsoluteStyle abstyle)
+    -> detail::Push<AbsoluteStyle> {
+    return {abstyle};
+}
+
+inline constexpr detail::Pop pop {};
 
 } // namespace deco
 
@@ -1670,9 +1828,10 @@ inline auto styled_out(std::ostream& os) -> StyledOstream {
 
 
 #include <cstdlib>
-#include <iostream>
+#include <string_view>
 
 #if defined(_WIN32)
+#include <stdexcept>
 #include <windows.h>
 #else // POSIX
 #include <unistd.h>
@@ -1681,73 +1840,63 @@ inline auto styled_out(std::ostream& os) -> StyledOstream {
 
 namespace deco {
 
-namespace terminal {
-
-inline auto is_stdout_tty() -> bool;
-inline auto is_stderr_tty() -> bool;
-
-} // namespace terminal
-
 namespace detail {
-
-inline constexpr auto contains(std::string_view sv, std::string_view find)
-    -> bool {
-    return sv.find(find) != std::string_view::npos; // NOLINT
-}
 
 #if defined(_WIN32)
 [[nodiscard]]
-inline auto enable_virtual_terminal_mode() -> bool {
+inline auto enable_stdout_vt() -> bool {
     HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h_stdout == INVALID_HANDLE_VALUE) return false;
     DWORD mode;
     if (!GetConsoleMode(h_stdout, &mode)) return false;
     mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     return SetConsoleMode(h_stdout, mode);
 }
+
+[[nodiscard]]
+inline auto enable_stderr_vt() -> bool {
+    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
+    if (h_stderr == INVALID_HANDLE_VALUE) return false;
+    DWORD mode;
+    if (!GetConsoleMode(h_stderr, &mode)) return false;
+    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    return SetConsoleMode(h_stderr, mode);
+}
 #endif // _WIN32
+
+[[nodiscard]]
+inline auto no_color() -> bool {
+    const char* no_color = std::getenv("NO_COLOR");
+    return no_color != nullptr && no_color[0] != '\0';
+}
 
 // Based on https://github.com/termstandard/colors?tab=readme-ov-file
 [[nodiscard]]
-inline auto get_color_support() -> ColorMode {
+inline auto get_color_support() -> ColorSupport {
+    auto contains = [](const char* lhs, std::string_view rhs) -> bool {
+        std::string_view sv = lhs ? lhs : "";
+        return sv.find(rhs) != std::string_view::npos; // NOLINT
+    };
+
+    const char* colorterm = std::getenv("COLORTERM");
+
+    if (contains(colorterm, "truecolor")
+        || contains(colorterm, "24bit"))
+        return ColorSupport::TrueColor;
+
+    const char* term = std::getenv("TERM");
+    if (contains(colorterm, "256") || contains(term, "256")) 
+        return ColorSupport::Color256;
+
 #if defined(_WIN32)
-    return ColorSupport::true_color;
+    // TODO: 
+    return ColorSupport::TrueColor;
 #else // POSIX
-    const char* colorterm_p = std::getenv("COLORTERM");
 
-    std::string_view env_colorterm = colorterm_p ? colorterm_p : "";
-    if (contains(env_colorterm, "truecolor")
-        || contains(env_colorterm, "24bit"))
-        return ColorMode::true_color;
-
-    // TODO:
-
-    return ColorMode::color16;
+    return ColorSupport::Color16;
 #endif
 };
 
-// HACK: Uses the same approach as the termcolor library to detect whether
-// an ostream is stdout or stderr.
-inline auto is_ostream_stdout(const std::ostream& os) -> bool {
-    return &os == &std::cout;
-}
-
-inline auto is_ostream_stderr(const std::ostream& os) -> bool {
-    return (&os == &std::cerr) || (&os == &std::clog);
-}
-
-} // namespace detail
-
-namespace terminal {
-
-#if defined(_WIN32)
-// Automatically enables Windows virtual terminal processing unless
-// DECOTERM_NO_AUTO_ENABLE_VT is defined.
-#ifndef DECOTERM_NO_AUTO_ENABLE_VT
-inline bool g_virtual_terminal_mode_enabled = enable_virtual_terminal_mode();
-#endif // DECOTERM_NO_AUTO_ENABLE_VT
-#endif // _WIN32
-
-/// @brief Checks whether stdout is pointed to a terminal.
 [[nodiscard]]
 inline auto is_stdout_tty() -> bool {
 #if defined(_WIN32)
@@ -1759,7 +1908,6 @@ inline auto is_stdout_tty() -> bool {
 #endif
 };
 
-/// @brief Check whether stderr is pointed to a terminal.
 [[nodiscard]]
 inline auto is_stderr_tty() -> bool {
 #if defined(_WIN32)
@@ -1771,26 +1919,64 @@ inline auto is_stderr_tty() -> bool {
 #endif
 };
 
-/// @brief Returns the detected color support of teh current terminal.
+
+} // namespace detail
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                        terminal                         ║
+// ╚═════════════════════════════════════════════════════════╝
+
+struct TerminalInfo {
+    ColorSupport color_support;
+    bool is_stdout_tty;
+    bool is_stderr_tty;
+    bool no_color;
+};
+
+/// Detects the current terminal environment and returns the result as a `TerminalInfo`.
 [[nodiscard]]
-inline auto color_support() -> ColorMode {
-    static ColorMode s_color_support = detail::get_color_support();
-    return s_color_support;
+inline auto terminal_info() -> TerminalInfo {
+    return {
+        .color_support = detail::get_color_support(),
+        .is_stdout_tty = detail::is_stdout_tty(),
+        .is_stderr_tty = detail::is_stderr_tty(),
+        .no_color = detail::no_color(),
+    };
 }
 
-/// @brief Creates a StyledOstream with TTY-based automatic configuration.
-/// @details Equivalent to `deco::styled_out(os)`, but style output and context
-/// tracking are enabled only when os is detected as stdout or stderr attached
-/// to a terminal.
-[[nodiscard]]
-inline auto styled_out(std::ostream& os) -> StyledOstream {
-    bool is_tty = (detail::is_ostream_stdout(os) && is_stdout_tty())
-                  || (detail::is_ostream_stderr(os) && is_stderr_tty());
-    return deco::styled_out(os).enable_style(is_tty).enable_context_tracking(
-        is_tty);
-}
+/// @brief Configures the global output config based on the current terminal
+/// environment.
+///
+/// @details
+/// - If the `NO_COLOR` environment variable is set, color output is disabled.
+///   (Style output remains enabled)
+/// -  `color_support` are set according to the detected `ColorSupport`.
+///
+/// On Windows, this function also attempts to enable Virtual Terminal (VT)
+/// processing for `stdout` and `stderr` if they are attached to a terminal.
+///
+/// @return The detected `TerminalInfo`.
+///
+/// @throws std::runtime_error If enabling VT processing fails on Windows.
+inline auto init() -> TerminalInfo {
+    auto info = terminal_info();
+    auto& cfg = config();
 
-}; // namespace terminal
+    cfg.enable_color(!info.no_color);
+    cfg.set_color_support(info.color_support);
+
+#if defined(_WIN32)
+    if (!detail::enable_stdout_vt() && !info.is_stdout_tty)
+        throw std::runtime_error(
+            "deco::init(): failed to enable virtual terminal mode");
+
+    if (!detail::enable_stderr_vt() && !info.is_stderr_tty)
+        throw std::runtime_error(
+            "deco::init(): failed to enable virtual terminal mode");
+#endif // _WIN32
+
+    return info;
+}
 
 } // namespace deco
 
@@ -1803,19 +1989,19 @@ inline auto styled_out(std::ostream& os) -> StyledOstream {
 
 #include <format>
 #include <iterator>
-#include <optional>
+#include <ostream>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 #include <version>
 
-#if defined(__cpp_lib_print) && __cpp_lib_print >= 202403L
-#define DECO_ENABLE_PRINT
+#if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L
+#define DECO_ENABLE_STD_PRINT
+#include <cstdio>
 #include <print>
 #endif
 
 namespace deco {
-
-namespace concepts {
 
 #if __cplusplus >= 202302L
 template <typename Arg, typename CharT = char>
@@ -1838,65 +2024,148 @@ concept formattable =
     };
 #endif
 
-} // namespace concepts
-
 namespace detail {
 
-struct StyledFormatContext {
-    constexpr StyledFormatContext(AbsoluteStyle current_style,
-                                  bool style_enabled)
-        : current_style(current_style),
-          style_enabled(style_enabled) {}
-
-    AbsoluteStyle current_style;
-    bool style_enabled;
+template <typename T>
+struct formatter_type {
+    using type = std::formatter<T>;
 };
 
-// StyledRef with style context.
-// This is used instead of StyledRef in StyledFormat.
-template <typename StyledRefT>
-struct FStyledRef {
-    constexpr FStyledRef(StyledRefT styled, StyledFormatContext context)
-        : styled(styled),
-          context(context) {}
-
-    StyledRefT styled;
-    StyledFormatContext context; // NOLINT
+template <typename Char, std::size_t N>
+    requires requires { std::formatter<std::basic_string_view<Char>, Char>(); }
+struct formatter_type<Char[N]> {
+    using type = std::formatter<std::basic_string_view<Char>, Char>;
 };
 
-// Replace StyledRef<T>& with FStyledRef<T>.
+template <typename T>
+using formatter_t = formatter_type<std::remove_cvref_t<T>>::type;
+
+// inspired by {fmt} library
+inline constexpr std::size_t FMT_INLINE_BUFFER_SIZE = 500;
+
+using FormatBuf = Buffer<char, FMT_INLINE_BUFFER_SIZE>;
+
+template <typename T, std::size_t N>
+struct BufAppender {
+    using iterator_category = std::output_iterator_tag;
+    using value_type = void;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using reference = void;
+
+    explicit constexpr BufAppender(Buffer<T, N>& buf) : buf(&buf) {}
+
+    constexpr auto operator*() -> BufAppender& { return *this; }
+    constexpr auto operator++() -> BufAppender& { return *this; }
+    constexpr auto operator++(int) -> BufAppender& { return *this; }
+
+    constexpr auto operator=(T v) -> BufAppender& {
+        buf->push_back(v);
+        return *this;
+    }
+
+    NotNull<Buffer<T, N>*> buf;
+};
+
+template <style_type StyleT, typename T>
+struct FStyled {
+    constexpr FStyled(Styled<StyleT, T> styled, AbsoluteStyle current_style, const OutputConfig* cfg)
+        : styled(std::move(styled)),
+          restore_style(current_style),
+        cfg(cfg) {}
+
+    Styled<StyleT, T> styled;
+    AbsoluteStyle restore_style;
+    const OutputConfig* cfg;
+};
+
+// Replace `Styled` with `FStyled`
 template <typename Arg>
-constexpr auto process_arg(detail::StyledFormatContext context, Arg&& arg)
+constexpr auto process_fmt_arg(Arg& arg, AbsoluteStyle current_style, const OutputConfig* cfg)
     -> decltype(auto) {
-    if constexpr (concepts::styled_ref<Arg>) {
-        return FStyledRef(arg, context);
-    } else return std::forward<Arg>(arg); // NOLINT
+    static_assert(!style_type<Arg> && !std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
+                  "Style types and 'reset' cannot be used as a format argument.");
+    if constexpr (detail::styled<Arg>)
+        return FStyled(std::move(arg), current_style, cfg);
+    else return arg;
 }
 
-template <typename Arg>
-using processed_arg_t = std::conditional_t<concepts::styled_ref<Arg>,
-                                           FStyledRef<std::remove_cvref_t<Arg>>,
-                                           Arg>;
-
-// this is used with process_arg(), since make_format_args don't take rvalue
-// reference.
 template <typename... Args>
-constexpr auto make_format_args(Args&&... args /*NOLINT*/) {
+inline auto make_format_args(Args&&... args /* NOLINT */) {
     return std::make_format_args(args...);
 }
+
+template <std::output_iterator<const char&> OutputIt,
+          style_type StyleT,
+          typename... Args>
+inline auto format_to_impl(OutputIt out,
+                           StyleT style,
+                           std::format_string<Args...> fmt,
+                           Args&&... args /* NOLINT */) -> OutputIt {
+    out = style.to_escape(out);
+    out = std::vformat_to(
+        out, fmt.get(), make_format_args(process_fmt_arg(args, abs(style), nullptr)...));
+    if (!style.is_null()) out = abs(null_style).to_escape(out);
+    return out;
+}
+
+template <style_type StyleT, typename... Args>
+inline auto format_impl(StyleT style,
+                        std::format_string<Args...> fmt,
+                        Args&&... args /* NOLINT */) -> std::string {
+    auto buf = FormatBuf();
+    format_to_impl(BufAppender(buf), style, fmt, std::forward<Args>(args)...);
+    return {buf.data(), buf.size()};
+}
+
+template <std::output_iterator<const char&> OutputIt, detail::style_type StyleT>
+auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
+    -> OutputIt {
+    if (!cfg) return style.to_escape(out);
+    if (!cfg->style_enabled()) return out;
+    if (!cfg->color_enabled()) style = detail::disable_color(style);
+    else style = detail::fallback_color(style, cfg->color_support());
+    return style.to_escape(out);
+}
+
+#ifdef DECO_ENABLE_STD_PRINT
+
+template <typename Stream, style_type StyleT, typename... Args>
+inline auto print_impl(Stream&& stream/* NOLINT */,
+                       StyleT style,
+                       std::format_string<Args...> fmt,
+                       Args&&... args) {
+    auto buffer = FormatBuf();
+    format_to_impl(
+        BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
+    std::print(stream, "{}", std::string_view(buffer.data(), buffer.size()));
+}
+
+template <typename Stream, style_type StyleT, typename... Args>
+inline auto println_impl(Stream&& stream /* NOLINT */,
+                         StyleT style,
+                         std::format_string<Args...> fmt,
+                         Args&&... args) {
+    auto buffer = FormatBuf();
+    format_to_impl(
+        BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
+    std::println(stream, "{}", std::string_view(buffer.data(), buffer.size()));
+}
+
+#endif // DECO_ENABLE_STD_PRINT
 
 } // namespace detail
 
 } // namespace deco
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                       Formatters                        ║
+// ║                       formatters                        ║
 // ╚═════════════════════════════════════════════════════════╝
 
 namespace std {
 
-/// @brief formatter for Style types, e.g. `Style` and `AbsoluteStyle`
-template <deco::concepts::style StyleT>
+/// formatter for style types
+template <deco::detail::style_type StyleT>
 struct formatter<StyleT> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
@@ -1907,298 +2176,435 @@ struct formatter<StyleT> {
     }
 };
 
-/// @brief formatter for `deco::reset`
+/// formatter for `deco::reset`
 template <>
-struct formatter<deco::style_reset_t> {
+struct formatter<deco::Reset> {
     constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
 
-    auto format(deco::style_reset_t, std::format_context& ctx) const {
+    auto format(deco::Reset, std::format_context& ctx) const {
         return deco::abs(deco::null_style).to_escape(ctx.out());
     }
 };
 
-/// @brief formatter for styled values
-template <deco::concepts::styled_ref StyledRefT>
-    requires deco::concepts::formattable<typename StyledRefT::value_type>
-struct formatter<StyledRefT> {
-    std::formatter<typename StyledRefT::value_type, char> value_formatter;
-
-    bool reset_on_end;
-
-    constexpr formatter(bool reset_on_end = true)
-        : reset_on_end(reset_on_end) {}
-
-    constexpr auto parse(std::format_parse_context& ctx) {
-        return value_formatter.parse(ctx);
-    }
-
-    auto format(const StyledRefT& styled, /*NOLINT*/
+/// formatter for `styled()`
+template <deco::detail::style_type StyleT, typename T>
+    requires deco::formattable<T>
+struct formatter<deco::detail::Styled<StyleT, T>>
+    : deco::detail::formatter_t<T> {
+    auto format(const deco::detail::Styled<StyleT, T>& styled,
                 std::format_context& ctx) const {
+        using namespace deco;
+
         ctx.advance_to(styled.style().to_escape(ctx.out()));
-        ctx.advance_to(value_formatter.format(styled.value(), ctx));
-        if (reset_on_end)
-            ctx.advance_to(
-                formatter<deco::style_reset_t> {}.format(deco::reset, ctx));
+        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
+        ctx.advance_to(abs(null_style).to_escape(ctx.out()));
+
         return ctx.out();
     }
 };
 
-// internal formatter
-template <deco::concepts::styled_ref StyledRefT>
-    requires deco::concepts::formattable<typename StyledRefT::value_type>
-struct formatter<deco::detail::FStyledRef<StyledRefT>>
-    : public formatter<StyledRefT> {
-    using formatter<StyledRefT>::value_formatter;
-    using formatter<StyledRefT>::parse;
-
-    constexpr formatter() : formatter<StyledRefT>(false) {}
-
-    auto format(const deco::detail::FStyledRef<StyledRefT>& fstyled, /*NOLINT*/
+template <deco::detail::style_type StyleT, typename T>
+    requires deco::formattable<T>
+struct formatter<deco::detail::FStyled<StyleT, T>>
+    : deco::detail::formatter_t<T> {
+    auto format(const deco::detail::FStyled<StyleT, T>& fstyled,
                 std::format_context& ctx) const {
-        if (fstyled.context.style_enabled)
-            ctx.advance_to(fstyled.styled.style().to_escape(ctx.out()));
-        ctx.advance_to(value_formatter.format(fstyled.styled.value(), ctx));
-        if (fstyled.context.style_enabled)
-            ctx.advance_to(fstyled.context.current_style.to_escape(ctx.out()));
+        using namespace deco;
+
+        const auto& styled = fstyled.styled;
+
+        ctx.advance_to(detail::write_style(ctx.out(), styled.style(), fstyled.cfg));
+        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
+        ctx.advance_to(detail::write_style(ctx.out(), fstyled.restore_style, fstyled.cfg));
+
         return ctx.out();
     }
 };
 
-}; // namespace std
+} // namespace std
 
 namespace deco {
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                      StyledFormat                       ║
+// ║                         format                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Format string type used by StyledFormat::print().
+template <std::output_iterator<const char&> OutputIt, typename... Args>
+inline auto format_to(OutputIt out,
+                      Style style,
+                      std::format_string<Args...> fmt,
+                      Args&&... args) -> OutputIt {
+    return detail::format_to_impl(out, style, fmt, std::forward<Args>(args)...);
+}
+
+template <std::output_iterator<const char&> OutputIt, typename... Args>
+inline auto format_to(OutputIt out,
+                      AbsoluteStyle abstyle,
+                      std::format_string<Args...> fmt,
+                      Args&&... args) -> OutputIt {
+    return detail::format_to_impl(
+        out, abstyle, fmt, std::forward<Args>(args)...);
+}
+
 template <typename... Args>
-using FormatString = std::format_string<detail::processed_arg_t<Args>...>;
+[[nodiscard]] inline auto format(Style style,
+                                 std::format_string<Args...> fmt,
+                                 Args&&... args) -> std::string {
+    return detail::format_impl(style, fmt, std::forward<Args>(args)...);
+}
 
-/// @brief A stateful writer similar to `StyledOstream`, but with
-/// `std::formatter` support.
-/// @details Format arguments cannot contain Style types, reset, or pop. Use
-/// print(style, ...), styled(), push(), reset(), or pop() instead.
-class StyledFormat : public StyleState, public StyleStateSetter<StyledFormat> {
-    using stream_type = std::variant<std::FILE*, std::ostream*>;
+template <typename... Args>
+[[nodiscard]] inline auto format(AbsoluteStyle abstyle,
+                                 std::format_string<Args...> fmt,
+                                 Args&&... args) -> std::string {
+    return detail::format_impl(abstyle, fmt, std::forward<Args>(args)...);
+}
 
+#ifdef DECO_ENABLE_STD_PRINT
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                          print                          ║
+// ╚═════════════════════════════════════════════════════════╝
+
+template <typename... Args>
+inline void print(Style s, std::format_string<Args...> fmt, Args&&... args) {
+    detail::print_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(AbsoluteStyle s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(FILE* f,
+                  Style s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(FILE* f,
+                  AbsoluteStyle s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(std::ostream& os,
+                  Style s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl(os, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(std::ostream& os,
+                  AbsoluteStyle s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl(os, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(Style s, std::format_string<Args...> fmt, Args&&... args) {
+    detail::println_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(AbsoluteStyle s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(FILE* f,
+                    Style s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(FILE* f,
+                    AbsoluteStyle s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(std::ostream& os,
+                    Style s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl(os, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(std::ostream& os,
+                    AbsoluteStyle s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl(os, s, fmt, std::forward<Args>(args)...);
+}
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                         Printer                         ║
+// ╚═════════════════════════════════════════════════════════╝
+
+/// @brief Provides functionality similar to `deco::OStream`, but uses a
+/// `std::print`-style API instead of stream insertion.
+///
+/// @details
+/// - Use the `push()` and `pop()` member functions to manage the style stack,
+///   rather than manipulators.
+/// - `style` and `reset` cannot be used as format arguments because `Printer`
+///   cannot track them and update its internal style context accordingly.
+///   Use `apply()` to modify the current style and `reset()` to reset the style
+///   context instead.
+class Printer {
   public:
-    StyledFormat() = default;
-    StyledFormat(StyleState state) : StyleState(std::move(state)) {}
+    explicit Printer(std::ostream& os)
+        : cfg_(nullptr),
+          stream(&os) {
+        ctx_.ensure_style();
+    }
 
-    /* ----- Style operations ----- */
+    explicit Printer(std::FILE* f = stdout)
+        : cfg_(nullptr),
+          stream(f) {
+        ctx_.ensure_style();
+    }
 
-    /// Similar to `styled_os << style`, where `styled_os` is a StyledOstream
-    /// object.
-    auto push(concepts::style auto style) -> StyledFormat& {
-        push_style(style);
-        current_is_pending_ = true;
+    explicit Printer(const OutputConfig& config, std::ostream& os)
+        : cfg_(&config),
+          stream(&os) {
+        ctx_.ensure_style();
+    }
+
+    explicit Printer(const OutputConfig& config, std::FILE* f = stdout)
+        : cfg_(&config),
+          stream(f) {
+        ctx_.ensure_style();
+    }
+
+    auto set_base_style(Style s) -> Printer& {
+        ctx_.set_base_style(s);
         return *this;
     }
 
-    /// Similar to `styled_os << pop`, where `styled_os` is a StyledOstream
-    /// object.
-    auto pop() -> StyledFormat& {
-        pop_style();
-        current_is_pending_ = true;
+    /// Emits the current style.
+    auto ensure_style() -> Printer& {
+        ctx_.ensure_style();
         return *this;
     }
 
-    /// Similar to `styled_os << reset`, where `styled_os` is a StyledOstream
-    /// object.
-    auto reset() -> StyledFormat& {
-        reset_style();
-        current_is_pending_ = true;
+    /// Changes the current style.
+    auto apply(Style s) -> Printer& {
+        ctx_.merge_current_style(s);
         return *this;
     }
 
-    /* ----- format ----- */
+    auto push(Style s) -> Printer& {
+        ctx_.push(s);
+        return *this;
+    }
+
+    auto push(AbsoluteStyle s) -> Printer& {
+        ctx_.push(s);
+        return *this;
+    }
+
+    auto pop() -> Printer& {
+        ctx_.pop();
+        return *this;
+    }
+
+    auto reset() -> Printer& {
+        ctx_.reset();
+        return *this;
+    }
+
+    [[nodiscard]] auto current_style() const -> Style {
+        return ctx_.current_abstyle().inner();
+    }
+
+    [[nodiscard]] auto base_style() const -> Style { return ctx_.base_style(); }
+
+    /// Clones this `Printer` with different underlying stream.
+    [[nodiscard]] auto clone_with(std::ostream& os) const -> Printer {
+        return Printer(cfg_, &os, ctx_);
+    }
+
+    /// Clones this `Printer` with different underlying stream.
+    [[nodiscard]] auto clone_with(std::FILE* f) const -> Printer {
+        return Printer(cfg_, f, ctx_);
+    }
+
+    /* ----- print ----- */
+
+    template <typename... Args>
+    auto print(std::format_string<Args...> fmt, Args&&... args) -> Printer& {
+        this->print_impl(null_style, fmt, std::forward<Args>(args)...);
+        return *this;
+    }
+
+    template <typename... Args>
+    auto print(Style style, std::format_string<Args...> fmt, Args&&... args)
+        -> Printer& {
+        this->print_impl(style, fmt, std::forward<Args>(args)...);
+        return *this;
+    }
+
+    template <typename... Args>
+    auto print(AbsoluteStyle style,
+               std::format_string<Args...> fmt,
+               Args&&... args) -> Printer& {
+        this->print_impl(style, fmt, std::forward<Args>(args)...);
+        return *this;
+    }
+
+    template <typename... Args>
+    auto println(std::format_string<Args...> fmt, Args&&... args) -> Printer& {
+        this->println_impl(null_style, fmt, std::forward<Args>(args)...);
+        return *this;
+    }
+
+    template <typename... Args>
+    auto println(Style style, std::format_string<Args...> fmt, Args&&... args)
+        -> Printer& {
+        this->println_impl(style, fmt, std::forward<Args>(args)...);
+        return *this;
+    }
+
+    template <typename... Args>
+    auto println(AbsoluteStyle style,
+                 std::format_string<Args...> fmt,
+                 Args&&... args) -> Printer& {
+        this->println_impl(style, fmt, std::forward<Args>(args)...);
+        return *this;
+    }
+
+  private:
+    using Stream = std::variant<detail::NotNull<std::FILE*>,
+                                detail::NotNull<std::ostream*>>;
+
+    explicit Printer(const OutputConfig* config, Stream stream, detail::StyleContext ctx)
+        : ctx_(std::move(ctx)),
+          cfg_(config), stream(stream){
+        ctx_.drop_pending();
+        ctx_.ensure_style();
+    }
 
     template <std::output_iterator<const char&> OutputIt,
-              concepts::style StyleT,
+              detail::style_type StyleT>
+    auto write_pending(OutputIt out, StyleT with) -> OutputIt {
+        assert(ctx_.has_pending());
+        auto pending = ctx_.consume_pending();
+        if (!with.is_null()) pending.merge(with);
+        return pending.visit(
+            [this, out](detail::style_type auto style) constexpr {
+                return detail::write_style(out, style, cfg_);
+            });
+    }
+
+    template <std::output_iterator<const char&> OutputIt,
+              detail::style_type StyleT,
               typename... Args>
     auto format_to(OutputIt out,
                    StyleT style,
                    std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt {
-        (check_arg<Args>(), ...);
-        out = ensure_context(out);
-        const AbsoluteStyle current =
-            detail::apply_style(current_style(), style);
+                   Args&&... args /* NOLINT */) -> OutputIt {
+        if (ctx_.has_pending()) out = this->write_pending(out, style);
+        else out = detail::write_style(out, style, cfg_);
 
-        if (!style.is_null()) out = output_style(out, style);
+        [[maybe_unused]] // For some reason, GCC reports this variable as unused.
+        const AbsoluteStyle current_style = detail::merge(ctx_.current_abstyle(), style);
+
         out = std::vformat_to(
             out,
             fmt.get(),
-            detail::make_format_args(process_arg(
-                detail::StyledFormatContext(current, style_enabled()),
-                std::forward<Args>(args))...));
-        if (!style.is_null()) out = output_style(out, current_style());
+            detail::make_format_args(
+                detail::process_fmt_arg(args, current_style, cfg_)...));
+
+        if (!style.is_null())
+            out = detail::write_style(out, ctx_.current_abstyle(), cfg_);
+
         return out;
     }
 
-    template <std::output_iterator<const char&> OutputIt, typename... Args>
-    auto format_to(OutputIt out,
-                   std::format_string<Args...> fmt,
-                   Args&&... args) -> OutputIt {
-        return format_to(out, null_style, fmt, std::forward<Args>(args)...);
+    template <detail::style_type StyleT, typename... Args>
+    void print_impl(StyleT style,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+        auto buffer = detail::FormatBuf();
+        this->format_to(detail::BufAppender(buffer),
+                        style,
+                        fmt,
+                        std::forward<Args>(args)...);
+        this->print_stream(buffer);
     }
 
-    template <typename... Args>
-    [[nodiscard]]
-    auto format(concepts::style auto style,
-                std::format_string<Args...> fmt,
-                Args&&... args) -> std::string {
-        std::string buf;
-        format_to(
-            std::back_inserter(buf), style, fmt, std::forward<Args>(args)...);
-        return buf;
+    template <detail::style_type StyleT, typename... Args>
+    void println_impl(StyleT style,
+                      std::format_string<Args...> fmt,
+                      Args&&... args) {
+        auto buffer = detail::FormatBuf();
+        this->format_to(detail::BufAppender(buffer),
+                        style,
+                        fmt,
+                        std::forward<Args>(args)...);
+        this->println_stream(buffer);
     }
 
-    template <typename... Args>
-    [[nodiscard]]
-    auto format(std::format_string<Args...> fmt, Args&&... args)
-        -> std::string {
-        std::string buf;
-        format_to(std::back_inserter(buf), fmt, std::forward<Args>(args)...);
-        return buf;
-    }
-
-  private:
-    template <typename Arg>
-    static consteval void check_arg() {
-        using arg_type = std::remove_cvref_t<Arg>;
-        if constexpr (concepts::styled_ref<arg_type>)
-            detail::check_styled_ref<Arg>();
-        else
-            static_assert(
-                (!concepts::style<arg_type>
-                 && !std::is_same_v<arg_type, style_reset_t>
-                 && !std::is_same_v<arg_type, style_pop_t>),
-                "deco::StyledFormat: Style, reset, pop are disallowed as "
-                "format arguments. Use print(style, ...), styled(), "
-                "push(), reset(), or pop() instead.");
-    }
-
-    template <std::output_iterator<const char&> OutputIt,
-              concepts::style StyleT>
-    auto output_style(OutputIt out, StyleT style) const -> OutputIt {
-        if (!style_enabled()) return out;
-        return fallback_style(style).to_escape(out);
-    }
-
-    template <std::output_iterator<const char&> OutputIt>
-    auto ensure_context(OutputIt out) -> OutputIt {
-        const auto update = update_context();
-        const AbsoluteStyle current = current_style();
-
-        if (update) out = output_style(out, *update);
-        if (current_is_pending_ && (!update || current != *update))
-            out = output_style(out, current);
-        current_is_pending_ = false;
-        return out;
-    }
-
-    // Whether the current style needs to be emitted before the next output.
-    bool current_is_pending_ = false;
-
-    // ──────────────────────── std::print extensions ────────────────────────
-
-#ifdef DECO_ENABLE_PRINT
-  public:
-    /* ----- print ----- */
-    auto set_stream(FILE* f) -> StyledFormat& {
-        stream_.emplace<FILE*>(f);
-        return *this;
-    }
-
-    auto set_stream(std::ostream& os) -> StyledFormat& {
-        stream_.emplace<std::ostream*>(&os);
-        return *this;
-    }
-
-    /// @brief Prints with a temporary style to the stream.
-    template <concepts::style StyleT, typename... Args>
-    auto print(StyleT style, FormatString<Args...> fmt, Args&&... args)
-        -> StyledFormat& {
-        (check_arg<Args>(), ...);
-        ensure_context();
-        const AbsoluteStyle current =
-            detail::apply_style(current_style(), style);
-
-        if (!style.is_null()) output_style(style);
-        print_stream(
-            fmt,
-            process_arg(detail::StyledFormatContext(current, style_enabled()),
-                        std::forward<Args>(args))...);
-        if (!style.is_null()) output_style(current_style());
-        return *this;
-    }
-
-    template <typename... Args>
-    auto print(FormatString<Args...> fmt, Args&&... args) -> StyledFormat& {
-        print(null_style, fmt, std::forward<Args>(args)...);
-        return *this;
-    }
-
-    // TODO: println
-  private:
-    template <typename... Args>
-    void print_stream(std::format_string<Args...> fmt, Args&&... args) const {
-        if (std::holds_alternative<FILE*>(stream_)) {
-            std::print(
-                std::get<FILE*>(stream_), fmt, std::forward<Args>(args)...);
-        } else if (std::holds_alternative<std::ostream*>(stream_)) {
-            std::print(*std::get<std::ostream*>(stream_),
-                       fmt,
-                       std::forward<Args>(args)...);
+    void print_stream(const detail::FormatBuf& buf) {
+        if (auto* f = std::get_if<detail::NotNull<std::FILE*>>(&stream)) {
+            std::print(*f, "{}", std::string_view(buf.data(), buf.size()));
+        } else if (auto* os =
+                       std::get_if<detail::NotNull<std::ostream*>>(&stream)) {
+            std::print(**os, "{}", std::string_view(buf.data(), buf.size()));
         }
     }
 
-    void output_style(concepts::style auto style) const {
-        if (!style_enabled()) return;
-        print_stream("{}", fallback_style(style));
+    void println_stream(const detail::FormatBuf& buf) {
+        if (auto* f = std::get_if<detail::NotNull<std::FILE*>>(&stream)) {
+            std::println(*f, "{}", std::string_view(buf.data(), buf.size()));
+        } else if (auto* os =
+                       std::get_if<detail::NotNull<std::ostream*>>(&stream)) {
+            std::println(**os, "{}", std::string_view(buf.data(), buf.size()));
+        }
     }
 
-    void ensure_context() {
-        const auto update = update_context();
-        const AbsoluteStyle current = current_style();
-        if (update) output_style(*update);
-        if (current_is_pending_ && (!update || current != *update))
-            output_style(current);
-        current_is_pending_ = false;
-    }
+    detail::StyleContext ctx_;
 
-    stream_type stream_ = stream_type(std::in_place_type<FILE*>, stdout);
-
-#endif // DECO_ENABLE_PRINT
+    const OutputConfig* cfg_;
+    Stream stream;
 };
 
-#ifdef DECO_ENABLE_PRINT
-
-/// @brief Creates a StyledFormat with context tracking enabled.
-/// @details equivalent to
-/// `StyledFormat().enable_context_tracking().set_stream(f)`
-inline auto styled_fmt(std::FILE* f = stdout) -> StyledFormat {
-    return StyledFormat().enable_context_tracking().set_stream(f);
+/// Creates a `Printer` links to `stdout` and global output config.
+inline auto stdout_printer() -> Printer {
+    return Printer(config(), stdout);
 }
 
-/// @brief Creates a StyledFormat with context tracking enabled.
-/// @details equivalent to
-/// `StyledFormat().enable_context_tracking().set_stream(os)`
-inline auto styled_fmt(std::ostream& os) -> StyledFormat {
-    return StyledFormat().enable_context_tracking().set_stream(os);
+/// Creates a `Printer` links to `stderr` and global output config.
+inline auto stderr_printer() -> Printer {
+    return Printer(config(), stderr);
 }
 
-#endif // DECO_ENABLE_PRINT
+#endif // DECO_ENABLE_STD_PRINT
 
-}; // namespace deco
+} // namespace deco
 
-#ifdef DECO_ENABLE_PRINT
-#undef DECO_ENABLE_PRINT
+#ifdef DECO_ENABLE_STD_PRINT
+#undef DECO_ENABLE_STD_PRINT
 #endif
 
 #endif // !DECOTERM_FORMAT_HPP

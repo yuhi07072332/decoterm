@@ -12,8 +12,8 @@
 #include <array>
 #include <atomic>
 #include <cassert>
-#include <memory>
 #include <iostream>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -48,7 +48,7 @@ class Buffer {
   public:
     using value_type = T;
 
-    constexpr Buffer() = default;
+    constexpr Buffer() = default; // NOLINT
 
     constexpr Buffer(const Buffer& other) { this->copy_from(other); }
     constexpr Buffer(Buffer&& other) noexcept {
@@ -99,7 +99,9 @@ class Buffer {
     [[nodiscard]] constexpr auto empty() const -> bool { return !size_; }
 
   private:
-    constexpr auto is_heap() const noexcept -> bool { return data_ == heap_.get(); }
+    constexpr auto is_heap() const noexcept -> bool {
+        return data_ == heap_.get();
+    }
 
     constexpr void copy_from(const Buffer& other) {
         if (other.is_heap()) {
@@ -133,9 +135,8 @@ class Buffer {
     }
 
     constexpr void grow() {
-        const std::size_t new_capacity = capacity_ / 2 == 0
-            ? capacity_ * 2
-            : capacity_ + (capacity_ / 2);
+        const std::size_t new_capacity =
+            capacity_ / 2 == 0 ? capacity_ * 2 : capacity_ + (capacity_ / 2);
         auto new_heap = std::make_unique_for_overwrite<T[]>(new_capacity);
         for (std::size_t i = 0; i < size_; ++i)
             new_heap[i] = data_[i];
@@ -168,7 +169,7 @@ constexpr auto fallback_to_16(Color color) -> Color {
         return color;
     }
 
-	RGB rgb = { .r=0, .g=0, .b=0 };
+    RGB rgb = {.r = 0, .g = 0, .b = 0};
     if (type == ColorType::TerminalColor) {
         const uint8_t index = color.data()[0];
         if (index < 16) return color;
@@ -232,11 +233,13 @@ constexpr auto merge(AbsoluteStyle lhs, Style rhs) -> AbsoluteStyle {
     return abs(lhs.inner() | rhs);
 }
 
-constexpr auto merge([[maybe_unused]] Style lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+constexpr auto merge([[maybe_unused]] Style lhs, AbsoluteStyle rhs)
+    -> AbsoluteStyle {
     return rhs;
 }
 
-constexpr auto merge([[maybe_unused]] AbsoluteStyle lhs, AbsoluteStyle rhs) -> AbsoluteStyle {
+constexpr auto merge([[maybe_unused]] AbsoluteStyle lhs, AbsoluteStyle rhs)
+    -> AbsoluteStyle {
     return rhs;
 }
 
@@ -267,7 +270,7 @@ struct AnyStyle {
                 return visitor(abs(inner_));
         }
         assert(false);
-		return visitor(inner_); // unreachable
+        return visitor(inner_); // unreachable
     }
 
     constexpr auto is_null() const -> bool {
@@ -304,7 +307,8 @@ class StyleContext {
         pending_.merge(style);
     }
 
-    constexpr void merge_current_style_no_pending(detail::style_type auto style) {
+    constexpr void merge_current_style_no_pending(
+        detail::style_type auto style) {
         if (stack_.empty()) stack_.push_back(detail::merge(base_style_, style));
         else stack_.back() = detail::merge(stack_.back(), style);
     }
@@ -326,9 +330,7 @@ class StyleContext {
         pending_.merge(this->current_abstyle());
     }
 
-    constexpr void drop_pending() {
-        pending_ = null_style;
-    }
+    constexpr void drop_pending() { pending_ = null_style; }
 
     [[nodiscard]] constexpr auto consume_pending() -> AnyStyle {
         auto pending = pending_;
@@ -375,8 +377,9 @@ struct Pop {};
 /// @brief Configures how styles and colors are emitted.
 ///
 /// @details
-/// - This class is **thread-safe**. If an object holds a reference to an 
-///   `OutputConfig`, modifying the configuration concurrently does not cause a data race.
+/// - This class is **thread-safe**. If an object holds a reference to an
+///   `OutputConfig`, modifying the configuration concurrently does not cause a
+///   data race.
 class OutputConfig {
   public:
     OutputConfig() = default;
@@ -477,7 +480,7 @@ inline auto config() -> OutputConfig& {
 ///   referenced `OutputConfig`, if any.
 class OStream {
   public:
-    explicit OStream(std::ostream& ostream) 
+    explicit OStream(std::ostream& ostream)
         : cfg_(nullptr),
           ostream_(&ostream) {
         ctx_.ensure_style();
@@ -606,10 +609,12 @@ class OStream {
     }
 
   private:
-    explicit OStream(const OutputConfig* config, std::ostream& ostream, detail::StyleContext ctx)
+    explicit OStream(const OutputConfig* config,
+                     std::ostream& ostream,
+                     detail::StyleContext ctx)
         : ctx_(std::move(ctx)),
           cfg_(config),
-          ostream_(&ostream){
+          ostream_(&ostream) {
         ctx_.drop_pending();
         ctx_.ensure_style();
     }
@@ -642,14 +647,10 @@ class OStream {
 };
 
 /// Creates a `OStream` that links to `std::cout` and global output config.
-inline auto stdout_ostream() -> OStream {
-    return OStream(config(), std::cout);
-}
+inline auto stdout_ostream() -> OStream { return OStream(config(), std::cout); }
 
 /// Creates a `OStream` that links to `std::cerr` and global output config.
-inline auto stderr_ostream() -> OStream {
-    return OStream(config(), std::cerr);
-}
+inline auto stderr_ostream() -> OStream { return OStream(config(), std::cerr); }
 
 /* ----- OStream manipulators ----- */
 

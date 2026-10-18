@@ -1,4 +1,3 @@
-#include "decoterm/output.hpp"
 #include <decoterm/decoterm.hpp>
 
 #include <iostream>
@@ -11,5 +10,5 @@ auto main() -> int {
     std::cout << error << "assertion failed " << deco::reset << "\nat ";
 
     // same as `std::cout << deco::italic << "main.cpp" << deco::reset`
-    std::cout << (deco::italic | "main.cpp");
+    std::cout << ("main.cpp" | deco::italic);
 }

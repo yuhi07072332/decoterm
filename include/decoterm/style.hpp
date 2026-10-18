@@ -31,13 +31,11 @@
 #include <concepts>
 #include <cstdint>
 #include <iterator>
-#include <memory>
 #include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <utility>
 #include <version>
 
 #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
@@ -87,7 +85,6 @@ concept style_type = (std::is_same_v<std::remove_cvref_t<S>, Style>
 // clang-format on
 
 using ColorData = std::array<uint8_t, 3>;
-
 
 // clang-format off
 inline constexpr std::array<std::string_view, 16> SGR_PARAM_FG {
@@ -170,58 +167,19 @@ constexpr auto color_to_sgr_params(OutputIt out, ColorType type, ColorData data)
     return out; // unreachable
 }
 
-/// A wrapper that stores rvalue or references lvalue.
-template <typename T>
-struct ValueOrRef {
-    explicit constexpr ValueOrRef(T value)
-        requires std::move_constructible<T>
-        : value(std::move(value)) {}
-
-    explicit constexpr ValueOrRef(const T& value)
-        requires(!std::move_constructible<T>
-                 && std::constructible_from<T, const T&>)
-        : value(value) {}
-
-    constexpr auto get() const -> T& { return value; }
-
-  private:
-    mutable T value;
-};
-
-template <typename T>
-struct ValueOrRef<T&> {
-    explicit constexpr ValueOrRef(T& ref) : ptr(std::addressof(ref)) {}
-
-    constexpr auto get() const -> T& { return *ptr; }
-
-  private:
-    mutable T* ptr;
-};
-
-template <typename T>
-    requires(!std::is_lvalue_reference_v<T>)
-ValueOrRef(T&& value) -> ValueOrRef<std::remove_cvref_t<T>>;
-
-template <typename T>
-ValueOrRef(T& ref) -> ValueOrRef<T&>;
-
-template <typename Ret, typename... Args>
-ValueOrRef(Ret(Args...)) -> ValueOrRef<std::decay_t<Ret(Args...)>>;
-
-/// A `ValueOrRef` with a style.
 template <style_type StyleT, typename T>
 struct Styled {
     using value_type = T;
 
-    constexpr Styled(ValueOrRef<T> value, StyleT style)
-        : store_(std::move(value)),
+    constexpr Styled(const T& value, StyleT style)
+        : value_(value),
           style_(style) {}
 
-    constexpr auto value() const -> T& { return store_.get(); }
+    constexpr auto value() const -> const T& { return value_; }
     constexpr auto style() const -> StyleT { return style_; }
 
   private:
-    ValueOrRef<T> store_;
+    const T& value_; // NOLINT
     StyleT style_;
 };
 
@@ -755,26 +713,36 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 /// @return An implementation-defined object that associates `value` with
 /// `style`. Lvalues are stored by reference and rvalues are stored by value.
 template <typename T>
-constexpr auto styled(T&& value, Style style) {
-    return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), style);
+    requires(!detail::style_type<T>)
+constexpr auto styled(const T& value, Style style) {
+    return detail::Styled(value, style);
 }
 
 /// `AbsoluteStyle` version of `styled()`
 template <typename T>
-constexpr auto styled(T&& value, AbsoluteStyle abstyle) {
-    return detail::Styled(detail::ValueOrRef(std::forward<T>(value)), abstyle);
+    requires(!detail::style_type<T>)
+constexpr auto styled(const T& value, AbsoluteStyle abstyle) {
+    return detail::Styled(value, abstyle);
 }
 
 /// shorthand for `styled(value, style)`
 template <typename T>
-constexpr auto operator|(Style style, T&& value) {
-    return styled(std::forward<T>(value), style);
+    requires(!detail::style_type<T> && !detail::styled<T>)
+constexpr auto operator|(const T& value, Style style) {
+    return styled(value, style);
 }
 
 /// shorthand for `styled(value, abstyle)`
 template <typename T>
-constexpr auto operator|(AbsoluteStyle abstyle, T&& value) {
-    return styled(std::forward<T>(value), abstyle);
+    requires(!detail::style_type<T> && !detail::styled<T>)
+constexpr auto operator|(const T& value, AbsoluteStyle abstyle) {
+    return styled(value, abstyle);
+}
+
+template <typename T>
+constexpr auto operator|(const detail::Styled<Style, T>& styled, Style style)
+    -> detail::Styled<Style, T> {
+    return detail::Styled(styled.value(), styled.style() | style);
 }
 
 /// output operator for `styled()`

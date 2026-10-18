@@ -17,11 +17,11 @@ constexpr std::array<std::string_view, 8> style_names {
 
 auto main() -> int {
     std::println("{}",
-                 (deco::color(deco::black, deco::bright_green) | deco::bold)
-                     | "Styles");
+                 "Styles" |
+                     (deco::color(deco::black, deco::bright_green) | deco::bold));
     std::println();
 
     for (std::size_t i = 0; i < style_names.size(); ++i) {
-        std::println("{}", deco::Style(1 << i) | style_names[i]);
+        std::println("{}", style_names[i] | deco::Style(1 << i));
     }
 }

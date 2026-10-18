@@ -15,7 +15,8 @@ using namespace deco;
 using doctest::test_suite;
 
 TEST_CASE("BufAppender" * test_suite("BufAppender")) {
-    static_assert(std::output_iterator<detail::BufAppender<char, 1>, const char&>);
+    static_assert(
+        std::output_iterator<detail::BufAppender<char, 1>, const char&>);
 
     detail::Buffer<char, 5> buf;
 
@@ -35,8 +36,10 @@ TEST_CASE("BufAppender" * test_suite("BufAppender")) {
 }
 
 TEST_CASE("formatters" * test_suite("formatters")) {
-    static_assert(std::is_same_v<detail::formatter_t<const char(&) [5]>, std::formatter<std::string_view>>);
-    static_assert(std::is_same_v<detail::formatter_t<int (&)[5]>, std::formatter<int[5]>>);
+    static_assert(std::is_same_v<detail::formatter_t<const char (&)[5]>,
+                                 std::formatter<std::string_view>>);
+    static_assert(std::is_same_v<detail::formatter_t<int (&)[5]>,
+                                 std::formatter<int[5]>>);
 
     std::string result;
     std::ostringstream expected;
@@ -60,7 +63,8 @@ TEST_CASE("formatters" * test_suite("formatters")) {
     }
 
     SUBCASE("styled") {
-        result = std::format("{:04}{}", styled(42, bold), styled("hello", italic));
+        result =
+            std::format("{:04}{}", styled(42, bold), styled("hello", italic));
         expected << bold << "0042" << reset << italic << "hello" << reset;
         CHECK(result == expected.str());
     }
@@ -78,7 +82,7 @@ TEST_CASE("format with style" * test_suite("format")) {
 
     SUBCASE("AbsoluteStyle") {
         result = format(abs(bold), "abs bold text");
-        expected =  std::format("{}abs bold text{}", abs(bold), reset);
+        expected = std::format("{}abs bold text{}", abs(bold), reset);
         CHECK(result == expected);
     }
 
@@ -91,10 +95,10 @@ TEST_CASE("format with style" * test_suite("format")) {
     SUBCASE("styled() restore to specified style") {
         result = format(fg(blue), "blue, {}, blue", styled("bold blue", bold));
         expected = std::format("{}blue, {}bold blue{}, blue{}",
-                             fg(blue),
-                             bold,
-                             abs(fg(blue)),
-                             reset);
+                               fg(blue),
+                               bold,
+                               abs(fg(blue)),
+                               reset);
         CAPTURE(result);
         CAPTURE(expected);
         CHECK(result == expected);
@@ -118,7 +122,6 @@ TEST_CASE("print with style" * test_suite("print")) {
     }
 }
 
-
 TEST_CASE("Printer prints values" * test_suite("Printer")) {
     OutputConfig ocfg;
     std::ostringstream os;
@@ -135,26 +138,31 @@ TEST_CASE("Printer prints values" * test_suite("Printer")) {
     }
 
     SUBCASE("styled") {
-        out.print("The answer is {}.", fg(blue) | bold | 42);
-        expected = std::format("{}The answer is {}42{}.", abs(base), fg(blue) | bold, abs(base));
+        out.print("The answer is {}.", 42 | fg(blue) | bold);
+        expected = std::format(
+            "{}The answer is {}42{}.", abs(base), fg(blue) | bold, abs(base));
         CHECK(os.str() == expected);
     }
 
     SUBCASE("with style specified") {
         out.println(bg(blue) | fg(black), "TEXT");
-        expected = std::format("{}TEXT{}\n", abs(base | bg(blue) | fg(black)), abs(base));
+        expected = std::format(
+            "{}TEXT{}\n", abs(base | bg(blue) | fg(black)), abs(base));
         CHECK(out.current_style() == base);
         CHECK(os.str() == expected);
 
         os.str("");
         os.clear();
 
-        out.println(bold, "first {} third", fg(blue) | "second");
-        expected = std::format("{}first {}second{} third{}\n", bold, fg(blue), abs(base | bold), abs(base));
+        out.println(bold, "first {} third", "second" | fg(blue));
+        expected = std::format("{}first {}second{} third{}\n",
+                               bold,
+                               fg(blue),
+                               abs(base | bold),
+                               abs(base));
         CHECK(out.current_style() == base);
         CHECK(os.str() == expected);
     }
-
 }
 
 TEST_CASE("Printer follows OutputConfig" * test_suite("Printer")) {
@@ -167,19 +175,22 @@ TEST_CASE("Printer follows OutputConfig" * test_suite("Printer")) {
     SUBCASE("disable color") {
         ocfg.enable_color(false);
 
-        out .set_base_style(dim)
-            .print(bold, "text{}text", fg(blue) | italic | "text");
-        expected = std::format("{}text{}text{}text{}", abs(dim | bold), italic, abs(dim | bold), abs(dim));
+        out.set_base_style(dim).print(
+            bold, "text{}text", "text" | fg(blue) | italic);
+        expected = std::format("{}text{}text{}text{}",
+                               abs(dim | bold),
+                               italic,
+                               abs(dim | bold),
+                               abs(dim));
         CHECK(os.str() == expected);
     }
-    
+
     SUBCASE("disable style") {
         ocfg.enable_style(false);
-        out .set_base_style(dim)
-            .print(bold, "text{}text", fg(blue) | italic | "text");
+        out.set_base_style(dim).print(
+            bold, "text{}text", "text" | fg(blue) | italic);
         CHECK(os.str() == "texttexttext");
     }
-
 
     SUBCASE("color fallback") {
 
@@ -187,12 +198,13 @@ TEST_CASE("Printer follows OutputConfig" * test_suite("Printer")) {
     }
 }
 
-TEST_CASE("Printer without OutputConfig writes styles directly" * test_suite("Printer")) {
+TEST_CASE("Printer without OutputConfig writes styles directly"
+          * test_suite("Printer")) {
     std::ostringstream os;
     Printer out(os);
 
-    out.set_base_style(dim)
-        .print(bold, "text{}text", fg(blue) | italic | "styled");
+    out.set_base_style(dim).print(
+        bold, "text{}text", "styled" | fg(blue) | italic);
 
     const auto expected = std::format("{}text{}styled{}text{}",
                                       abs(dim | bold),
@@ -202,7 +214,8 @@ TEST_CASE("Printer without OutputConfig writes styles directly" * test_suite("Pr
     CHECK(os.str() == expected);
 }
 
-TEST_CASE("Printer clone_with starts from the cloned style state" * test_suite("Printer")) {
+TEST_CASE("Printer clone_with starts from the cloned style state"
+          * test_suite("Printer")) {
     std::ostringstream source_os;
     std::ostringstream clone_os;
     Printer source(source_os);
@@ -212,9 +225,8 @@ TEST_CASE("Printer clone_with starts from the cloned style state" * test_suite("
 
     clone.print("nested").pop().print("base");
 
-    const auto expected = std::format("{}nested{}base",
-                                      abs(bold | italic),
-                                      abs(bold));
+    const auto expected =
+        std::format("{}nested{}base", abs(bold | italic), abs(bold));
     CHECK(source_os.str().empty());
     CHECK(clone_os.str() == expected);
     CHECK(source.current_style() == (bold | italic));
@@ -258,8 +270,7 @@ TEST_CASE("Printer merges styles" * test_suite("Printer")) {
         std::ostringstream os;
         Printer out(ocfg, os);
 
-        out.set_base_style(bold)
-           .apply(italic).print(fg(red), "text");
+        out.set_base_style(bold).apply(italic).print(fg(red), "text");
 
         const auto expected = std::format(
             "{}text{}", abs(bold | italic | fg(red)), abs(bold | italic));
@@ -284,8 +295,8 @@ TEST_CASE("Printer merges styles" * test_suite("Printer")) {
             .print("four");
 
         const auto expected = std::format("{}one{}two{}three{}four",
-                                           abs(bold | fg(red)),
-                                           underline | bg(blue),
+                                          abs(bold | fg(red)),
+                                          underline | bg(blue),
                                           abs(bold | fg(red)),
                                           reset);
         CHECK(out.current_style() == null_style);

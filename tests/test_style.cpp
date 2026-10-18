@@ -308,151 +308,15 @@ TEST_CASE("AbsoluteStyle writes escape sequence"
     }
 }
 
-// ──────────────────────────────── misc ─────────────────────────────
-
-namespace {
-
-class Counter {
-  public:
-    Counter(int init) : value_(init) {}
-
-    void increment() { value_++; }
-    auto value() const -> int { return value_; }
-
-  private:
-    int value_;
-};
-
-std::ostream& operator<<(std::ostream& os, const Counter& cc) {
-    os << cc.value();
-    return os;
-}
-
-auto test_fn(int value) -> int { return value + 1; }
-
-struct MoveOnly {
-    std::string v;
-
-    MoveOnly(std::string v) : v(std::move(v)) {}
-    MoveOnly(const MoveOnly&) = delete;
-    auto operator=(const MoveOnly&) -> MoveOnly& = delete;
-
-    MoveOnly(MoveOnly&&) noexcept = default;
-    auto operator=(MoveOnly&&) noexcept -> MoveOnly& = default;
-    ~MoveOnly() = default;
-};
-
-struct CopyOnly {
-    std::string v;
-
-    CopyOnly(std::string v) : v(std::move(v)) {}
-    CopyOnly(const CopyOnly&) = default;
-    auto operator=(const CopyOnly&) -> CopyOnly& = default;
-
-    CopyOnly(CopyOnly&&) noexcept = delete;
-    auto operator=(CopyOnly&&) noexcept -> CopyOnly& = delete;
-    ~CopyOnly() = default;
-};
-
-} // namespace
-
-
-TEST_CASE("ValueOrRef stores or borrows value" * test_suite("ValueOrRef")) {
-
-    SUBCASE("stores rvalue") {
-        const int ci = 64;
-
-        auto vi = detail::ValueOrRef(32);
-        auto vci = detail::ValueOrRef(std::move(ci));
-        auto vpi = detail::ValueOrRef(&ci);
-        auto vcounter = detail::ValueOrRef(Counter(0));
-        static_assert(
-            std::is_same_v<decltype(vcounter), detail::ValueOrRef<Counter>>);
-
-        static_assert(std::is_same_v<decltype(vi), detail::ValueOrRef<int>>);
-        static_assert(std::is_same_v<decltype(vci), detail::ValueOrRef<int>>);
-        static_assert(
-            std::is_same_v<decltype(vpi), detail::ValueOrRef<const int*>>);
-
-        CHECK(vcounter.get().value() == 0);
-        CHECK(vi.get() == 32);
-        CHECK(vci.get() == 64);
-
-        vcounter.get().increment();
-        CHECK(vcounter.get().value() == 1);
-    }
-
-    SUBCASE("borrows lvalue") {
-        int i = 128;
-        const int ci = 64;
-        int arr[] = {1, 2, 3};
-        int* pi = &i;
-        const int* cpi = &i;
-        Counter counter(0);
-
-        auto vi = detail::ValueOrRef(i);
-        auto vci = detail::ValueOrRef(ci);
-        auto varr = detail::ValueOrRef(arr);
-        auto vpi = detail::ValueOrRef(pi);
-        auto vcpi = detail::ValueOrRef(cpi);
-        auto vcounter = detail::ValueOrRef(counter);
-
-        static_assert(std::is_same_v<decltype(vi), detail::ValueOrRef<int&>>);
-        static_assert(
-            std::is_same_v<decltype(vci), detail::ValueOrRef<const int&>>);
-        static_assert(
-            std::is_same_v<decltype(varr), detail::ValueOrRef<int (&)[3]>>);
-        static_assert(std::is_same_v<decltype(vpi), detail::ValueOrRef<int*&>>);
-        static_assert(
-            std::is_same_v<decltype(vcpi), detail::ValueOrRef<const int*&>>);
-        static_assert(
-            std::is_same_v<decltype(vcounter), detail::ValueOrRef<Counter&>>);
-
-        counter.increment();
-        vcounter.get().increment();
-        vi.get()++;
-        varr.get()[1] = 4;
-
-        CHECK(counter.value() == 2);
-        CHECK(i == 129);
-        CHECK(vci.get() == 64);
-        CHECK(arr[1] == 4);
-        CHECK(vpi.get() == &i);
-        CHECK(vcpi.get() == &i);
-    }
-
-    SUBCASE("decays functions") {
-        auto value = detail::ValueOrRef(test_fn);
-        static_assert(
-            std::is_same_v<decltype(value), detail::ValueOrRef<int (*)(int)>>);
-
-        CHECK(value.get()(41) == 42);
-    }
-}
-
-TEST_CASE("ValueOrRef handles move or copy" * test_suite("ValueOrRef")) {
-    SUBCASE("move only type") {
-        MoveOnly m("move only");
-        auto v = detail::ValueOrRef(std::move(m));
-        CHECK(m.v == "");
-    }
-
-    SUBCASE("copy only type") {
-        CopyOnly c("copy only");
-        auto v = detail::ValueOrRef(std::move(c));
-        CHECK(c.v == "copy only");
-    }
-}
+// ─────────────────────────────── styled ────────────────────────────
 
 TEST_CASE("styled() wraps value with style" * test_suite("styled")) {
     std::ostringstream os;
     std::ostringstream expected;
 
-    auto styled_counter = italic | Counter(0);
-    styled_counter.value().increment();
 
-    os << (bold | "hello") << styled_counter;
-    expected << bold << "hello" << reset << italic << 1 << reset;
+    os << ("hello" | bold) << (1 | italic | fg(blue));
+    expected << bold << "hello" << reset << (italic | fg(blue))<< 1 << reset;
     CHECK(os.str() == expected.str());
 }
 

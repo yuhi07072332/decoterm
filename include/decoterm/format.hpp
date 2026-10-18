@@ -91,10 +91,12 @@ struct BufAppender {
 
 template <style_type StyleT, typename T>
 struct FStyled {
-    constexpr FStyled(Styled<StyleT, T> styled, AbsoluteStyle current_style, const OutputConfig* cfg)
+    constexpr FStyled(Styled<StyleT, T> styled,
+                      AbsoluteStyle current_style,
+                      const OutputConfig* cfg)
         : styled(std::move(styled)),
           restore_style(current_style),
-        cfg(cfg) {}
+          cfg(cfg) {}
 
     Styled<StyleT, T> styled;
     AbsoluteStyle restore_style;
@@ -103,10 +105,12 @@ struct FStyled {
 
 // Replace `Styled` with `FStyled`
 template <typename Arg>
-constexpr auto process_fmt_arg(Arg& arg, AbsoluteStyle current_style, const OutputConfig* cfg)
-    -> decltype(auto) {
-    static_assert(!style_type<Arg> && !std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
-                  "Style types and 'reset' cannot be used as a format argument.");
+constexpr auto process_fmt_arg(Arg& arg,
+                               AbsoluteStyle current_style,
+                               const OutputConfig* cfg) -> decltype(auto) {
+    static_assert(
+        !style_type<Arg> && !std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
+        "Style types and 'reset' cannot be used as a format argument.");
     if constexpr (detail::styled<Arg>)
         return FStyled(std::move(arg), current_style, cfg);
     else return arg;
@@ -126,7 +130,9 @@ inline auto format_to_impl(OutputIt out,
                            Args&&... args /* NOLINT */) -> OutputIt {
     out = style.to_escape(out);
     out = std::vformat_to(
-        out, fmt.get(), make_format_args(process_fmt_arg(args, abs(style), nullptr)...));
+        out,
+        fmt.get(),
+        make_format_args(process_fmt_arg(args, abs(style), nullptr)...));
     if (!style.is_null()) out = abs(null_style).to_escape(out);
     return out;
 }
@@ -153,7 +159,7 @@ auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
 #ifdef DECO_ENABLE_STD_PRINT
 
 template <typename Stream, style_type StyleT, typename... Args>
-inline auto print_impl(Stream&& stream/* NOLINT */,
+inline auto print_impl(Stream&& stream /* NOLINT */,
                        StyleT style,
                        std::format_string<Args...> fmt,
                        Args&&... args) {
@@ -237,9 +243,11 @@ struct formatter<deco::detail::FStyled<StyleT, T>>
 
         const auto& styled = fstyled.styled;
 
-        ctx.advance_to(detail::write_style(ctx.out(), styled.style(), fstyled.cfg));
+        ctx.advance_to(
+            detail::write_style(ctx.out(), styled.style(), fstyled.cfg));
         ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
-        ctx.advance_to(detail::write_style(ctx.out(), fstyled.restore_style, fstyled.cfg));
+        ctx.advance_to(
+            detail::write_style(ctx.out(), fstyled.restore_style, fstyled.cfg));
 
         return ctx.out();
     }
@@ -394,15 +402,11 @@ inline void println(std::ostream& os,
 ///   context instead.
 class Printer {
   public:
-    explicit Printer(std::ostream& os)
-        : cfg_(nullptr),
-          stream(&os) {
+    explicit Printer(std::ostream& os) : cfg_(nullptr), stream(&os) {
         ctx_.ensure_style();
     }
 
-    explicit Printer(std::FILE* f = stdout)
-        : cfg_(nullptr),
-          stream(f) {
+    explicit Printer(std::FILE* f = stdout) : cfg_(nullptr), stream(f) {
         ctx_.ensure_style();
     }
 
@@ -519,9 +523,12 @@ class Printer {
     using Stream = std::variant<detail::NotNull<std::FILE*>,
                                 detail::NotNull<std::ostream*>>;
 
-    explicit Printer(const OutputConfig* config, Stream stream, detail::StyleContext ctx)
+    explicit Printer(const OutputConfig* config,
+                     Stream stream,
+                     detail::StyleContext ctx)
         : ctx_(std::move(ctx)),
-          cfg_(config), stream(stream){
+          cfg_(config),
+          stream(stream) {
         ctx_.drop_pending();
         ctx_.ensure_style();
     }
@@ -548,14 +555,14 @@ class Printer {
         if (ctx_.has_pending()) out = this->write_pending(out, style);
         else out = detail::write_style(out, style, cfg_);
 
-        [[maybe_unused]] // For some reason, GCC reports this variable as unused.
-        const AbsoluteStyle current_style = detail::merge(ctx_.current_abstyle(), style);
+        // For some reason, GCC reports this variable as unused.
+        [[maybe_unused]] const AbsoluteStyle current_style =
+            detail::merge(ctx_.current_abstyle(), style);
 
-        out = std::vformat_to(
-            out,
-            fmt.get(),
-            detail::make_format_args(
-                detail::process_fmt_arg(args, current_style, cfg_)...));
+        out = std::vformat_to(out,
+                              fmt.get(),
+                              detail::make_format_args(detail::process_fmt_arg(
+                                  args, current_style, cfg_)...));
 
         if (!style.is_null())
             out = detail::write_style(out, ctx_.current_abstyle(), cfg_);
@@ -612,14 +619,10 @@ class Printer {
 };
 
 /// Creates a `Printer` links to `stdout` and global output config.
-inline auto stdout_printer() -> Printer {
-    return Printer(config(), stdout);
-}
+inline auto stdout_printer() -> Printer { return Printer(config(), stdout); }
 
 /// Creates a `Printer` links to `stderr` and global output config.
-inline auto stderr_printer() -> Printer {
-    return Printer(config(), stderr);
-}
+inline auto stderr_printer() -> Printer { return Printer(config(), stderr); }
 
 #endif // DECO_ENABLE_STD_PRINT
 
