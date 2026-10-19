@@ -43,6 +43,8 @@ log << deco::push(info)
     << deco::pop;
 ```
 
+Preview:  
+
 ![preview](https://github.com/user-attachments/assets/406b696e-0612-4e63-8315-be558df62c46)
 
 ## Features
