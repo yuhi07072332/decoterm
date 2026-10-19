@@ -4,6 +4,7 @@ add_executable(decoterm_test
     test_style.cpp
     test_output.cpp
     test_format.cpp
+    test_sync.cpp
 )
 
 target_include_directories(decoterm_test PRIVATE

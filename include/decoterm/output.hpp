@@ -613,6 +613,12 @@ class OStream {
         return out;
     }
 
+  protected:
+
+    void switch_ostream(std::ostream& os) {
+        ostream_ = &os;
+    }
+
   private:
     explicit OStream(const OutputConfig* config,
                      std::ostream& ostream,
