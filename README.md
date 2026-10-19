@@ -43,6 +43,10 @@ log << deco::push(info)
     << deco::pop;
 ```
 
+Preview:  
+
+![preview](https://github.com/user-attachments/assets/406b696e-0612-4e63-8315-be558df62c46)
+
 ## Features
 
 - Cross-platform support for Windows, Linux, macOS and other platforms
@@ -71,8 +75,8 @@ The library itself requires atleast **C++20**. The examples and tests use `std::
 
 ```
                      ┌───────────┐    Minimal API                           
-                     │ style.hpp │    [Color, Style, styled(),
-                     └───────────┘     ostream output operator]             
+                     │ style.hpp │    [Color, Style, styled()]
+                     └───────────┘
                            ▲                                                
                            │                                                
  ┌────────────────┐        │                                                
@@ -81,7 +85,7 @@ The library itself requires atleast **C++20**. The examples and tests use `std::
           ▲                │                                                
           │                │                                                
           │      ┌────────────────────┐  Advanced style output functionality
-          └──────│     output.hpp     │  [StyledOstream]                    
+          └──────│     output.hpp     │  [Ostream]                    
                  └────────────────────┘                                     
                    ▲                ▲                                       
                    │                │                                       
@@ -89,7 +93,7 @@ The library itself requires atleast **C++20**. The examples and tests use `std::
         │ format.hpp │             │ terminal.hpp │  utilities              
         └────────────┘             └──────────────┘ 
 std::format and std::print support                                          
-[formatters, StyledFormat]                                                  
+[formatters, Printer]                                                  
 ```
 
 ## Development

@@ -1,5 +1,6 @@
 #include "style.hpp"
 #include "color_info.hpp"
 #include "output.hpp"
+#include "sync.hpp"
 #include "terminal.hpp"
 #include "format.hpp"
