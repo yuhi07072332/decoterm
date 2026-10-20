@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Yuhi0707
+// This file is part of the decoterm library.
+// For license information, see deco.hpp.
+
 #ifndef DECOTERM_SYNC_HPP
 #define DECOTERM_SYNC_HPP
 

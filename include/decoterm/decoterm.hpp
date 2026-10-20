@@ -1,5 +1,5 @@
 #include "deco.hpp"             // IWYU pragma: keep
-#include "color_info.hpp"       // IWYU pragma: keep
+#include "color256.hpp"         // IWYU pragma: keep
 #include "output.hpp"           // IWYU pragma: keep
 #include "sync.hpp"             // IWYU pragma: keep
 #include "terminal.hpp"         // IWYU pragma: keep

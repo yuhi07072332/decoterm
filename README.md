@@ -59,7 +59,7 @@ Preview:
 
 Just download [single-include/decoterm/decoterm.hpp](single-include/decoterm/decoterm.hpp)
 and add it to your *include directories*.
-> Alternatively, you can use [include/decoterm/style.hpp](include/decoterm/style.hpp)
+> Alternatively, you can use [include/decoterm/deco.hpp](include/decoterm/deco.hpp)
 > if you only need the minimal style output functionality.
 
 ### Header-only Mode
@@ -75,7 +75,7 @@ The library itself requires atleast **C++20**. The examples and tests use `std::
 
 ```
                      ┌───────────┐    Minimal API                           
-                     │ style.hpp │    [Color, Style, styled()]
+                     │ deco.hpp  │    [Color, Style, styled()]
                      └───────────┘
                            ▲                                                
                            │                                                
