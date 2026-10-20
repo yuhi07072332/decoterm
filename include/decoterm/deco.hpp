@@ -572,7 +572,7 @@ struct Style {
 
         uint8_t current_flag = emphasis_;
         int count = 0;
-        do {
+        while (current_flag) {
             if (current_flag & 1u) {
                 if (needs_separate) *out++ = ';';
                 out = write_to(out, SGR_PARAM_STYLE[count]);
@@ -580,7 +580,7 @@ struct Style {
             }
             count++;
             current_flag >>= 1u;
-        } while (current_flag);
+        }
         return out;
     }
 
