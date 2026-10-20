@@ -38,6 +38,13 @@
 #include <type_traits>
 #include <version>
 
+#if defined(__cpp_lib_format) \
+    && __cpp_lib_format >= 201907L \
+    && !defined(DECOTERM_NO_FORMAT)
+#define DECO_ENABLE_FORMAT
+#include <format>
+#endif
+
 #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
 #define DECO_CONSTEXPR_CMATH constexpr
 #else
@@ -61,6 +68,31 @@ template <typename T>
 concept ostream_outputable = requires(std::ostream& os, const T& value) {
     { os << value } -> std::same_as<std::ostream&>;
 };
+
+#ifdef DECO_ENABLE_FORMAT
+
+#if __cplusplus >= 202302L
+template <typename Arg, typename CharT = char>
+concept formattable = std::formattable<Arg, CharT>;
+#else
+// fallback for C++20. This only checks if `std::formatter<Arg>` exists
+// and has `parse()` and `format()`.
+template <typename Arg, typename CharT = char>
+concept formattable =
+    requires(std::formatter<std::remove_cvref_t<Arg>, CharT> formatter,
+             Arg&& arg,
+             std::basic_format_parse_context<CharT> parse_ctx,
+             std::basic_format_context<char*, CharT> fmt_ctx) {
+        {
+            formatter.parse(parse_ctx)
+        } -> std::same_as<typename decltype(parse_ctx)::iterator>;
+        {
+            formatter.format(std::forward<Arg>(arg), fmt_ctx)
+        } -> std::same_as<typename decltype(fmt_ctx)::iterator>;
+    };
+#endif
+
+#endif // DECO_ENABLE_FORMAT
 
 namespace detail {
 
@@ -190,6 +222,25 @@ struct is_styled<Styled<S, T>> : std::true_type {};
 
 template <typename T>
 concept styled = is_styled<std::remove_cvref_t<T>>::value;
+
+#ifdef DECO_ENABLE_FORMAT
+
+// for `Styled` formatter
+template <typename T>
+struct formatter_type {
+    using type = std::formatter<T>;
+};
+
+template <typename Char, std::size_t N>
+    requires requires { std::formatter<std::basic_string_view<Char>, Char>(); }
+struct formatter_type<Char[N]> {
+    using type = std::formatter<std::basic_string_view<Char>, Char>;
+};
+
+template <typename T>
+using formatter_t = formatter_type<std::remove_cvref_t<T>>::type;
+
+#endif // DECO_ENABLE_FORMAT
 
 } // namespace detail
 
@@ -771,6 +822,63 @@ inline auto operator<<(std::ostream& os,
 
 } // namespace deco
 
+#ifdef DECO_ENABLE_FORMAT
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       formatters                        ║
+// ╚═════════════════════════════════════════════════════════╝
+
+namespace std {
+
+/// formatter for style types
+template <deco::detail::style_type StyleT>
+struct formatter<StyleT> {
+    constexpr auto parse(std::format_parse_context& ctx) const {
+        return ctx.begin();
+    }
+
+    auto format(StyleT style, std::format_context& ctx) const {
+        return style.to_escape(ctx.out());
+    }
+};
+
+/// formatter for `deco::reset`
+template <>
+struct formatter<deco::Reset> {
+    constexpr auto parse(std::format_parse_context& ctx) const {
+        return ctx.begin();
+    }
+
+    auto format(deco::Reset, std::format_context& ctx) const {
+        return deco::abs(deco::null_style).to_escape(ctx.out());
+    }
+};
+
+/// formatter for `styled()`
+template <deco::detail::style_type StyleT, typename T>
+    requires deco::formattable<T>
+struct formatter<deco::detail::Styled<StyleT, T>>
+    : deco::detail::formatter_t<T> {
+    auto format(const deco::detail::Styled<StyleT, T>& styled,
+                std::format_context& ctx) const {
+        using namespace deco;
+
+        ctx.advance_to(styled.style().to_escape(ctx.out()));
+        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
+        ctx.advance_to(abs(null_style).to_escape(ctx.out()));
+
+        return ctx.out();
+    }
+};
+
+}
+
+#endif // DECO_ENABLE_FORMAT
+
 #undef DECO_CONSTEXPR_CMATH
+
+#ifdef DECO_ENABLE_FORMAT
+#undef DECO_ENABLE_FORMAT
+#endif
 
 #endif // !DECOTERM_STYLE_HPP
