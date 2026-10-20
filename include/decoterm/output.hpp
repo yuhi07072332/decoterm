@@ -21,16 +21,16 @@
 #include <type_traits>
 #include <utility>
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#ifdef DECOTERM_ENABLE_STD_FORMAT
 #   include <format>
-#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#endif // DECOTERM_ENABLE_STD_FORMAT
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT
+#ifdef DECOTERM_ENABLE_STD_PRINT
 #   include <cstdio>
 #   include <print>
 #   include <variant>
 #   include <string_view>
-#endif // DECOTERM_DETAIL_ENABLE_STD_PRINT
+#endif // DECOTERM_ENABLE_STD_PRINT
 
 namespace deco {
 
@@ -385,7 +385,7 @@ struct Push {
 
 struct Pop {};
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#ifdef DECOTERM_ENABLE_STD_FORMAT
 
 // inspired by {fmt} library
 inline constexpr std::size_t FMT_INLINE_BUFFER_SIZE = 500;
@@ -446,7 +446,7 @@ inline auto make_format_args(Args&&... args /* NOLINT */) {
     return std::make_format_args(args...);
 }
 
-#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#endif // DECOTERM_ENABLE_STD_FORMAT
 
 } // namespace detail
 
@@ -752,7 +752,7 @@ inline auto stderr_ostream() -> OStream { return OStream(config(), std::cerr); }
 
 inline constexpr detail::Pop pop {};
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#ifdef DECOTERM_ENABLE_STD_FORMAT
 
 namespace detail {
 
@@ -768,7 +768,7 @@ auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
 
 } // namespace detail
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT
+#ifdef DECOTERM_ENABLE_STD_PRINT
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         Printer                         ║
@@ -1008,12 +1008,12 @@ inline auto stdout_printer() -> Printer { return Printer(config(), stdout); }
 /// Creates a `Printer` links to `stderr` and global output config.
 inline auto stderr_printer() -> Printer { return Printer(config(), stderr); }
 
-#endif // DECOTERM_DETAIL_ENABLE_STD_PRINT
-#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#endif // DECOTERM_ENABLE_STD_PRINT
+#endif // DECOTERM_ENABLE_STD_FORMAT
 
 } // namespace deco
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#ifdef DECOTERM_ENABLE_STD_FORMAT
 
 namespace std {
 
@@ -1039,6 +1039,6 @@ struct formatter<deco::detail::FStyled<StyleT, T>>
 
 } // namespace std
 
-#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#endif // DECOTERM_ENABLE_STD_FORMAT
 
 #endif // !DECOTERM_OUTPUT_HPP

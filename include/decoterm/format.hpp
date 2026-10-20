@@ -9,7 +9,7 @@
 #include "output.hpp"
 #include "style.hpp"
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#ifdef DECOTERM_ENABLE_STD_FORMAT
 
 #include <format>
 #include <iterator>
@@ -18,7 +18,7 @@
 #include <utility>
 #include <version>
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT
+#ifdef DECOTERM_ENABLE_STD_PRINT
 #   include <cstdio>
 #   include <print>
 #endif
@@ -51,7 +51,7 @@ inline auto format_impl(StyleT style,
     return {buf.data(), buf.size()};
 }
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT
+#ifdef DECOTERM_ENABLE_STD_PRINT
 
 template <typename Stream, style_type StyleT, typename... Args>
 inline auto print_impl(Stream&& stream /* NOLINT */,
@@ -75,7 +75,7 @@ inline auto println_impl(Stream&& stream /* NOLINT */,
     std::println(stream, "{}", std::string_view(buffer.data(), buffer.size()));
 }
 
-#endif // DECOTERM_DETAIL_ENABLE_STD_PRINT
+#endif // DECOTERM_ENABLE_STD_PRINT
 
 } // namespace detail
 
@@ -114,7 +114,7 @@ template <typename... Args>
     return detail::format_impl(abstyle, fmt, std::forward<Args>(args)...);
 }
 
-#ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT
+#ifdef DECOTERM_ENABLE_STD_PRINT
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                          print                          ║
@@ -208,10 +208,10 @@ inline void println(std::ostream& os,
     detail::println_impl(os, s, fmt, std::forward<Args>(args)...);
 }
 
-#endif // DECOTERM_DETAIL_ENABLE_STD_PRINT
+#endif // DECOTERM_ENABLE_STD_PRINT
 
 } // namespace deco
 
-#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#endif // DECOTERM_ENABLE_STD_FORMAT
 
 #endif // !DECOTERM_FORMAT_HPP
