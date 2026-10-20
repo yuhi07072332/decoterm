@@ -12,12 +12,14 @@
 // ║                       Color names                       ║
 // ╚═════════════════════════════════════════════════════════╝
 
-namespace deco::colors {
+namespace deco { // NOLINT
+
+inline namespace colors {
+
+namespace color256 {
 
 // NOLINTBEGIN
 // clang-format off
-
-// ──────────────────────── Terminal color names ─────────────────────
 
 enum Color256 : uint8_t {               // NOLINT
     aquamarine1       = 86,
@@ -265,6 +267,10 @@ enum Color256 : uint8_t {               // NOLINT
 // clang-format on
 // NOLINTEND
 
-} // namespace deco::colors
+} // namespace color256
+
+} // namespace colors
+
+} // namespace deco
 
 #endif // !DECOTERM_COLOR256_HPP

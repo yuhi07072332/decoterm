@@ -25,8 +25,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef DECOTERM_STYLE_HPP
-#define DECOTERM_STYLE_HPP
+#ifndef DECOTERM_DECO_HPP
+#define DECOTERM_DECO_HPP
 
 #include <array>
 #include <cassert>
@@ -42,10 +42,25 @@
 #include <type_traits>
 #include <version>
 
+#if __cplusplus < 202302L
+#   include <utility>
+#endif
+
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L                   \
+    && !defined(DECOTERM_NO_FORMAT)
+#   define DECOTERM_ENABLE_STD_FORMAT
+#   include <format>
+#endif
+
+#if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L                     \
+    && defined(DECOTERM_ENABLE_STD_FORMAT)
+#   define DECOTERM_ENABLE_STD_PRINT
+#endif
+
 #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
-#define DECO_CONSTEXPR_CMATH constexpr
+#   define DECO_CONSTEXPR_CMATH constexpr
 #else
-#define DECO_CONSTEXPR_CMATH
+#   define DECO_CONSTEXPR_CMATH
 #endif
 
 namespace deco {
@@ -65,6 +80,31 @@ template <typename T>
 concept ostream_outputable = requires(std::ostream& os, const T& value) {
     { os << value } -> std::same_as<std::ostream&>;
 };
+
+#ifdef DECOTERM_ENABLE_STD_FORMAT
+
+#if __cplusplus >= 202302L
+template <typename Arg, typename CharT = char>
+concept formattable = std::formattable<Arg, CharT>;
+#else
+// fallback for C++20. This only checks if `std::formatter<Arg>` exists
+// and has `parse()` and `format()`.
+template <typename Arg, typename CharT = char>
+concept formattable =
+    requires(std::formatter<std::remove_cvref_t<Arg>, CharT> formatter,
+             Arg&& arg,
+             std::basic_format_parse_context<CharT> parse_ctx,
+             std::basic_format_context<char*, CharT> fmt_ctx) {
+        {
+            formatter.parse(parse_ctx)
+        } -> std::same_as<typename decltype(parse_ctx)::iterator>;
+        {
+            formatter.format(std::forward<Arg>(arg), fmt_ctx)
+        } -> std::same_as<typename decltype(fmt_ctx)::iterator>;
+    };
+#endif
+
+#endif // DECOTERM_ENABLE_STD_FORMAT
 
 namespace detail {
 
@@ -195,6 +235,25 @@ struct is_styled<Styled<S, T>> : std::true_type {};
 template <typename T>
 concept styled = is_styled<std::remove_cvref_t<T>>::value;
 
+#ifdef DECOTERM_ENABLE_STD_FORMAT
+
+// for `Styled` formatter
+template <typename T>
+struct formatter_type {
+    using type = std::formatter<T>;
+};
+
+template <typename Char, std::size_t N>
+    requires requires { std::formatter<std::basic_string_view<Char>, Char>(); }
+struct formatter_type<Char[N]> {
+    using type = std::formatter<std::basic_string_view<Char>, Char>;
+};
+
+template <typename T>
+using formatter_t = formatter_type<std::remove_cvref_t<T>>::type;
+
+#endif // DECOTERM_ENABLE_STD_FORMAT
+
 } // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -324,6 +383,12 @@ struct Color {
     detail::ColorData data_;
 };
 
+// ╔═════════════════════════════════════════════════════════╗
+// ║                         Colors                          ║
+// ╚═════════════════════════════════════════════════════════╝
+
+inline namespace colors {
+
 /// Creates a color from RGB.
 constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
     return Color(r, g, b);
@@ -378,8 +443,6 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     // clang-format on 
 }
 
-/* ----- color constants ----- */
-
 inline constexpr Color default_color   = Color::default_color();
 inline constexpr Color null_color      = Color::null_color();
 
@@ -401,6 +464,8 @@ inline constexpr Color bright_cyan     = Color(14);
 inline constexpr Color bright_white    = Color(15);
 
 // clang-format on
+
+} // namespace colors
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                          Style                          ║
@@ -511,7 +576,7 @@ struct Style {
 
         uint8_t current_flag = emphasis_;
         int count = 0;
-        do {
+        while (current_flag) {
             if (current_flag & 1u) {
                 if (needs_separate) *out++ = ';';
                 out = write_to(out, SGR_PARAM_STYLE[count]);
@@ -519,7 +584,7 @@ struct Style {
             }
             count++;
             current_flag >>= 1u;
-        } while (current_flag);
+        }
         return out;
     }
 
@@ -646,29 +711,7 @@ struct AbsoluteStyle {
     Style style_;
 };
 
-/// @brief Creates an AbsoluteStyle from a Style.
-///
-/// @details equivalent to `AbsoluteStyle(style)`
-constexpr auto abs(Style style) -> AbsoluteStyle {
-    return AbsoluteStyle(style);
-}
-
-/// Creates a Style with foreground and background colors.
-constexpr auto color(Color fg, Color bg) -> Style {
-    return Style(Style::Emphasis::None, fg, bg);
-}
-
-/// Create a Style with foreground color.
-constexpr auto fg(Color fg) -> Style {
-    return Style(Style::Emphasis::None, fg);
-}
-
-/// Create a Style with background color.
-constexpr auto bg(Color bg) -> Style {
-    return Style(Style::Emphasis::None, null_color, bg);
-}
-
-/// IO manipulator that resets the terminal style.
+/// manipulator that resets the terminal style.
 struct Reset {};
 inline constexpr Reset reset;
 
@@ -692,12 +735,38 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
 /// output operator for deco::reset
 inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
-    auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
+    auto len = AbsoluteStyle(Style()).to_escape(buf.begin()) - buf.begin();
     os.write(buf.data(), len);
     return os;
 }
 
-/* ----- style constants ----- */
+// ╔═════════════════════════════════════════════════════════╗
+// ║                         Styles                          ║
+// ╚═════════════════════════════════════════════════════════╝
+
+inline namespace styles {
+
+/// @brief Creates an AbsoluteStyle from a Style.
+///
+/// @details equivalent to `AbsoluteStyle(style)`
+constexpr auto abs(Style style) -> AbsoluteStyle {
+    return AbsoluteStyle(style);
+}
+
+/// Creates a Style with foreground and background colors.
+constexpr auto color(Color fg, Color bg) -> Style {
+    return Style(Style::Emphasis::None, fg, bg);
+}
+
+/// Create a Style with foreground color.
+constexpr auto fg(Color fg) -> Style {
+    return Style(Style::Emphasis::None, fg);
+}
+
+/// Create a Style with background color.
+constexpr auto bg(Color bg) -> Style {
+    return Style(Style::Emphasis::None, null_color, bg);
+}
 
 // clang-format off
 
@@ -712,6 +781,8 @@ inline constexpr Style strikethrough     = Style(Style::Emphasis::Strikethrough)
 inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDouble);
 
 // clang-format on
+
+} // namespace styles
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         styled                          ║
@@ -775,46 +846,83 @@ inline auto operator<<(std::ostream& os,
 
 } // namespace deco
 
+#ifdef DECOTERM_ENABLE_STD_FORMAT
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       formatters                        ║
+// ╚═════════════════════════════════════════════════════════╝
+
+namespace std {
+
+/// formatter for style types
+template <deco::detail::style_type StyleT>
+struct formatter<StyleT> {
+    constexpr auto parse(std::format_parse_context& ctx) const {
+        return ctx.begin();
+    }
+
+    auto format(StyleT style, std::format_context& ctx) const {
+        return style.to_escape(ctx.out());
+    }
+};
+
+/// formatter for `deco::reset`
+template <>
+struct formatter<deco::Reset> {
+    constexpr auto parse(std::format_parse_context& ctx) const {
+        return ctx.begin();
+    }
+
+    auto format(deco::Reset, std::format_context& ctx) const {
+        return deco::abs(deco::null_style).to_escape(ctx.out());
+    }
+};
+
+/// formatter for `styled()`
+template <deco::detail::style_type StyleT, typename T>
+    requires deco::formattable<T>
+struct formatter<deco::detail::Styled<StyleT, T>>
+    : deco::detail::formatter_t<T> {
+    auto format(const deco::detail::Styled<StyleT, T>& styled,
+                std::format_context& ctx) const {
+        using namespace deco;
+
+        ctx.advance_to(styled.style().to_escape(ctx.out()));
+        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
+        ctx.advance_to(abs(null_style).to_escape(ctx.out()));
+
+        return ctx.out();
+    }
+};
+
+} // namespace std
+
+#endif // DECOTERM_ENABLE_STD_FORMAT
+
 #undef DECO_CONSTEXPR_CMATH
 
-#endif // !DECOTERM_STYLE_HPP
+#endif // !DECOTERM_DECO_HPP
+             // IWYU pragma: keep
 
+#ifndef DECOTERM_COLOR256_HPP
+#define DECOTERM_COLOR256_HPP
 
-#ifndef DECOTERM_COLOR_INFO_HPP
-#define DECOTERM_COLOR_INFO_HPP
-
-#include <array>
 #include <cstdint>
 
 // ╔═════════════════════════════════════════════════════════╗
-// ║                       Color Info                        ║
+// ║                       Color names                       ║
 // ╚═════════════════════════════════════════════════════════╝
 
-namespace deco::colors {
+namespace deco { // NOLINT
+
+inline namespace colors {
+
+namespace color256 {
 
 // NOLINTBEGIN
 // clang-format off
 
-// ──────────────────────── Terminal color names ─────────────────────
-
-enum TerminalColors : uint8_t {               // NOLINT
-    black             = 0,
-    red               = 1,
-    green             = 2,
-    yellow            = 3,
-    blue              = 4,
-    magenta           = 5,
-    cyan              = 6,
-    white             = 7,
-    bright_black       = 8,
-    bright_red         = 9,
-    bright_green       = 10,
-    bright_yellow      = 11,
-    bright_blue        = 12,
-    bright_magenta     = 13,
-    bright_cyan        = 14,
-    bright_white       = 15,
-
+enum Color256 : uint8_t {               // NOLINT
     aquamarine1       = 86,
     aquamarine1_1     = 122,
     aquamarine3       = 79,
@@ -1060,17 +1168,58 @@ enum TerminalColors : uint8_t {               // NOLINT
 // clang-format on
 // NOLINTEND
 
-} // namespace deco::colors
+} // namespace color256
 
-namespace deco::detail {
+} // namespace colors
 
-// ──────────────────────── Terminal color info ─────────────────────
+} // namespace deco
+
+#endif // !DECOTERM_COLOR256_HPP
+         // IWYU pragma: keep
+
+#ifndef DECOTERM_OUTPUT_HPP
+#define DECOTERM_OUTPUT_HPP
+
+
+#include <array>
+#include <atomic>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <iterator>
+#include <memory>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+
+#ifdef DECOTERM_ENABLE_STD_FORMAT
+#   include <format>
+#endif // DECOTERM_ENABLE_STD_FORMAT
+
+#ifdef DECOTERM_ENABLE_STD_PRINT
+#   include <cstdio>
+#   include <print>
+#   include <string_view>
+#   include <variant>
+#endif // DECOTERM_ENABLE_STD_PRINT
+
+namespace deco {
+
+class OutputConfig;
+
+/// Terminal color capability levels.
+enum class ColorSupport : uint8_t { Color16, Color256, TrueColor };
+
+namespace detail {
 
 struct RGB {
     uint8_t r, g, b;
 };
 
 // NOLINTBEGIN
+
+// Generated from scripts/gen_color_names.py
 inline constexpr std::array<RGB, 256> color_info {
     {{0, 0, 0},       {128, 0, 0},     {0, 128, 0},     {128, 128, 0},
      {0, 0, 128},     {128, 0, 128},   {0, 128, 128},   {192, 192, 192},
@@ -1136,31 +1285,8 @@ inline constexpr std::array<RGB, 256> color_info {
      {128, 128, 128}, {138, 138, 138}, {148, 148, 148}, {158, 158, 158},
      {168, 168, 168}, {178, 178, 178}, {188, 188, 188}, {198, 198, 198},
      {208, 208, 208}, {218, 218, 218}, {228, 228, 228}, {238, 238, 238}}};
+
 // NOLINTEND
-
-} // namespace deco::detail
-
-#endif // !DECOTERM_COLOR_INFO_HPP
-
-
-#ifndef DECOTERM_OUTPUT_HPP
-#define DECOTERM_OUTPUT_HPP
-
-
-#include <array>
-#include <atomic>
-#include <cassert>
-#include <iostream>
-#include <memory>
-#include <type_traits>
-#include <utility>
-
-namespace deco {
-
-/// Terminal color capability levels.
-enum class ColorSupport : uint8_t { Color16, Color256, TrueColor };
-
-namespace detail {
 
 template <typename Ptr>
     requires std::is_pointer_v<Ptr>
@@ -1506,6 +1632,69 @@ struct Push {
 
 struct Pop {};
 
+#ifdef DECOTERM_ENABLE_STD_FORMAT
+
+// inspired by {fmt} library
+inline constexpr std::size_t FMT_INLINE_BUFFER_SIZE = 500;
+
+using FormatBuf = Buffer<char, FMT_INLINE_BUFFER_SIZE>;
+
+template <typename T, std::size_t N>
+struct BufAppender {
+    using iterator_category = std::output_iterator_tag;
+    using value_type = void;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using reference = void;
+
+    explicit constexpr BufAppender(Buffer<T, N>& buf) : buf(&buf) {}
+
+    constexpr auto operator*() -> BufAppender& { return *this; }
+    constexpr auto operator++() -> BufAppender& { return *this; }
+    constexpr auto operator++(int) -> BufAppender& { return *this; }
+
+    constexpr auto operator=(T v) -> BufAppender& {
+        buf->push_back(v);
+        return *this;
+    }
+
+    NotNull<Buffer<T, N>*> buf;
+};
+
+template <style_type StyleT, typename T>
+struct FStyled {
+    constexpr FStyled(Styled<StyleT, T> styled,
+                      AbsoluteStyle current_style,
+                      const OutputConfig* cfg)
+        : styled(std::move(styled)),
+          restore_style(current_style),
+          cfg(cfg) {}
+
+    Styled<StyleT, T> styled;
+    AbsoluteStyle restore_style;
+    const OutputConfig* cfg;
+};
+
+// Replace `Styled` with `FStyled`
+template <typename Arg>
+constexpr auto process_fmt_arg(Arg& arg,
+                               AbsoluteStyle current_style,
+                               const OutputConfig* cfg) -> decltype(auto) {
+    static_assert(
+        !style_type<Arg> && !std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
+        "Style types and 'reset' cannot be used as a format argument.");
+    if constexpr (detail::styled<Arg>)
+        return FStyled(std::move(arg), current_style, cfg);
+    else return arg;
+}
+
+template <typename... Args>
+inline auto make_format_args(Args&&... args /* NOLINT */) {
+    return std::make_format_args(args...);
+}
+
+#endif // DECOTERM_ENABLE_STD_FORMAT
+
 } // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -1752,10 +1941,7 @@ class OStream {
     }
 
   protected:
-
-    void switch_ostream(std::ostream& os) {
-        ostream_ = &os;
-    }
+    void switch_ostream(std::ostream& os) { ostream_ = &os; }
 
   private:
     explicit OStream(const OutputConfig* config,
@@ -1813,365 +1999,9 @@ inline auto stderr_ostream() -> OStream { return OStream(config(), std::cerr); }
 
 inline constexpr detail::Pop pop {};
 
-} // namespace deco
-
-#endif // !DECOTERM_OUTPUT_HPP
-
-#ifndef DECOTERM_SYNC_HPP
-#define DECOTERM_SYNC_HPP
-
-
-#include <syncstream>
-
-namespace deco {
-
-/// @brief An `OStream` that buffers output using `std::osyncstream`.
-///
-/// @details
-/// For example:
-///
-/// ```cpp
-/// OSyncStream out(std::cout);
-/// out << styled("synced", bold);
-/// out.emit();
-/// ```
-/// The above is equivalent to:
-///
-/// ```cpp
-/// std::osyncstream oss(std::cout);
-/// OStream out(oss);
-/// out << styled("synced", bold);
-/// oss.emit();
-/// ```
-/// @warning Similar to `std::osyncstream`, `OSyncStream` itself is not safe for
-/// concurrent access. The same `OSyncStream` object must not be used by
-/// multiple threads simultaneously, as doing so may cause a data race.
-class OSyncStream : public OStream {
-  public:
-    explicit OSyncStream(std::ostream& ostream)
-        : OStream(ostream),
-          osyncstream_(ostream) {
-        this->switch_ostream(osyncstream_);
-    }
-
-    explicit OSyncStream(const OutputConfig& config, std::ostream& ostream)
-        : OStream(config, ostream),
-          osyncstream_(ostream) {
-        this->switch_ostream(osyncstream_);
-    }
-
-    /// Emits the buffered output to the wrapped stream.
-    void emit() { osyncstream_.emit(); }
-
-  private:
-    std::osyncstream osyncstream_;
-};
-
-} // namespace deco
-
-#endif // !DECOTERM_SYNC_HPP
-
-
-#ifndef DECOTERM_TERMINAL_HPP
-#define DECOTERM_TERMINAL_HPP
-
-
-#include <cstdlib>
-#include <string_view>
-
-#if defined(_WIN32)
-#include <stdexcept>
-#include <windows.h>
-#else // POSIX
-#include <unistd.h>
-
-#endif
-
-namespace deco {
+#ifdef DECOTERM_ENABLE_STD_FORMAT
 
 namespace detail {
-
-#if defined(_WIN32)
-[[nodiscard]]
-inline auto enable_stdout_vt() -> bool {
-    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (h_stdout == INVALID_HANDLE_VALUE) return false;
-    DWORD mode;
-    if (!GetConsoleMode(h_stdout, &mode)) return false;
-    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    return SetConsoleMode(h_stdout, mode);
-}
-
-[[nodiscard]]
-inline auto enable_stderr_vt() -> bool {
-    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
-    if (h_stderr == INVALID_HANDLE_VALUE) return false;
-    DWORD mode;
-    if (!GetConsoleMode(h_stderr, &mode)) return false;
-    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    return SetConsoleMode(h_stderr, mode);
-}
-#endif // _WIN32
-
-[[nodiscard]]
-inline auto no_color() -> bool {
-    const char* no_color = std::getenv("NO_COLOR");
-    return no_color != nullptr && no_color[0] != '\0';
-}
-
-// Based on https://github.com/termstandard/colors?tab=readme-ov-file
-[[nodiscard]]
-inline auto get_color_support() -> ColorSupport {
-    auto contains = [](const char* lhs, std::string_view rhs) -> bool {
-        std::string_view sv = lhs ? lhs : "";
-        return sv.find(rhs) != std::string_view::npos; // NOLINT
-    };
-
-    const char* colorterm = std::getenv("COLORTERM");
-
-    if (contains(colorterm, "truecolor")
-        || contains(colorterm, "24bit"))
-        return ColorSupport::TrueColor;
-
-    const char* term = std::getenv("TERM");
-    if (contains(colorterm, "256") || contains(term, "256")) 
-        return ColorSupport::Color256;
-
-#if defined(_WIN32)
-    // TODO: 
-    return ColorSupport::TrueColor;
-#else // POSIX
-
-    return ColorSupport::Color16;
-#endif
-};
-
-[[nodiscard]]
-inline auto is_stdout_tty() -> bool {
-#if defined(_WIN32)
-    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD mode;
-    return GetConsoleMode(h_stdout, &mode);
-#else // POSIX
-    return isatty(STDOUT_FILENO);
-#endif
-};
-
-[[nodiscard]]
-inline auto is_stderr_tty() -> bool {
-#if defined(_WIN32)
-    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
-    DWORD mode;
-    return GetConsoleMode(h_stderr, &mode);
-#else // POSIX
-    return isatty(STDERR_FILENO);
-#endif
-};
-
-
-} // namespace detail
-
-// ╔═════════════════════════════════════════════════════════╗
-// ║                        terminal                         ║
-// ╚═════════════════════════════════════════════════════════╝
-
-struct TerminalInfo {
-    ColorSupport color_support;
-    bool is_stdout_tty;
-    bool is_stderr_tty;
-    bool no_color;
-};
-
-/// Detects the current terminal environment and returns the result as a `TerminalInfo`.
-[[nodiscard]]
-inline auto terminal_info() -> TerminalInfo {
-    return {
-        .color_support = detail::get_color_support(),
-        .is_stdout_tty = detail::is_stdout_tty(),
-        .is_stderr_tty = detail::is_stderr_tty(),
-        .no_color = detail::no_color(),
-    };
-}
-
-/// @brief Configures the global output config based on the current terminal
-/// environment.
-///
-/// @details
-/// - If the `NO_COLOR` environment variable is set, color output is disabled.
-///   (Style output remains enabled)
-/// -  `color_support` are set according to the detected `ColorSupport`.
-///
-/// On Windows, this function also attempts to enable Virtual Terminal (VT)
-/// processing for `stdout` and `stderr` if they are attached to a terminal.
-///
-/// @return The detected `TerminalInfo`.
-///
-/// @throws std::runtime_error If enabling VT processing fails on Windows.
-inline auto init() -> TerminalInfo {
-    auto info = terminal_info();
-    auto& cfg = config();
-
-    cfg.enable_color(!info.no_color);
-    cfg.set_color_support(info.color_support);
-
-#if defined(_WIN32)
-    if (!detail::enable_stdout_vt() && !info.is_stdout_tty)
-        throw std::runtime_error(
-            "deco::init(): failed to enable virtual terminal mode");
-
-    if (!detail::enable_stderr_vt() && !info.is_stderr_tty)
-        throw std::runtime_error(
-            "deco::init(): failed to enable virtual terminal mode");
-#endif // _WIN32
-
-    return info;
-}
-
-} // namespace deco
-
-#endif // !DECOTERM_TERMINAL_HPP
-
-
-#ifndef DECOTERM_FORMAT_HPP
-#define DECOTERM_FORMAT_HPP
-
-
-#include <format>
-#include <iterator>
-#include <ostream>
-#include <string_view>
-#include <type_traits>
-#include <variant>
-#include <version>
-
-#if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L
-#define DECO_ENABLE_STD_PRINT
-#include <cstdio>
-#include <print>
-#endif
-
-namespace deco {
-
-#if __cplusplus >= 202302L
-template <typename Arg, typename CharT = char>
-concept formattable = std::formattable<Arg, CharT>;
-#else
-// fallback for C++20. This only checks if `std::formatter<Arg>` exists
-// and has `parse()` and `format()`.
-template <typename Arg, typename CharT = char>
-concept formattable =
-    requires(std::formatter<std::remove_cvref_t<Arg>, CharT> formatter,
-             Arg&& arg,
-             std::basic_format_parse_context<CharT> parse_ctx,
-             std::basic_format_context<char*, CharT> fmt_ctx) {
-        {
-            formatter.parse(parse_ctx)
-        } -> std::same_as<typename decltype(parse_ctx)::iterator>;
-        {
-            formatter.format(std::forward<Arg>(arg), fmt_ctx)
-        } -> std::same_as<typename decltype(fmt_ctx)::iterator>;
-    };
-#endif
-
-namespace detail {
-
-template <typename T>
-struct formatter_type {
-    using type = std::formatter<T>;
-};
-
-template <typename Char, std::size_t N>
-    requires requires { std::formatter<std::basic_string_view<Char>, Char>(); }
-struct formatter_type<Char[N]> {
-    using type = std::formatter<std::basic_string_view<Char>, Char>;
-};
-
-template <typename T>
-using formatter_t = formatter_type<std::remove_cvref_t<T>>::type;
-
-// inspired by {fmt} library
-inline constexpr std::size_t FMT_INLINE_BUFFER_SIZE = 500;
-
-using FormatBuf = Buffer<char, FMT_INLINE_BUFFER_SIZE>;
-
-template <typename T, std::size_t N>
-struct BufAppender {
-    using iterator_category = std::output_iterator_tag;
-    using value_type = void;
-    using difference_type = std::ptrdiff_t;
-    using pointer = void;
-    using reference = void;
-
-    explicit constexpr BufAppender(Buffer<T, N>& buf) : buf(&buf) {}
-
-    constexpr auto operator*() -> BufAppender& { return *this; }
-    constexpr auto operator++() -> BufAppender& { return *this; }
-    constexpr auto operator++(int) -> BufAppender& { return *this; }
-
-    constexpr auto operator=(T v) -> BufAppender& {
-        buf->push_back(v);
-        return *this;
-    }
-
-    NotNull<Buffer<T, N>*> buf;
-};
-
-template <style_type StyleT, typename T>
-struct FStyled {
-    constexpr FStyled(Styled<StyleT, T> styled,
-                      AbsoluteStyle current_style,
-                      const OutputConfig* cfg)
-        : styled(std::move(styled)),
-          restore_style(current_style),
-          cfg(cfg) {}
-
-    Styled<StyleT, T> styled;
-    AbsoluteStyle restore_style;
-    const OutputConfig* cfg;
-};
-
-// Replace `Styled` with `FStyled`
-template <typename Arg>
-constexpr auto process_fmt_arg(Arg& arg,
-                               AbsoluteStyle current_style,
-                               const OutputConfig* cfg) -> decltype(auto) {
-    static_assert(
-        !style_type<Arg> && !std::is_same_v<std::remove_cvref_t<Arg>, Reset>,
-        "Style types and 'reset' cannot be used as a format argument.");
-    if constexpr (detail::styled<Arg>)
-        return FStyled(std::move(arg), current_style, cfg);
-    else return arg;
-}
-
-template <typename... Args>
-inline auto make_format_args(Args&&... args /* NOLINT */) {
-    return std::make_format_args(args...);
-}
-
-template <std::output_iterator<const char&> OutputIt,
-          style_type StyleT,
-          typename... Args>
-inline auto format_to_impl(OutputIt out,
-                           StyleT style,
-                           std::format_string<Args...> fmt,
-                           Args&&... args /* NOLINT */) -> OutputIt {
-    out = style.to_escape(out);
-    out = std::vformat_to(
-        out,
-        fmt.get(),
-        make_format_args(process_fmt_arg(args, abs(style), nullptr)...));
-    if (!style.is_null()) out = abs(null_style).to_escape(out);
-    return out;
-}
-
-template <style_type StyleT, typename... Args>
-inline auto format_impl(StyleT style,
-                        std::format_string<Args...> fmt,
-                        Args&&... args /* NOLINT */) -> std::string {
-    auto buf = FormatBuf();
-    format_to_impl(BufAppender(buf), style, fmt, std::forward<Args>(args)...);
-    return {buf.data(), buf.size()};
-}
 
 template <std::output_iterator<const char&> OutputIt, detail::style_type StyleT>
 auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
@@ -2183,235 +2013,9 @@ auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
     return style.to_escape(out);
 }
 
-#ifdef DECO_ENABLE_STD_PRINT
-
-template <typename Stream, style_type StyleT, typename... Args>
-inline auto print_impl(Stream&& stream /* NOLINT */,
-                       StyleT style,
-                       std::format_string<Args...> fmt,
-                       Args&&... args) {
-    auto buffer = FormatBuf();
-    format_to_impl(
-        BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
-    std::print(stream, "{}", std::string_view(buffer.data(), buffer.size()));
-}
-
-template <typename Stream, style_type StyleT, typename... Args>
-inline auto println_impl(Stream&& stream /* NOLINT */,
-                         StyleT style,
-                         std::format_string<Args...> fmt,
-                         Args&&... args) {
-    auto buffer = FormatBuf();
-    format_to_impl(
-        BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
-    std::println(stream, "{}", std::string_view(buffer.data(), buffer.size()));
-}
-
-#endif // DECO_ENABLE_STD_PRINT
-
 } // namespace detail
 
-} // namespace deco
-
-// ╔═════════════════════════════════════════════════════════╗
-// ║                       formatters                        ║
-// ╚═════════════════════════════════════════════════════════╝
-
-namespace std {
-
-/// formatter for style types
-template <deco::detail::style_type StyleT>
-struct formatter<StyleT> {
-    constexpr auto parse(std::format_parse_context& ctx) const {
-        return ctx.begin();
-    }
-
-    auto format(StyleT style, std::format_context& ctx) const {
-        return style.to_escape(ctx.out());
-    }
-};
-
-/// formatter for `deco::reset`
-template <>
-struct formatter<deco::Reset> {
-    constexpr auto parse(std::format_parse_context& ctx) const {
-        return ctx.begin();
-    }
-
-    auto format(deco::Reset, std::format_context& ctx) const {
-        return deco::abs(deco::null_style).to_escape(ctx.out());
-    }
-};
-
-/// formatter for `styled()`
-template <deco::detail::style_type StyleT, typename T>
-    requires deco::formattable<T>
-struct formatter<deco::detail::Styled<StyleT, T>>
-    : deco::detail::formatter_t<T> {
-    auto format(const deco::detail::Styled<StyleT, T>& styled,
-                std::format_context& ctx) const {
-        using namespace deco;
-
-        ctx.advance_to(styled.style().to_escape(ctx.out()));
-        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
-        ctx.advance_to(abs(null_style).to_escape(ctx.out()));
-
-        return ctx.out();
-    }
-};
-
-template <deco::detail::style_type StyleT, typename T>
-    requires deco::formattable<T>
-struct formatter<deco::detail::FStyled<StyleT, T>>
-    : deco::detail::formatter_t<T> {
-    auto format(const deco::detail::FStyled<StyleT, T>& fstyled,
-                std::format_context& ctx) const {
-        using namespace deco;
-
-        const auto& styled = fstyled.styled;
-
-        ctx.advance_to(
-            detail::write_style(ctx.out(), styled.style(), fstyled.cfg));
-        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
-        ctx.advance_to(
-            detail::write_style(ctx.out(), fstyled.restore_style, fstyled.cfg));
-
-        return ctx.out();
-    }
-};
-
-} // namespace std
-
-namespace deco {
-
-// ╔═════════════════════════════════════════════════════════╗
-// ║                         format                          ║
-// ╚═════════════════════════════════════════════════════════╝
-
-template <std::output_iterator<const char&> OutputIt, typename... Args>
-inline auto format_to(OutputIt out,
-                      Style style,
-                      std::format_string<Args...> fmt,
-                      Args&&... args) -> OutputIt {
-    return detail::format_to_impl(out, style, fmt, std::forward<Args>(args)...);
-}
-
-template <std::output_iterator<const char&> OutputIt, typename... Args>
-inline auto format_to(OutputIt out,
-                      AbsoluteStyle abstyle,
-                      std::format_string<Args...> fmt,
-                      Args&&... args) -> OutputIt {
-    return detail::format_to_impl(
-        out, abstyle, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-[[nodiscard]] inline auto format(Style style,
-                                 std::format_string<Args...> fmt,
-                                 Args&&... args) -> std::string {
-    return detail::format_impl(style, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-[[nodiscard]] inline auto format(AbsoluteStyle abstyle,
-                                 std::format_string<Args...> fmt,
-                                 Args&&... args) -> std::string {
-    return detail::format_impl(abstyle, fmt, std::forward<Args>(args)...);
-}
-
-#ifdef DECO_ENABLE_STD_PRINT
-
-// ╔═════════════════════════════════════════════════════════╗
-// ║                          print                          ║
-// ╚═════════════════════════════════════════════════════════╝
-
-template <typename... Args>
-inline void print(Style s, std::format_string<Args...> fmt, Args&&... args) {
-    detail::print_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void print(AbsoluteStyle s,
-                  std::format_string<Args...> fmt,
-                  Args&&... args) {
-    detail::print_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void print(FILE* f,
-                  Style s,
-                  std::format_string<Args...> fmt,
-                  Args&&... args) {
-    detail::print_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void print(FILE* f,
-                  AbsoluteStyle s,
-                  std::format_string<Args...> fmt,
-                  Args&&... args) {
-    detail::print_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void print(std::ostream& os,
-                  Style s,
-                  std::format_string<Args...> fmt,
-                  Args&&... args) {
-    detail::print_impl(os, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void print(std::ostream& os,
-                  AbsoluteStyle s,
-                  std::format_string<Args...> fmt,
-                  Args&&... args) {
-    detail::print_impl(os, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void println(Style s, std::format_string<Args...> fmt, Args&&... args) {
-    detail::println_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void println(AbsoluteStyle s,
-                    std::format_string<Args...> fmt,
-                    Args&&... args) {
-    detail::println_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void println(FILE* f,
-                    Style s,
-                    std::format_string<Args...> fmt,
-                    Args&&... args) {
-    detail::println_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void println(FILE* f,
-                    AbsoluteStyle s,
-                    std::format_string<Args...> fmt,
-                    Args&&... args) {
-    detail::println_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void println(std::ostream& os,
-                    Style s,
-                    std::format_string<Args...> fmt,
-                    Args&&... args) {
-    detail::println_impl(os, s, fmt, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void println(std::ostream& os,
-                    AbsoluteStyle s,
-                    std::format_string<Args...> fmt,
-                    Args&&... args) {
-    detail::println_impl(os, s, fmt, std::forward<Args>(args)...);
-}
+#ifdef DECOTERM_ENABLE_STD_PRINT
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         Printer                         ║
@@ -2651,13 +2255,476 @@ inline auto stdout_printer() -> Printer { return Printer(config(), stdout); }
 /// Creates a `Printer` links to `stderr` and global output config.
 inline auto stderr_printer() -> Printer { return Printer(config(), stderr); }
 
-#endif // DECO_ENABLE_STD_PRINT
+#endif // DECOTERM_ENABLE_STD_PRINT
+#endif // DECOTERM_ENABLE_STD_FORMAT
 
 } // namespace deco
 
-#ifdef DECO_ENABLE_STD_PRINT
-#undef DECO_ENABLE_STD_PRINT
+#ifdef DECOTERM_ENABLE_STD_FORMAT
+
+namespace std {
+
+template <deco::detail::style_type StyleT, typename T>
+    requires deco::formattable<T>
+struct formatter<deco::detail::FStyled<StyleT, T>>
+    : deco::detail::formatter_t<T> {
+    auto format(const deco::detail::FStyled<StyleT, T>& fstyled,
+                std::format_context& ctx) const {
+        using namespace deco;
+
+        const auto& styled = fstyled.styled;
+
+        ctx.advance_to(
+            detail::write_style(ctx.out(), styled.style(), fstyled.cfg));
+        ctx.advance_to(detail::formatter_t<T>::format(styled.value(), ctx));
+        ctx.advance_to(
+            detail::write_style(ctx.out(), fstyled.restore_style, fstyled.cfg));
+
+        return ctx.out();
+    }
+};
+
+} // namespace std
+
+#endif // DECOTERM_ENABLE_STD_FORMAT
+
+#endif // !DECOTERM_OUTPUT_HPP
+           // IWYU pragma: keep
+
+#ifndef DECOTERM_FORMAT_HPP
+#define DECOTERM_FORMAT_HPP
+
+
+#ifdef DECOTERM_ENABLE_STD_FORMAT
+
+#include <format>
+#include <iterator>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <version>
+
+#ifdef DECOTERM_ENABLE_STD_PRINT
+#   include <cstdio>
+#   include <print>
 #endif
 
-#endif // !DECOTERM_FORMAT_HPP
+namespace deco {
 
+namespace detail {
+template <std::output_iterator<const char&> OutputIt,
+          style_type StyleT,
+          typename... Args>
+inline auto format_to_impl(OutputIt out,
+                           StyleT style,
+                           std::format_string<Args...> fmt,
+                           Args&&... args /* NOLINT */) -> OutputIt {
+    out = style.to_escape(out);
+    out = std::vformat_to(
+        out,
+        fmt.get(),
+        make_format_args(process_fmt_arg(args, abs(style), nullptr)...));
+    if (!style.is_null()) out = abs(null_style).to_escape(out);
+    return out;
+}
+
+template <style_type StyleT, typename... Args>
+inline auto format_impl(StyleT style,
+                        std::format_string<Args...> fmt,
+                        Args&&... args /* NOLINT */) -> std::string {
+    auto buf = FormatBuf();
+    format_to_impl(BufAppender(buf), style, fmt, std::forward<Args>(args)...);
+    return {buf.data(), buf.size()};
+}
+
+#ifdef DECOTERM_ENABLE_STD_PRINT
+
+template <typename Stream, style_type StyleT, typename... Args>
+inline auto print_impl(Stream&& stream /* NOLINT */,
+                       StyleT style,
+                       std::format_string<Args...> fmt,
+                       Args&&... args) {
+    auto buffer = FormatBuf();
+    format_to_impl(
+        BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
+    std::print(stream, "{}", std::string_view(buffer.data(), buffer.size()));
+}
+
+template <typename Stream, style_type StyleT, typename... Args>
+inline auto println_impl(Stream&& stream /* NOLINT */,
+                         StyleT style,
+                         std::format_string<Args...> fmt,
+                         Args&&... args) {
+    auto buffer = FormatBuf();
+    format_to_impl(
+        BufAppender(buffer), style, fmt, std::forward<Args>(args)...);
+    std::println(stream, "{}", std::string_view(buffer.data(), buffer.size()));
+}
+
+#endif // DECOTERM_ENABLE_STD_PRINT
+
+} // namespace detail
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                         format                          ║
+// ╚═════════════════════════════════════════════════════════╝
+
+template <std::output_iterator<const char&> OutputIt, typename... Args>
+inline auto format_to(OutputIt out,
+                      Style style,
+                      std::format_string<Args...> fmt,
+                      Args&&... args) -> OutputIt {
+    return detail::format_to_impl(out, style, fmt, std::forward<Args>(args)...);
+}
+
+template <std::output_iterator<const char&> OutputIt, typename... Args>
+inline auto format_to(OutputIt out,
+                      AbsoluteStyle abstyle,
+                      std::format_string<Args...> fmt,
+                      Args&&... args) -> OutputIt {
+    return detail::format_to_impl(
+        out, abstyle, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+[[nodiscard]] inline auto format(Style style,
+                                 std::format_string<Args...> fmt,
+                                 Args&&... args) -> std::string {
+    return detail::format_impl(style, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+[[nodiscard]] inline auto format(AbsoluteStyle abstyle,
+                                 std::format_string<Args...> fmt,
+                                 Args&&... args) -> std::string {
+    return detail::format_impl(abstyle, fmt, std::forward<Args>(args)...);
+}
+
+#ifdef DECOTERM_ENABLE_STD_PRINT
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                          print                          ║
+// ╚═════════════════════════════════════════════════════════╝
+
+template <typename... Args>
+inline void print(Style s, std::format_string<Args...> fmt, Args&&... args) {
+    detail::print_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(AbsoluteStyle s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(FILE* f,
+                  Style s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(FILE* f,
+                  AbsoluteStyle s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(std::ostream& os,
+                  Style s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl(os, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void print(std::ostream& os,
+                  AbsoluteStyle s,
+                  std::format_string<Args...> fmt,
+                  Args&&... args) {
+    detail::print_impl(os, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(Style s, std::format_string<Args...> fmt, Args&&... args) {
+    detail::println_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(AbsoluteStyle s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl<FILE*>(stdout, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(FILE* f,
+                    Style s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(FILE* f,
+                    AbsoluteStyle s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl<FILE*>(f, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(std::ostream& os,
+                    Style s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl(os, s, fmt, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+inline void println(std::ostream& os,
+                    AbsoluteStyle s,
+                    std::format_string<Args...> fmt,
+                    Args&&... args) {
+    detail::println_impl(os, s, fmt, std::forward<Args>(args)...);
+}
+
+#endif // DECOTERM_ENABLE_STD_PRINT
+
+} // namespace deco
+
+#endif // DECOTERM_ENABLE_STD_FORMAT
+
+#endif // !DECOTERM_FORMAT_HPP
+           // IWYU pragma: keep
+
+#ifndef DECOTERM_SYNC_HPP
+#define DECOTERM_SYNC_HPP
+
+
+#include <syncstream>
+
+namespace deco {
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       OSyncStream                       ║
+// ╚═════════════════════════════════════════════════════════╝
+
+/// @brief An `OStream` that buffers output using `std::osyncstream`.
+///
+/// @details
+/// For example:
+///
+/// ```cpp
+/// OSyncStream out(std::cout);
+/// out << styled("synced", bold);
+/// out.emit();
+/// ```
+/// The above is equivalent to:
+///
+/// ```cpp
+/// std::osyncstream oss(std::cout);
+/// OStream out(oss);
+/// out << styled("synced", bold);
+/// oss.emit();
+/// ```
+/// @warning Similar to `std::osyncstream`, `OSyncStream` itself is not safe for
+/// concurrent access. The same `OSyncStream` object must not be used by
+/// multiple threads simultaneously, as doing so may cause a data race.
+class OSyncStream : public OStream {
+  public:
+    explicit OSyncStream(std::ostream& ostream)
+        : OStream(ostream),
+          osyncstream_(ostream) {
+        this->switch_ostream(osyncstream_);
+    }
+
+    explicit OSyncStream(const OutputConfig& config, std::ostream& ostream)
+        : OStream(config, ostream),
+          osyncstream_(ostream) {
+        this->switch_ostream(osyncstream_);
+    }
+
+    /// Emits the buffered output to the wrapped stream.
+    void emit() { osyncstream_.emit(); }
+
+  private:
+    std::osyncstream osyncstream_;
+};
+
+} // namespace deco
+
+#endif // !DECOTERM_SYNC_HPP
+             // IWYU pragma: keep
+
+#ifndef DECOTERM_TERMINAL_HPP
+#define DECOTERM_TERMINAL_HPP
+
+
+#include <cstdlib>
+#include <string_view>
+
+#if defined(_WIN32)
+#   include <stdexcept>
+#   include <windows.h>
+#else // POSIX
+#   include <unistd.h>
+#endif
+
+namespace deco {
+
+namespace detail {
+
+#if defined(_WIN32)
+[[nodiscard]]
+inline auto enable_stdout_vt() -> bool {
+    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h_stdout == INVALID_HANDLE_VALUE) return false;
+    DWORD mode;
+    if (!GetConsoleMode(h_stdout, &mode)) return false;
+    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    return SetConsoleMode(h_stdout, mode);
+}
+
+[[nodiscard]]
+inline auto enable_stderr_vt() -> bool {
+    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
+    if (h_stderr == INVALID_HANDLE_VALUE) return false;
+    DWORD mode;
+    if (!GetConsoleMode(h_stderr, &mode)) return false;
+    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    return SetConsoleMode(h_stderr, mode);
+}
+#endif // _WIN32
+
+[[nodiscard]]
+inline auto no_color() -> bool {
+    const char* no_color = std::getenv("NO_COLOR");
+    return no_color != nullptr && no_color[0] != '\0';
+}
+
+// Based on https://github.com/termstandard/colors?tab=readme-ov-file
+[[nodiscard]]
+inline auto get_color_support() -> ColorSupport {
+    auto contains = [](const char* lhs, std::string_view rhs) -> bool {
+        std::string_view sv = lhs ? lhs : "";
+        return sv.find(rhs) != std::string_view::npos; // NOLINT
+    };
+
+    const char* colorterm = std::getenv("COLORTERM");
+
+    if (contains(colorterm, "truecolor")
+        || contains(colorterm, "24bit"))
+        return ColorSupport::TrueColor;
+
+    const char* term = std::getenv("TERM");
+    if (contains(colorterm, "256") || contains(term, "256")) 
+        return ColorSupport::Color256;
+
+#if defined(_WIN32)
+    // TODO: 
+    return ColorSupport::TrueColor;
+#else // POSIX
+
+    return ColorSupport::Color16;
+#endif
+};
+
+[[nodiscard]]
+inline auto is_stdout_tty() -> bool {
+#if defined(_WIN32)
+    HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode;
+    return GetConsoleMode(h_stdout, &mode);
+#else // POSIX
+    return isatty(STDOUT_FILENO);
+#endif
+};
+
+[[nodiscard]]
+inline auto is_stderr_tty() -> bool {
+#if defined(_WIN32)
+    HANDLE h_stderr = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD mode;
+    return GetConsoleMode(h_stderr, &mode);
+#else // POSIX
+    return isatty(STDERR_FILENO);
+#endif
+};
+
+
+} // namespace detail
+
+// ╔═════════════════════════════════════════════════════════╗
+// ║                        terminal                         ║
+// ╚═════════════════════════════════════════════════════════╝
+
+struct TerminalInfo {
+    ColorSupport color_support;
+    bool is_stdout_tty;
+    bool is_stderr_tty;
+    bool no_color;
+};
+
+/// Detects the current terminal environment and returns the result as a `TerminalInfo`.
+[[nodiscard]]
+inline auto terminal_info() -> TerminalInfo {
+    return {
+        .color_support = detail::get_color_support(),
+        .is_stdout_tty = detail::is_stdout_tty(),
+        .is_stderr_tty = detail::is_stderr_tty(),
+        .no_color = detail::no_color(),
+    };
+}
+
+/// @brief Configures the global output config based on the current terminal
+/// environment.
+///
+/// @details
+/// - If the `NO_COLOR` environment variable is set, color output is disabled.
+///   (Style output remains enabled)
+/// -  `color_support` are set according to the detected `ColorSupport`.
+///
+/// On Windows, this function also attempts to enable Virtual Terminal (VT)
+/// processing for `stdout` and `stderr` if they are attached to a terminal.
+///
+/// @return The detected `TerminalInfo`.
+///
+/// @throws std::runtime_error If enabling VT processing fails on Windows.
+inline auto init() -> TerminalInfo {
+    auto info = terminal_info();
+    auto& cfg = config();
+
+    cfg.enable_color(!info.no_color);
+    cfg.set_color_support(info.color_support);
+
+#if defined(_WIN32)
+    if (!detail::enable_stdout_vt() && !info.is_stdout_tty)
+        throw std::runtime_error(
+            "deco::init(): failed to enable virtual terminal mode");
+
+    if (!detail::enable_stderr_vt() && !info.is_stderr_tty)
+        throw std::runtime_error(
+            "deco::init(): failed to enable virtual terminal mode");
+#endif // _WIN32
+
+    return info;
+}
+
+} // namespace deco
+
+#endif // !DECOTERM_TERMINAL_HPP
+         // IWYU pragma: keep
+
+#ifdef DECOTERM_ENABLE_STD_FORMAT
+#   undef DECOTERM_ENABLE_STD_FORMAT
+#endif
+
+#ifdef DECOTERM_ENABLE_STD_PRINT
+#   undef DECOTERM_ENABLE_STD_PRINT
+#endif
