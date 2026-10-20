@@ -41,14 +41,20 @@
 #if defined(__cpp_lib_format) \
     && __cpp_lib_format >= 201907L \
     && !defined(DECOTERM_NO_FORMAT)
-#define DECO_ENABLE_FORMAT
-#include <format>
+#   define DECOTERM_DETAIL_ENABLE_STD_FORMAT
+#   include <format>
+#endif
+
+#if defined(__cpp_lib_print) \
+    && __cpp_lib_print >= 202207L \
+    && defined(DECOTERM_DETAIL_ENABLE_STD_FORMAT)
+#   define DECOTERM_DETAIL_ENABLE_STD_PRINT
 #endif
 
 #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
-#define DECO_CONSTEXPR_CMATH constexpr
+#   define DECO_CONSTEXPR_CMATH constexpr
 #else
-#define DECO_CONSTEXPR_CMATH
+#   define DECO_CONSTEXPR_CMATH
 #endif
 
 namespace deco {
@@ -69,7 +75,7 @@ concept ostream_outputable = requires(std::ostream& os, const T& value) {
     { os << value } -> std::same_as<std::ostream&>;
 };
 
-#ifdef DECO_ENABLE_FORMAT
+#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 #if __cplusplus >= 202302L
 template <typename Arg, typename CharT = char>
@@ -92,7 +98,7 @@ concept formattable =
     };
 #endif
 
-#endif // DECO_ENABLE_FORMAT
+#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 namespace detail {
 
@@ -223,7 +229,7 @@ struct is_styled<Styled<S, T>> : std::true_type {};
 template <typename T>
 concept styled = is_styled<std::remove_cvref_t<T>>::value;
 
-#ifdef DECO_ENABLE_FORMAT
+#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 // for `Styled` formatter
 template <typename T>
@@ -240,7 +246,7 @@ struct formatter_type<Char[N]> {
 template <typename T>
 using formatter_t = formatter_type<std::remove_cvref_t<T>>::type;
 
-#endif // DECO_ENABLE_FORMAT
+#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 } // namespace detail
 
@@ -822,7 +828,7 @@ inline auto operator<<(std::ostream& os,
 
 } // namespace deco
 
-#ifdef DECO_ENABLE_FORMAT
+#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                       formatters                        ║
@@ -873,12 +879,8 @@ struct formatter<deco::detail::Styled<StyleT, T>>
 
 }
 
-#endif // DECO_ENABLE_FORMAT
+#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 #undef DECO_CONSTEXPR_CMATH
-
-#ifdef DECO_ENABLE_FORMAT
-#undef DECO_ENABLE_FORMAT
-#endif
 
 #endif // !DECOTERM_STYLE_HPP

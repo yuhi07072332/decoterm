@@ -1,6 +1,7 @@
 #include <doctest.h>
 
-#include "decoterm/style.hpp"
+#define DECOTERM_NO_FORMAT
+#include <decoterm/style.hpp>
 
 #include <string>
 

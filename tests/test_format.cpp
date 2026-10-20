@@ -1,6 +1,6 @@
 #include <decoterm/format.hpp>
+#include <decoterm/output.hpp>
 
-#include "decoterm/output.hpp"
 #include "unit_test.hpp"
 #include <doctest.h>
 
