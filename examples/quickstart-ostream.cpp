@@ -4,18 +4,21 @@
 #include <iostream>
 
 auto main() -> int {
-    // combine styles using `|`
-    constexpr deco::Style info = deco::bold | deco::fg(deco::bright_cyan);
-    constexpr deco::Style warning = deco::bold | deco::fg(deco::yellow);
-    constexpr deco::Style error = deco::bold | deco::fg(deco::rgb(255, 85, 85));
+    using namespace deco::colors;
+    using namespace deco::styles;
 
-    // Output `Style`
+    // combine styles using `|`
+    constexpr deco::Style info = bold | fg(bright_cyan);
+    constexpr deco::Style warning = bold | fg(yellow);
+    constexpr deco::Style error = bold | fg(rgb(255, 85, 85));
+
+    // output `Style`
     std::cout << info << "[INFO]" << deco::reset << " server started\n";
 
     // Styled values similar to {fmt} library.
     // You can also use `value | style` instead of `styled(value, style)`.
     std::cout << deco::styled("[WARN]", warning) << " cache is nearly full\n";
-    std::cout << ("[ERROR]" | error) << " request failed: " << (503 | deco::bold) << '\n';
+    std::cout << ("[ERROR]" | error) << " request failed: " << (503 | bold) << '\n';
 
     // `init()` will detect terminal environment and initialize the global config.
     deco::TerminalInfo term = deco::init();
@@ -31,9 +34,9 @@ auto main() -> int {
     // nested style
     log << deco::push(info)
         << "[INFO] processed "
-        << (128 | deco::bold | deco::fg(deco::bright_green))
+        << (128 | bold | fg(bright_green))
         << " records in "
-        << deco::push(deco::underline | deco::fg(deco::yellow))
+        << deco::push(underline | fg(yellow))
         << 42 << " ms"
         << deco::pop
         << '\n'

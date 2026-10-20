@@ -379,6 +379,12 @@ struct Color {
     detail::ColorData data_;
 };
 
+// ╔═════════════════════════════════════════════════════════╗
+// ║                         Colors                          ║
+// ╚═════════════════════════════════════════════════════════╝
+
+inline namespace colors {
+
 /// Creates a color from RGB.
 constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
     return Color(r, g, b);
@@ -433,8 +439,6 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     // clang-format on 
 }
 
-/* ----- color constants ----- */
-
 inline constexpr Color default_color   = Color::default_color();
 inline constexpr Color null_color      = Color::null_color();
 
@@ -456,6 +460,8 @@ inline constexpr Color bright_cyan     = Color(14);
 inline constexpr Color bright_white    = Color(15);
 
 // clang-format on
+
+} // namespace colors
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                          Style                          ║
@@ -701,29 +707,7 @@ struct AbsoluteStyle {
     Style style_;
 };
 
-/// @brief Creates an AbsoluteStyle from a Style.
-///
-/// @details equivalent to `AbsoluteStyle(style)`
-constexpr auto abs(Style style) -> AbsoluteStyle {
-    return AbsoluteStyle(style);
-}
-
-/// Creates a Style with foreground and background colors.
-constexpr auto color(Color fg, Color bg) -> Style {
-    return Style(Style::Emphasis::None, fg, bg);
-}
-
-/// Create a Style with foreground color.
-constexpr auto fg(Color fg) -> Style {
-    return Style(Style::Emphasis::None, fg);
-}
-
-/// Create a Style with background color.
-constexpr auto bg(Color bg) -> Style {
-    return Style(Style::Emphasis::None, null_color, bg);
-}
-
-/// IO manipulator that resets the terminal style.
+/// manipulator that resets the terminal style.
 struct Reset {};
 inline constexpr Reset reset;
 
@@ -747,12 +731,38 @@ inline auto operator<<(std::ostream& os, AbsoluteStyle abstyle)
 /// output operator for deco::reset
 inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
     std::array<char, Style::MAX_ESCAPE_SEQ_SIZE> buf = {0};
-    auto len = abs(Style()).to_escape(buf.begin()) - buf.begin();
+    auto len = AbsoluteStyle(Style()).to_escape(buf.begin()) - buf.begin();
     os.write(buf.data(), len);
     return os;
 }
 
-/* ----- style constants ----- */
+// ╔═════════════════════════════════════════════════════════╗
+// ║                         Styles                          ║
+// ╚═════════════════════════════════════════════════════════╝
+
+inline namespace styles {
+
+/// @brief Creates an AbsoluteStyle from a Style.
+///
+/// @details equivalent to `AbsoluteStyle(style)`
+constexpr auto abs(Style style) -> AbsoluteStyle {
+    return AbsoluteStyle(style);
+}
+
+/// Creates a Style with foreground and background colors.
+constexpr auto color(Color fg, Color bg) -> Style {
+    return Style(Style::Emphasis::None, fg, bg);
+}
+
+/// Create a Style with foreground color.
+constexpr auto fg(Color fg) -> Style {
+    return Style(Style::Emphasis::None, fg);
+}
+
+/// Create a Style with background color.
+constexpr auto bg(Color bg) -> Style {
+    return Style(Style::Emphasis::None, null_color, bg);
+}
 
 // clang-format off
 
@@ -767,6 +777,8 @@ inline constexpr Style strikethrough     = Style(Style::Emphasis::Strikethrough)
 inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDouble);
 
 // clang-format on
+
+} // namespace styles
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         styled                          ║
