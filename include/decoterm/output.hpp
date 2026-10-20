@@ -164,33 +164,6 @@ class Buffer {
     std::size_t capacity_ = N;
 };
 
-// inspired by {fmt} library
-inline constexpr std::size_t FMT_INLINE_BUFFER_SIZE = 500;
-
-using FormatBuf = Buffer<char, FMT_INLINE_BUFFER_SIZE>;
-
-template <typename T, std::size_t N>
-struct BufAppender {
-    using iterator_category = std::output_iterator_tag;
-    using value_type = void;
-    using difference_type = std::ptrdiff_t;
-    using pointer = void;
-    using reference = void;
-
-    explicit constexpr BufAppender(Buffer<T, N>& buf) : buf(&buf) {}
-
-    constexpr auto operator*() -> BufAppender& { return *this; }
-    constexpr auto operator++() -> BufAppender& { return *this; }
-    constexpr auto operator++(int) -> BufAppender& { return *this; }
-
-    constexpr auto operator=(T v) -> BufAppender& {
-        buf->push_back(v);
-        return *this;
-    }
-
-    NotNull<Buffer<T, N>*> buf;
-};
-
 /* ----- color fallback ----- */
 
 // TODO: replace this with better algorithm
@@ -407,6 +380,33 @@ struct Push {
 struct Pop {};
 
 #ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
+
+// inspired by {fmt} library
+inline constexpr std::size_t FMT_INLINE_BUFFER_SIZE = 500;
+
+using FormatBuf = Buffer<char, FMT_INLINE_BUFFER_SIZE>;
+
+template <typename T, std::size_t N>
+struct BufAppender {
+    using iterator_category = std::output_iterator_tag;
+    using value_type = void;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using reference = void;
+
+    explicit constexpr BufAppender(Buffer<T, N>& buf) : buf(&buf) {}
+
+    constexpr auto operator*() -> BufAppender& { return *this; }
+    constexpr auto operator++() -> BufAppender& { return *this; }
+    constexpr auto operator++(int) -> BufAppender& { return *this; }
+
+    constexpr auto operator=(T v) -> BufAppender& {
+        buf->push_back(v);
+        return *this;
+    }
+
+    NotNull<Buffer<T, N>*> buf;
+};
 
 template <style_type StyleT, typename T>
 struct FStyled {
@@ -688,9 +688,7 @@ class OStream {
     }
 
   protected:
-    void switch_ostream(std::ostream& os) {
-        ostream_ = &os;
-    }
+    void switch_ostream(std::ostream& os) { ostream_ = &os; }
 
   private:
     explicit OStream(const OutputConfig* config,
@@ -763,8 +761,6 @@ auto write_style(OutputIt out, StyleT style, const OutputConfig* cfg)
 }
 
 } // namespace detail
-
-#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 #ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT
 
@@ -961,7 +957,7 @@ class Printer {
                         style,
                         fmt,
                         std::forward<Args>(args)...);
-            this->print_stream(buffer);
+        this->print_stream(buffer);
     }
 
     template <detail::style_type StyleT, typename... Args>
@@ -1007,6 +1003,7 @@ inline auto stdout_printer() -> Printer { return Printer(config(), stdout); }
 inline auto stderr_printer() -> Printer { return Printer(config(), stderr); }
 
 #endif // DECOTERM_DETAIL_ENABLE_STD_PRINT
+#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 } // namespace deco
 

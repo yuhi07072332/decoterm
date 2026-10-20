@@ -38,15 +38,13 @@
 #include <type_traits>
 #include <version>
 
-#if defined(__cpp_lib_format) \
-    && __cpp_lib_format >= 201907L \
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L                   \
     && !defined(DECOTERM_NO_FORMAT)
 #   define DECOTERM_DETAIL_ENABLE_STD_FORMAT
 #   include <format>
 #endif
 
-#if defined(__cpp_lib_print) \
-    && __cpp_lib_print >= 202207L \
+#if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L                     \
     && defined(DECOTERM_DETAIL_ENABLE_STD_FORMAT)
 #   define DECOTERM_DETAIL_ENABLE_STD_PRINT
 #endif
@@ -877,7 +875,7 @@ struct formatter<deco::detail::Styled<StyleT, T>>
     }
 };
 
-}
+} // namespace std
 
 #endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
 

@@ -9,6 +9,8 @@
 #include "output.hpp"
 #include "style.hpp"
 
+#ifdef DECOTERM_DETAIL_ENABLE_STD_FORMAT
+
 #include <format>
 #include <iterator>
 #include <version>
@@ -18,7 +20,9 @@
 #   include <print>
 #endif
 
-namespace deco::detail {
+namespace deco {
+
+namespace detail {
 template <std::output_iterator<const char&> OutputIt,
           style_type StyleT,
           typename... Args>
@@ -43,7 +47,6 @@ inline auto format_impl(StyleT style,
     format_to_impl(BufAppender(buf), style, fmt, std::forward<Args>(args)...);
     return {buf.data(), buf.size()};
 }
-
 
 #ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT
 
@@ -71,10 +74,7 @@ inline auto println_impl(Stream&& stream /* NOLINT */,
 
 #endif // DECOTERM_DETAIL_ENABLE_STD_PRINT
 
-} // namespace deco::detail
-
-
-namespace deco {
+} // namespace detail
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                         format                          ║
@@ -208,5 +208,7 @@ inline void println(std::ostream& os,
 #endif // DECOTERM_DETAIL_ENABLE_STD_PRINT
 
 } // namespace deco
+
+#endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 #endif // !DECOTERM_FORMAT_HPP

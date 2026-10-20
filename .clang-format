@@ -13,6 +13,7 @@ BreakTemplateDeclarations: Leave
 FixNamespaceComments: true
 IncludeBlocks: Preserve
 IndentCaseLabels: true
+IndentPPDirectives: Leave
 SpaceBeforeCpp11BracedList: true
 BinPackArguments: false
 BinPackParameters: OnePerLine

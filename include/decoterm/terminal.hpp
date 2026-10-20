@@ -12,11 +12,10 @@
 #include <string_view>
 
 #if defined(_WIN32)
-#include <stdexcept>
-#include <windows.h>
+#   include <stdexcept>
+#   include <windows.h>
 #else // POSIX
-#include <unistd.h>
-
+#   include <unistd.h>
 #endif
 
 namespace deco {
