@@ -7,6 +7,10 @@
 
 namespace deco {
 
+// ╔═════════════════════════════════════════════════════════╗
+// ║                       OSyncStream                       ║
+// ╚═════════════════════════════════════════════════════════╝
+
 /// @brief An `OStream` that buffers output using `std::osyncstream`.
 ///
 /// @details

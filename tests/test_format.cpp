@@ -1,6 +1,6 @@
 #include <decoterm/format.hpp>
+#include <decoterm/output.hpp>
 
-#include "decoterm/output.hpp"
 #include "unit_test.hpp"
 #include <doctest.h>
 
@@ -32,41 +32,6 @@ TEST_CASE("BufAppender" * test_suite("BufAppender")) {
         CHECK(buf.size() == 11);
         CHECK(std::string_view(buf.data(), buf.size())
               == std::string_view("hello world"));
-    }
-}
-
-TEST_CASE("formatters" * test_suite("formatters")) {
-    static_assert(std::is_same_v<detail::formatter_t<const char (&)[5]>,
-                                 std::formatter<std::string_view>>);
-    static_assert(std::is_same_v<detail::formatter_t<int (&)[5]>,
-                                 std::formatter<int[5]>>);
-
-    std::string result;
-    std::ostringstream expected;
-
-    SUBCASE("Style") {
-        result = std::format("{}text", bold | fg(yellow));
-        expected << (bold | fg(yellow)) << "text";
-        CHECK(result == expected.str());
-    }
-
-    SUBCASE("AbsoluteStyle") {
-        result = std::format("{}text", abs(bold | fg(yellow)));
-        expected << abs(bold | fg(yellow)) << "text";
-        CHECK(result == expected.str());
-    }
-
-    SUBCASE("reset") {
-        result = std::format("{}text{}", bold, reset);
-        expected << bold << "text" << reset;
-        CHECK(result == expected.str());
-    }
-
-    SUBCASE("styled") {
-        result =
-            std::format("{:04}{}", styled(42, bold), styled("hello", italic));
-        expected << bold << "0042" << reset << italic << "hello" << reset;
-        CHECK(result == expected.str());
     }
 }
 

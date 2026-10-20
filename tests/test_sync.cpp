@@ -1,3 +1,4 @@
+#define DECOTERM_NO_FORMAT
 #include <decoterm/sync.hpp>
 
 #include "unit_test.hpp"
