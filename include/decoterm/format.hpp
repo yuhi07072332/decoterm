@@ -13,6 +13,9 @@
 
 #include <format>
 #include <iterator>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <version>
 
 #ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT

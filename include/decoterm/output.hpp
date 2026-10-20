@@ -12,8 +12,12 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <memory>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
@@ -22,8 +26,10 @@
 #endif // DECOTERM_DETAIL_ENABLE_STD_FORMAT
 
 #ifdef DECOTERM_DETAIL_ENABLE_STD_PRINT
+#   include <cstdio>
 #   include <print>
 #   include <variant>
+#   include <string_view>
 #endif // DECOTERM_DETAIL_ENABLE_STD_PRINT
 
 namespace deco {

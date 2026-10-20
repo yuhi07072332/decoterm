@@ -36,6 +36,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <version>
 
 #if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L                   \

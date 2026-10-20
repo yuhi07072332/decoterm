@@ -1,3 +1,4 @@
+#define DECOTERM_NO_FORMAT
 #include <decoterm/decoterm.hpp>
 
 #include <iostream>
