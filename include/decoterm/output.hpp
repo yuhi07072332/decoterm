@@ -7,7 +7,7 @@
 #define DECOTERM_OUTPUT_HPP
 
 #include "color_info.hpp"
-#include "style.hpp"
+#include "deco.hpp"
 
 #include <array>
 #include <atomic>
@@ -28,8 +28,8 @@
 #ifdef DECOTERM_ENABLE_STD_PRINT
 #   include <cstdio>
 #   include <print>
-#   include <variant>
 #   include <string_view>
+#   include <variant>
 #endif // DECOTERM_ENABLE_STD_PRINT
 
 namespace deco {

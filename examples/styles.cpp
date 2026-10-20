@@ -1,5 +1,5 @@
 #include <decoterm/format.hpp>
-#include <decoterm/style.hpp>
+#include <decoterm/deco.hpp>
 
 #include <array>
 #include <string_view>

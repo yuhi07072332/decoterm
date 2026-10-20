@@ -1,5 +1,5 @@
 #define DECOTERM_NO_FORMAT
-#include <decoterm/style.hpp>
+#include <decoterm/deco.hpp>
 #include <decoterm/output.hpp>
 
 #include "unit_test.hpp"

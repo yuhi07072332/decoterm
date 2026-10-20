@@ -7,7 +7,7 @@
 #define DECOTERM_FORMAT_HPP
 
 #include "output.hpp"
-#include "style.hpp"
+#include "deco.hpp"
 
 #ifdef DECOTERM_ENABLE_STD_FORMAT
 

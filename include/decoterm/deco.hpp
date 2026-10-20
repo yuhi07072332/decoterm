@@ -21,8 +21,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef DECOTERM_STYLE_HPP
-#define DECOTERM_STYLE_HPP
+#ifndef DECOTERM_DECO_HPP
+#define DECOTERM_DECO_HPP
 
 #include <array>
 #include <cassert>
@@ -885,4 +885,4 @@ struct formatter<deco::detail::Styled<StyleT, T>>
 
 #undef DECO_CONSTEXPR_CMATH
 
-#endif // !DECOTERM_STYLE_HPP
+#endif // !DECOTERM_DECO_HPP

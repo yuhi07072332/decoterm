@@ -1,4 +1,4 @@
-#include <decoterm/style.hpp>
+#include <decoterm/deco.hpp>
 
 #include "unit_test.hpp"
 #include <doctest.h>
