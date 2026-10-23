@@ -1,0 +1,4 @@
+sphinx
+breathe
+myst-parser
+piccolo_theme

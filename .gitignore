@@ -1,7 +1,7 @@
 *.exe
 *.out
 
-/build
+build
 /.vs
 /.vscode
 /.cache

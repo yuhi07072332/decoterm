@@ -681,7 +681,7 @@ class OStream {
     /// @brief Output operator for any type that can be written to
     /// `std::ostream`.
     ///
-    /// @throws `std::logic_error` if `operator<<(std::ostream&, T&&)` returns a
+    /// @throws std::logic_error if `operator<<(std::ostream&, T&&)` returns a
     /// different ostream object.
     template <ostream_outputable T>
         requires(!detail::style_type<T> && !detail::styled<T>)
