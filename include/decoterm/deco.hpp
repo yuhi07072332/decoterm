@@ -312,15 +312,16 @@ struct Color {
     /// @brief Returns the raw data(`uint8_t[3]`) stored in this Color.
     ///
     /// @details
-    /// Usage:
+    /// **Usage**
+    /// 
     /// ```cpp
     /// Color col = rgb(32, 64, 128);
     /// if (col.type() == ColorType::TrueColor) {
     ///     auto [r, g, b] = col.data();
-    ///     /* ... */
+    ///     // ...
     /// } else if (col.type() == ColorType::TerminalColor) {
     ///     uint8_t index = col.data()[0];
-    ///     /* ... */
+    ///     // ...
     /// }
     /// ```
     constexpr auto data() const -> const detail::ColorData& { return data_; }
@@ -383,6 +384,7 @@ struct Color {
 // ║                         Colors                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief Color constants and helper functions.
 inline namespace colors {
 
 /// Creates a color from RGB.
@@ -662,7 +664,7 @@ struct Style {
 /// @details
 /// Style output normally has *additive semantics*, but this does't have.
 ///
-/// Example for `std::cout`:
+/// **Example** for `std::cout`:
 /// ```cpp
 /// std::cout << italic << bold; // current style: italic | bold
 /// std::cout << reset;
@@ -740,6 +742,7 @@ inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
 // ║                         Styles                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief Style constants and helper functions.
 inline namespace styles {
 
 /// @brief Creates an AbsoluteStyle from a Style.
@@ -794,6 +797,7 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 /// The returned object has **reference semantics** and must not outlive value.
 ///
 /// **Example**
+///
 /// ```cpp
 /// auto styled_int = styled(42, bold);  // BAD: dangling reference
 /// std::cout << styled(42, bold);       // OK

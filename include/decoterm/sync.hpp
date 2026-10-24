@@ -26,6 +26,7 @@ namespace deco {
 /// out << styled("synced", bold);
 /// out.emit();
 /// ```
+///
 /// The above is equivalent to:
 ///
 /// ```cpp
@@ -34,6 +35,7 @@ namespace deco {
 /// out << styled("synced", bold);
 /// oss.emit();
 /// ```
+/// 
 /// @warning Similar to `std::osyncstream`, `OSyncStream` itself is not safe for
 /// concurrent access. The same `OSyncStream` object must not be used by
 /// multiple threads simultaneously, as doing so may cause a data race.

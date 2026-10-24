@@ -1,4 +1,4 @@
 sphinx
 breathe
 myst-parser
-piccolo_theme
+sphinx_immaterial
