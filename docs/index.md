@@ -16,6 +16,7 @@ abcdefg
 ## Contents
 
 :::{toctree}
-:maxdepth: 1
-
 api
+:::
+
+:maxdepth: 1

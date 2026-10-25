@@ -33,6 +33,8 @@ exclude_patterns = []
 
 myst_enable_extensions = ["colon_fence"]
 
+master_doc = "index"
+
 
 # Sphinx-immaterial config
 
@@ -42,6 +44,8 @@ html_theme_options = {
         "repo": "fontawesome/brands/github",
     },
     "features": [
+        "toc.follow",
+        "search.suggest",
     ],
     "palette": [
         {
@@ -76,8 +80,12 @@ object_description_options = [
     ("cpp:.*", dict(
         include_fields_in_toc=False,
         include_rubrics_in_toc=False,
-        clang_format_style=CLANG_FORMAT_STYLE
+        clang_format_style=CLANG_FORMAT_STYLE,
     )),
+    ("cpp:function", dict(toc_icon_class="data", toc_icon_text="F")),
+    ("cpp:class", dict(toc_icon_class="data", toc_icon_text="C")),
+    ("cpp:struct", dict(toc_icon_class="data", toc_icon_text="C")),
+    ("cpp:enum.*", dict(toc_icon_class="data", toc_icon_text="E")),
 ]
 
 # Breathe config

@@ -1,43 +1,37 @@
 ---
-tocdepth: 3
+tocdepth: 4
 ---
 
 # API Reference
 
+## Core
 
-## Color
+### Color Types
 
 > :::{doxygenenum} deco::ColorType
 
 > :::{doxygenstruct} deco::Color
 
-## Style
+### Colors
+
+> :::{doxygennamespace} deco::colors
+
+### Style Types
 
 > :::{doxygenstruct} deco::Style
 
 > :::{doxygenstruct} deco::AbsoluteStyle
 
-## Output
-
-:::{doxygenclass} deco::OutputConfig
-:members:
-:undoc-members:
-:::
-
-:::{doxygenclass} deco::OStream
-:members:
-:undoc-members:
-:::
-
-## Colors
-
-> :::{doxygennamespace} deco::colors
-
-## Styles
+### Styles
 
 > :::{doxygennamespace} deco::styles
 
+## Output
+
+> :::{doxygenclass} deco::OutputConfig
+
+> :::{doxygenclass} deco::OStream
+
 ## Concepts
 
-:::{doxygenconcept} deco::ostream_outputable
-:::
+> :::{doxygenconcept} deco::ostream_outputable
