@@ -29,6 +29,8 @@ def main():
             sys.executable, "-m", "sphinx",
             "-b", "html",
             "-D", f"breathe_projects.decoterm={DOXYGEN_XML}",
+            "-a",
+            "-E",
             str(DOCS),
             str(HTML),
         ],

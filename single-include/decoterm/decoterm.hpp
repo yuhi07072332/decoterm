@@ -316,15 +316,16 @@ struct Color {
     /// @brief Returns the raw data(`uint8_t[3]`) stored in this Color.
     ///
     /// @details
-    /// Usage:
+    /// **Usage**
+    /// 
     /// ```cpp
     /// Color col = rgb(32, 64, 128);
     /// if (col.type() == ColorType::TrueColor) {
     ///     auto [r, g, b] = col.data();
-    ///     /* ... */
+    ///     // ...
     /// } else if (col.type() == ColorType::TerminalColor) {
     ///     uint8_t index = col.data()[0];
-    ///     /* ... */
+    ///     // ...
     /// }
     /// ```
     constexpr auto data() const -> const detail::ColorData& { return data_; }
@@ -387,6 +388,7 @@ struct Color {
 // ║                         Colors                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief Color constants and helper functions.
 inline namespace colors {
 
 /// Creates a color from RGB.
@@ -666,7 +668,7 @@ struct Style {
 /// @details
 /// Style output normally has *additive semantics*, but this does't have.
 ///
-/// Example for `std::cout`:
+/// **Example** for `std::cout`:
 /// ```cpp
 /// std::cout << italic << bold; // current style: italic | bold
 /// std::cout << reset;
@@ -744,6 +746,7 @@ inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
 // ║                         Styles                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @brief Style constants and helper functions.
 inline namespace styles {
 
 /// @brief Creates an AbsoluteStyle from a Style.
@@ -788,16 +791,23 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 // ║                         styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Creates a styled wrapper aroune a value.
+/// @brief Creates a styled wrapper around a value.
 ///
 /// @details
-/// `std::cout << styled(value, style)` is equivalent to
-/// `std::cout << style << value << deco::reset;`.
+/// You can also use `value | style` for shorthand.
+///
+/// **Example**
+///
+/// ```cpp
+/// // Equivalent to std::cout << bold << 42 << reset << '\n';
+/// std::cout << styled(42, bold) << '\n';
+///
+/// // Using `|`
+/// std::cout << ("styled text" | italic | fg(blue)) << '\n';
+/// ```
 ///
 /// @warning
 /// The returned object has **reference semantics** and must not outlive value.
-///
-/// **Example**
 /// ```cpp
 /// auto styled_int = styled(42, bold);  // BAD: dangling reference
 /// std::cout << styled(42, bold);       // OK
@@ -917,11 +927,10 @@ namespace deco { // NOLINT
 
 inline namespace colors {
 
-namespace color256 {
-
 // NOLINTBEGIN
 // clang-format off
 
+/// @cond
 enum Color256 : uint8_t {               // NOLINT
     aquamarine1       = 86,
     aquamarine1_1     = 122,
@@ -1164,11 +1173,11 @@ enum Color256 : uint8_t {               // NOLINT
     yellow4           = 100,
     yellow4_1         = 106,
 };
+/// @endcond
 
 // clang-format on
 // NOLINTEND
 
-} // namespace color256
 
 } // namespace colors
 
@@ -1854,7 +1863,7 @@ class OStream {
     /// @brief Output operator for any type that can be written to
     /// `std::ostream`.
     ///
-    /// @throws `std::logic_error` if `operator<<(std::ostream&, T&&)` returns a
+    /// @throws std::logic_error if `operator<<(std::ostream&, T&&)` returns a
     /// different ostream object.
     template <ostream_outputable T>
         requires(!detail::style_type<T> && !detail::styled<T>)
@@ -2525,6 +2534,7 @@ namespace deco {
 /// out << styled("synced", bold);
 /// out.emit();
 /// ```
+///
 /// The above is equivalent to:
 ///
 /// ```cpp
@@ -2533,6 +2543,7 @@ namespace deco {
 /// out << styled("synced", bold);
 /// oss.emit();
 /// ```
+/// 
 /// @warning Similar to `std::osyncstream`, `OSyncStream` itself is not safe for
 /// concurrent access. The same `OSyncStream` object must not be used by
 /// multiple threads simultaneously, as doing so may cause a data race.

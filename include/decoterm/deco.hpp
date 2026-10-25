@@ -787,17 +787,19 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 // ║                         styled                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Creates a styled wrapper aroune a value.
+/// @brief Creates a styled wrapper around a value.
 ///
 /// @details
-/// `std::cout << styled(value, style)` is equivalent to
-/// `std::cout << style << value << deco::reset;`.
-///
-/// @warning
-/// The returned object has **reference semantics** and must not outlive value.
 ///
 /// **Example**
 ///
+/// ```cpp
+/// // Equivalent to std::cout << bold << 42 << reset << '\n';
+/// std::cout << styled(42, bold) << '\n';
+/// ```
+///
+/// @warning
+/// The returned object has **reference semantics** and must not outlive value.
 /// ```cpp
 /// auto styled_int = styled(42, bold);  // BAD: dangling reference
 /// std::cout << styled(42, bold);       // OK
@@ -815,7 +817,15 @@ constexpr auto styled(const T& value, AbsoluteStyle abstyle) {
     return detail::Styled(value, abstyle);
 }
 
-/// shorthand for `styled(value, style)`
+/// @brief Shorthand for `styled(value, style)`.
+///
+/// @details
+/// The | operator also supports chaining.
+/// 
+/// **Example**
+/// ```cpp
+/// std::print("the answer is {}", 42 | bold | fg(blue))
+/// ```
 template <typename T>
     requires(!detail::style_type<T> && !detail::styled<T>)
 constexpr auto operator|(const T& value, Style style) {

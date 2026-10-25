@@ -25,8 +25,8 @@ extensions = [
     "breathe",
     "myst_parser",
     "sphinx_immaterial",
-    "sphinx_immaterial.apidoc.format_signatures",
-    "sphinx_immaterial.apidoc.cpp.cppreference"
+    # "sphinx_immaterial.apidoc.format_signatures",
+    "sphinx_immaterial.apidoc.cpp.cppreference",
 ]
 
 exclude_patterns = []
@@ -46,6 +46,7 @@ html_theme_options = {
     "features": [
         "toc.follow",
         "search.suggest",
+        "search.highlight",
     ],
     "palette": [
         {
@@ -80,12 +81,8 @@ object_description_options = [
     ("cpp:.*", dict(
         include_fields_in_toc=False,
         include_rubrics_in_toc=False,
-        clang_format_style=CLANG_FORMAT_STYLE,
+        # clang_format_style=CLANG_FORMAT_STYLE,
     )),
-    ("cpp:function", dict(toc_icon_class="data", toc_icon_text="F")),
-    ("cpp:class", dict(toc_icon_class="data", toc_icon_text="C")),
-    ("cpp:struct", dict(toc_icon_class="data", toc_icon_text="C")),
-    ("cpp:enum.*", dict(toc_icon_class="data", toc_icon_text="E")),
 ]
 
 # Breathe config
