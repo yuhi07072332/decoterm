@@ -2,43 +2,52 @@
 tocdepth: 3
 ---
 
-# API Reference
+# API reference
 
 (header_overview)=
-## Header Overview
+## Headers
 
-**Dependency Chart**
+The `decoterm.hpp` convenience header includes every public header. Include an
+individual header when you need only a specific part of the library.
+
+### Header dependencies
 
 :::{md-mermaid}
 flowchart TD
-    deco[deco.hpp] --> output[output.hpp]
-    output --> sync[sync.hpp]
-    output --> format[format.hpp]
-    output --> terminal[terminal.hpp]
-    color256[color256.hpp]
+    decoterm[decoterm.hpp] --> deco[deco.hpp]
+    decoterm --> output[output.hpp]
+    decoterm --> format[format.hpp]
+    decoterm --> sync[sync.hpp]
+    decoterm --> terminal[terminal.hpp]
+    decoterm --> color256[color256.hpp]
+    output --> deco
+    format --> output
+    format --> deco
+    sync --> output
+    terminal --> output
 :::
 
-- {ref}`deco.hpp <deco_hpp>`: Defines core types such as 
-{cpp:struct}`deco::Color` and {cpp:struct}`deco::Style`, which can be written
-directly to {cpp:class}`std::ostream` or used with {cpp:func}`std::print`. 
-- {ref}`output.hpp <output_hpp>`: Provides advanced style output functionality 
-such as style output configuration and styled writers.
-- {ref}`format.hpp <format_hpp>`: Provides some wrapper functions for 
-{cpp:func}`std::format` and {cpp:func}`std::print`.
-- {ref}`terminal.hpp <terminal_hpp>`: Provides terminal utilities.
-- {ref}`sync.hpp <sync_hpp>`: Provides {cpp:class}`deco::OSyncStream`.
-- {ref}`color256.hpp <color256_hpp>`: Color names for Xterm 256 colors.
+- {ref}`deco.hpp <deco_hpp>`: Defines the core types, including
+  {cpp:struct}`deco::Color` and {cpp:struct}`deco::Style`.
+- {ref}`output.hpp <output_hpp>`: Defines output configuration and styled
+  writers.
+- {ref}`format.hpp <format_hpp>`: Defines wrappers for
+  {cpp:func}`std::format` and {cpp:func}`std::print`.
+- {ref}`terminal.hpp <terminal_hpp>`: Defines terminal-detection and
+  initialization utilities.
+- {ref}`sync.hpp <sync_hpp>`: Defines {cpp:class}`deco::OSyncStream`.
+- {ref}`color256.hpp <color256_hpp>`: Defines named xterm 256-color indices.
 
-## Configuration Macros
+### Configuration macros
 
-- `DECOTERM_NO_FORMAT`: Disables `<format>` and `<print>` functionality.
-You can define this before including any decoterm header file to improve the
+- `DECOTERM_NO_FORMAT`: Define this before including any decoterm header to 
+disable APIs that require `<format>` or `<print>` and can reduce 
 compile time.
 
 (deco_hpp)=
-## Core
+## Core types and styles
 
-Provided from `deco.hpp`.
+Provided by `deco.hpp`.
 
 ### Color
 
@@ -48,20 +57,16 @@ Provided from `deco.hpp`.
 
 ### Colors
 
-There are some helper functions and pre-defined constants in 
-`inline namespace colors`.
+The inline `deco::colors` namespace provides helper functions and predefined
+constants.
 
-::: {tip}
-You can use `using namespace deco::colors` to avoid verbosity.
-:::
-
-Helper functions for creating `Color`:
+Helper functions create {cpp:struct}`deco::Color` values:
 
 > ::: {doxygengroup} ColorHelpers
 > :content-only:
 > :::
 
-Pre-defined `Color` constants:
+Predefined {cpp:struct}`deco::Color` constants:
 
 > ::: {doxygengroup} ColorConstants
 > :content-only:
@@ -75,60 +80,59 @@ Pre-defined `Color` constants:
 
 ### Styles
 
-There are some helper functions and pre-defined constants in 
-`inline namespace styles`.
+The inline `deco::styles` namespace provides helper functions and predefined
+constants.
 
-::: {tip}
-You can use `using namespace deco::styles` to avoid verbosity.
-:::
-
-Helper functions for creating `Style`:
+Helper functions create {cpp:struct}`deco::Style` values:
 
 > ::: {doxygengroup} StyleHelpers
 > :content-only:
 > :::
 
-Pre-defined `Style` constants:
+Predefined {cpp:struct}`deco::Style` constants:
 
 > ::: {doxygengroup} StyleConstants
 > :content-only:
 > :::
 
+### Styled values
 
-### Styled Value
-
-Similar to [{fmt}](https://fmt.dev), You can wrap a value with a style by using
-{cpp:func}`styled`.
+Use {cpp:func}`deco::styled` to associate a value with a style
+(similar to [{fmt}](https://fmt.dev)).
 
 > :::{doxygenfunction} styled(const T&, Style)
 > :::
 > :::{doxygenfunction} styled(const T&, AbsoluteStyle)
 
-You can also use `value | style` for shorthand.
+Alternatively, use `value | style`.
 
 > :::{doxygenfunction} operator|(const T&, Style)
 > :::
 > :::{doxygenfunction} operator|(const T&, AbsoluteStyle)
 
+
 (output_hpp)=
-## Advanced Style Output
+## Styled output
 
-Provided from `output.hpp`.
+Provided by `output.hpp`.
 
-### Output Configuration
+### Output configuration
 
-You can apply `deco::OutputConfig` to {ref}`Styled Writers<api_styled_writers>`.
+Pass {cpp:class}`deco::OutputConfig` to a
+{ref}`styled writer <api_styled_writers>` to control its output.
 
 > :::{doxygenclass} deco::OutputConfig
 
-You can create a custom config, or use the **global config**.
+Create an {cpp:class}`deco::OutputConfig` or use the global configuration
+returned by {cpp:func}`deco::config`.
 
 > :::{doxygenfunction} deco::config
 
 (api_styled_writers)=
-### Styled Writers
+### Styled writers
 
-There are 2 styled writers: {cpp:class}`deco::OStream` and {cpp:class}`deco::Printer`.
+The styled writers are {cpp:class}`deco::OStream` and
+{cpp:class}`deco::Printer`.
 
 > :::{doxygenclass} deco::OStream
 
@@ -136,48 +140,60 @@ There are 2 styled writers: {cpp:class}`deco::OStream` and {cpp:class}`deco::Pri
 
 > :::{doxygenfunction} deco::stderr_ostream
 
+
 > :::{doxygenclass} deco::Printer
+
+::: {note}
+`deco::Printer` requires `<print>` support.
+:::
 
 > :::{doxygenfunction} deco::stdout_printer
 
 > :::{doxygenfunction} deco::stderr_printer
 
 (terminal_hpp)=
-## Terminal Utilities
+## Terminal utilities
 
-Provided from `terminal.hpp`.
+Provided by `terminal.hpp`.
 
-### Fetching Terminal Information
+### Get terminal information
 
 > :::{doxygenstruct} deco::TerminalInfo
 
 > :::{doxygenfunction} deco::terminal_info
 
-### Initializing the output
+### Initialize output
 
 > :::{doxygenfunction} deco::init
 
 (format_hpp)=
-## `format` / `print` Wrappers
+## Format and print functions
 
-Provided from `format.hpp`.
+Provided by `format.hpp`. The formatting functions are available only when the
 
-### format
+::: {note}
+{cpp:func}`deco::print` and {cpp:func}`deco::println` requires `<print>` support.
+:::
 
-You can specify a style for formatting.
+### `deco::format`
 
-**Syntax**
+Use these functions to format text with a {cpp:struct}`deco::Style` or an
+{cpp:struct}`deco::AbsoluteStyle`.
+
+The `<style>` parameter in the following signatures accepts either type.
+
+#### Syntax
 
 ```text
 deco::format_to(
     <output iterator>,
-    <Style or AbsoluteStyle,>
+    <style>,
     <format string>,
     <args>...
 );
 
 deco::format(
-    <Style or AbsoluteStyle,>
+    <style>,
     <format string>,
     <args>...
 );
@@ -187,23 +203,22 @@ deco::format(
 > :content-only:
 > :::
 
+### `deco::print` and `deco::println`
 
-### print
+Use these functions to print formatted text with a style.
 
-You can specify a style for printing.
-
-**Syntax**
+#### Syntax
 
 ```text
 deco::print(
-    [FILE* or std::ostream&,]
-    <Style or AbsoluteStyle,>
+    [<FILE*> or <std::ostream&>,]
+    <style>,
     <format string>,
     <args>...
 );
 
 deco::println(
-    <same as deco::print>
+    <the same parameters as deco::print>
 );
 ```
 
@@ -213,20 +228,22 @@ deco::println(
 
 
 (sync_hpp)=
-## Sync
+## Synchronized output
 
-Provided from `sync.hpp`.
+Provided by `sync.hpp`.
 
 ### OSyncStream
 
 > :::{doxygenclass} deco::OSyncStream
 
 (color256_hpp)=
-## 256 Color Names
+## xterm 256-color names
 
-Provided from `color256.hpp`.
-
+Provided by `color256.hpp`. The `deco::Color256` enumeration supplies named
+color indices for the xterm 256-color palette.
 
 ## Concepts
+
+from {ref}`deco.hpp <deco_hpp>`:
 
 > :::{doxygenconcept} deco::ostream_outputable

@@ -1,3 +1,6 @@
+> [!WARNING]
+> This document is out-dated
+
 # decoterm
 
 A simple header-only C++20 library for decorating terminal output.
