@@ -2,7 +2,7 @@
 tocdepth: 3
 ---
 
-# API reference
+# API Reference
 
 (header_overview)=
 ## Headers
@@ -10,21 +10,15 @@ tocdepth: 3
 The `decoterm.hpp` convenience header includes every public header. Include an
 individual header when you need only a specific part of the library.
 
-### Header dependencies
+**Header dependencies**
 
 :::{md-mermaid}
 flowchart TD
-    decoterm[decoterm.hpp] --> deco[deco.hpp]
-    decoterm --> output[output.hpp]
-    decoterm --> format[format.hpp]
-    decoterm --> sync[sync.hpp]
-    decoterm --> terminal[terminal.hpp]
-    decoterm --> color256[color256.hpp]
-    output --> deco
-    format --> output
-    format --> deco
-    sync --> output
-    terminal --> output
+    deco[deco.hpp] --> output[output.hpp]
+    output --> sync[sync.hpp]
+    output --> format[format.hpp]
+    output --> terminal[terminal.hpp]
+    color256[color256.hpp]
 :::
 
 - {ref}`deco.hpp <deco_hpp>`: Defines the core types, including
@@ -38,11 +32,14 @@ flowchart TD
 - {ref}`sync.hpp <sync_hpp>`: Defines {cpp:class}`deco::OSyncStream`.
 - {ref}`color256.hpp <color256_hpp>`: Defines named xterm 256-color indices.
 
-### Configuration macros
+## Configuration macros
 
-- `DECOTERM_NO_FORMAT`: Define this before including any decoterm header to 
-disable APIs that require `<format>` or `<print>` and can reduce 
-compile time.
+#### `DECOTERM_NO_FORMAT`
+Disables APIs that require `<format>` or `<print>`. This can reduce compile time.
+
+::: {note}
+You need to define this macro before including any decoterm header.
+:::
 
 (deco_hpp)=
 ## Core types and styles
@@ -140,12 +137,11 @@ The styled writers are {cpp:class}`deco::OStream` and
 
 > :::{doxygenfunction} deco::stderr_ostream
 
-
-> :::{doxygenclass} deco::Printer
-
 ::: {note}
 `deco::Printer` requires `<print>` support.
 :::
+
+> :::{doxygenclass} deco::Printer
 
 > :::{doxygenfunction} deco::stdout_printer
 
@@ -228,7 +224,7 @@ deco::println(
 
 
 (sync_hpp)=
-## Synchronized output
+## Synchronized stream output
 
 Provided by `sync.hpp`.
 
