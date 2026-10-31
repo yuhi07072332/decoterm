@@ -3,11 +3,6 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-CLANG_FORMAT_STYLE = {
-    "BasedOnStyle": "LLVM",
-    "PointerAlignment": "Left",
-}
-
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -44,9 +39,13 @@ html_theme_options = {
         "repo": "fontawesome/brands/github",
     },
     "features": [
-        "toc.follow",
+        "content.code.copy"
         "search.suggest",
         "search.highlight",
+        "navigation.sections",
+        "navigation.top",
+        "navigation.tabs",
+        "navigation.sticky",
     ],
     "palette": [
         {
@@ -80,7 +79,6 @@ object_description_options = [
     ("cpp:.*Param", dict(include_in_toc=False)),
     ("cpp:.*", dict(
         include_fields_in_toc=False,
-        include_rubrics_in_toc=False,
         # clang_format_style=CLANG_FORMAT_STYLE,
     )),
 ]
@@ -92,5 +90,7 @@ breathe_default_members = ( "members", "undoc-members" )
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+
+html_title = f"decoterm {release}"
 
 html_theme = "sphinx_immaterial"

@@ -129,10 +129,10 @@ inline auto terminal_info() -> TerminalInfo {
 ///
 /// @details
 /// - If the `NO_COLOR` environment variable is set, color output is disabled.
-///   (Style output remains enabled)
+///   (style output remains enabled)
 /// -  `color_support` are set according to the detected `ColorSupport`.
 ///
-/// On Windows, this function also attempts to enable Virtual Terminal (VT)
+/// On Windows, this function also attempts to enable Virtual Terminal
 /// processing for `stdout` and `stderr` if they are attached to a terminal.
 ///
 /// @return The detected `TerminalInfo`.

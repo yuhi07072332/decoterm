@@ -19,7 +19,6 @@ inline namespace colors {
 // NOLINTBEGIN
 // clang-format off
 
-/// @cond
 enum Color256 : uint8_t {               // NOLINT
     aquamarine1       = 86,
     aquamarine1_1     = 122,
@@ -262,7 +261,6 @@ enum Color256 : uint8_t {               // NOLINT
     yellow4           = 100,
     yellow4_1         = 106,
 };
-/// @endcond
 
 // clang-format on
 // NOLINTEND

@@ -83,6 +83,9 @@ inline auto println_impl(Stream&& stream /* NOLINT */,
 // ║                         format                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
+/// @defgroup FormatFuncs
+/// @{
+
 template <std::output_iterator<const char&> OutputIt, typename... Args>
 inline auto format_to(OutputIt out,
                       Style style,
@@ -114,11 +117,16 @@ template <typename... Args>
     return detail::format_impl(abstyle, fmt, std::forward<Args>(args)...);
 }
 
+/// @}
+
 #ifdef DECOTERM_ENABLE_STD_PRINT
 
 // ╔═════════════════════════════════════════════════════════╗
 // ║                          print                          ║
 // ╚═════════════════════════════════════════════════════════╝
+
+/// @defgroup PrintFuncs
+/// @{
 
 template <typename... Args>
 inline void print(Style s, std::format_string<Args...> fmt, Args&&... args) {
@@ -207,6 +215,8 @@ inline void println(std::ostream& os,
                     Args&&... args) {
     detail::println_impl(os, s, fmt, std::forward<Args>(args)...);
 }
+
+/// @}
 
 #endif // DECOTERM_ENABLE_STD_PRINT
 

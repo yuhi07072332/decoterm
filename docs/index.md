@@ -9,14 +9,17 @@ blahblahblah
 (installation)=
 ## Installation
 
-{doc}`api`
-{ref}`install <installation>`
+{doc}`api`  
+{ref}`install <installation>`  
+{ref}`header overview <header_overview>`  
 abcdefg
 
-## Contents
 
 :::{toctree}
-:maxdepth: 1
+:hidden:
+Home <self>
+usage
 api
+genindex
 :::
 

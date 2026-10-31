@@ -610,7 +610,7 @@ inline auto config() -> OutputConfig& {
 /// **Example**
 ///
 /// ```cpp
-/// OStream os(std::cout);
+/// OStream os = OStream(std::cout);
 ///
 /// // fg(blue) and bold is merged to fg(blue) | bold
 /// os << fg(blue) << bold << "text";

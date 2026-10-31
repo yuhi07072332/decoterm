@@ -384,17 +384,21 @@ struct Color {
 // ║                         Colors                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Color constants and helper functions.
 inline namespace colors {
 
-/// Creates a color from RGB.
+/// @defgroup ColorHelpers
+/// @{
+
+/// @brief Creates a `Color` from RGB.
+///
+/// @details Equivalent to `Color(r, g, b)`.
 constexpr auto rgb(uint8_t r, uint8_t g, uint8_t b) -> Color {
     return Color(r, g, b);
 }
 
-/// @brief Creates a color from 0xRRGGBB.
+/// @brief Creates a `Color` from 0xRRGGBB.
 ///
-/// @pre rgb <= 0xFFFFFF
+/// @pre `hex <= 0xFFFFFF`
 constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format off
     if (hex > 0xffffff) 
@@ -405,11 +409,11 @@ constexpr auto rgb(uint32_t hex) -> Color {
     // clang-format on
 }
 
-/// @brief Creates a color from HSV.
+/// @brief Creates a `Color` from HSV.
 ///
-/// @param h [0, 360): Hue of the color
-/// @param s [0, 255]: Saturation of the color
-/// @param v [0, 255]: Value (brightness) of the color
+/// @param h `[0, 360)` Hue of the color
+/// @param s `[0, 255]` Saturation of the color
+/// @param v `[0, 255]` Value (brightness) of the color
 [[nodiscard]]
 inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     -> Color {
@@ -441,6 +445,11 @@ inline DECO_CONSTEXPR_CMATH auto hsv(uint16_t h, uint8_t s, uint8_t v) // NOLINT
     // clang-format on 
 }
 
+/// @}
+
+/// @defgroup ColorConstants
+/// @{
+
 inline constexpr Color default_color   = Color::default_color();
 inline constexpr Color null_color      = Color::null_color();
 
@@ -461,6 +470,8 @@ inline constexpr Color bright_magenta  = Color(13);
 inline constexpr Color bright_cyan     = Color(14);
 inline constexpr Color bright_white    = Color(15);
 
+/// @}
+
 // clang-format on
 
 } // namespace colors
@@ -475,7 +486,7 @@ inline constexpr Color bright_white    = Color(15);
 /// * It contains 8 emphasis flags and 2 `Color`s for foreground color and
 /// background color.
 ///
-/// * A null 'Style' emits no ANSI escape sequence.
+/// * A null `Style` emits no ANSI escape sequence.
 struct Style {
     // clang-format off
     enum Emphasis : uint8_t {                              //NOLINT
@@ -506,7 +517,7 @@ struct Style {
 
     // ----- operators -----
 
-    /// @brief Combines two styles.
+    /// @brief Combines two `Style`s.
     ///
     /// @details
     /// It works like applying 2 ANSI escape sequences, meaning that
@@ -518,9 +529,11 @@ struct Style {
     /// * Each non-null color in `rhs` overrides the corresponding color in
     ///  `lhs`.
     ///
-    /// Examples:
-    /// (italic, fg=red) | (bold) = (italic | bold, fg=red)
-    /// (fg=black, bg=blue) | (bg=green) = (fg=black, bg=green)
+    /// **Examples**
+    /// ```
+    /// (italic, fg=red) | (bold)        -> (italic | bold, fg=red)
+    /// (fg=black, bg=blue) | (bg=green) -> (fg=black, bg=green)
+    /// ```
     constexpr auto operator|(Style rhs) const -> Style {
         Style combined = *this;
         combined.emphasis_ |= rhs.emphasis_;
@@ -659,12 +672,12 @@ struct Style {
     uint8_t emphasis_ = None;
 };
 
-/// @brief A Style wrapper that represents an absolute style.
+/// @brief A `Style` wrapper that represents an absolute style.
 ///
 /// @details
 /// Style output normally has *additive semantics*, but this does't have.
 ///
-/// **Example** for `std::cout`:
+/// **Example**:
 /// ```cpp
 /// std::cout << italic << bold; // current style: italic | bold
 /// std::cout << reset;
@@ -679,9 +692,10 @@ struct AbsoluteStyle {
     constexpr auto operator==(const AbsoluteStyle&) const -> bool = default;
     constexpr auto operator!=(const AbsoluteStyle&) const -> bool = default;
 
+    /// Returns inner `Style`.
     constexpr auto inner() const -> Style { return style_; }
 
-    /// This is always `false` since `to_escape()` will never be empty.
+    /// @note This is always `false` since `to_escape()` will never be empty.
     constexpr auto is_null() const -> bool { return false; }
 
     /// Writes ANSI escape sequence to the output iterator.
@@ -742,30 +756,37 @@ inline auto operator<<(std::ostream& os, Reset) -> std::ostream& {
 // ║                         Styles                          ║
 // ╚═════════════════════════════════════════════════════════╝
 
-/// @brief Style constants and helper functions.
 inline namespace styles {
 
-/// @brief Creates an AbsoluteStyle from a Style.
+/// @defgroup StyleHelpers
+/// @{
+
+/// @brief Creates an `AbsoluteStyle` from a `Style`.
 ///
 /// @details equivalent to `AbsoluteStyle(style)`
 constexpr auto abs(Style style) -> AbsoluteStyle {
     return AbsoluteStyle(style);
 }
 
-/// Creates a Style with foreground and background colors.
+/// Creates a `Style` with foreground and background colors.
 constexpr auto color(Color fg, Color bg) -> Style {
     return Style(Style::Emphasis::None, fg, bg);
 }
 
-/// Create a Style with foreground color.
+/// Creates a `Style` with foreground color.
 constexpr auto fg(Color fg) -> Style {
     return Style(Style::Emphasis::None, fg);
 }
 
-/// Create a Style with background color.
+/// Creates a `Style` with background color.
 constexpr auto bg(Color bg) -> Style {
     return Style(Style::Emphasis::None, null_color, bg);
 }
+
+/// @}
+
+/// @defgroup StyleConstants
+/// @{
 
 // clang-format off
 
@@ -781,6 +802,8 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 
 // clang-format on
 
+/// @}
+
 } // namespace styles
 
 // ╔═════════════════════════════════════════════════════════╗
@@ -794,26 +817,36 @@ inline constexpr Style underline_double  = Style(Style::Emphasis::UnderlineDoubl
 /// **Example**
 ///
 /// ```cpp
-/// // Equivalent to std::cout << bold << 42 << reset << '\n';
 /// std::cout << styled(42, bold) << '\n';
+///
+/// // The above is equivalent to:
+/// std::cout << bold << 42 << reset << '\n';
 /// ```
 ///
 /// @warning
 /// The returned object has **reference semantics** and must not outlive value.
 /// ```cpp
-/// auto styled_int = styled(42, bold);  // BAD: dangling reference
+/// auto styled_r_int = styled(42, bold);
+/// std::cout << styled_r_int;           // BAD: dangling reference
+///
 /// std::cout << styled(42, bold);       // OK
+///
+/// int i = 42;
+/// auto styled_l_int = styled(i, bold);
+/// std::cout << styled_l_int            // OK
 /// ```
 template <typename T>
     requires(!detail::style_type<T>)
-constexpr auto styled(const T& value, Style style) {
+constexpr auto styled(const T& value, Style style)
+    -> detail::Styled<Style, std::remove_cvref_t<T>> {
     return detail::Styled(value, style);
 }
 
 /// `AbsoluteStyle` version of `styled()`
 template <typename T>
     requires(!detail::style_type<T>)
-constexpr auto styled(const T& value, AbsoluteStyle abstyle) {
+constexpr auto styled(const T& value, AbsoluteStyle abstyle)
+    -> detail::Styled<AbsoluteStyle, std::remove_cvref_t<T>> {
     return detail::Styled(value, abstyle);
 }
 
@@ -824,24 +857,29 @@ constexpr auto styled(const T& value, AbsoluteStyle abstyle) {
 /// 
 /// **Example**
 /// ```cpp
-/// std::print("the answer is {}", 42 | bold | fg(blue))
+/// std::println("the answer is {}.", 42 | bold | fg(blue));
+///
+/// // The above is equivalent to:
+/// std::println("the answer is {}.", styled(42, bold | fg(blue)));
 /// ```
 template <typename T>
     requires(!detail::style_type<T> && !detail::styled<T>)
-constexpr auto operator|(const T& value, Style style) {
+constexpr auto operator|(const T& value, Style style) 
+    -> detail::Styled<Style, std::remove_cvref_t<T>> {
     return styled(value, style);
 }
 
 /// shorthand for `styled(value, abstyle)`
 template <typename T>
     requires(!detail::style_type<T> && !detail::styled<T>)
-constexpr auto operator|(const T& value, AbsoluteStyle abstyle) {
+constexpr auto operator|(const T& value, AbsoluteStyle abstyle)
+    -> detail::Styled<AbsoluteStyle, std::remove_cvref_t<T>> {
     return styled(value, abstyle);
 }
 
 template <typename T>
 constexpr auto operator|(const detail::Styled<Style, T>& styled, Style style)
-    -> detail::Styled<Style, T> {
+    -> detail::Styled<Style, std::remove_cvref_t<T>> {
     return detail::Styled(styled.value(), styled.style() | style);
 }
 
