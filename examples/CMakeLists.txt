@@ -7,6 +7,7 @@ set(EXAMPLE_CPP23_SRCS
     quickstart-fmt.cpp
     styles.cpp
     terminal-info.cpp
+    usage-style.cpp
 ) 
 
 foreach(source IN LISTS EXAMPLE_CPP20_SRCS)

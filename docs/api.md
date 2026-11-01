@@ -34,7 +34,7 @@ flowchart TD
 
 ## Configuration macros
 
-#### `DECOTERM_NO_FORMAT`
+### `DECOTERM_NO_FORMAT`
 Disables APIs that require `<format>` or `<print>`. This can reduce compile time.
 
 ::: {note}
@@ -52,12 +52,13 @@ Provided by `deco.hpp`.
 
 > :::{doxygenenum} deco::ColorType
 
+(api_colors)=
 ### Colors
 
 The inline `deco::colors` namespace provides helper functions and predefined
 constants.
 
-Helper functions create {cpp:struct}`deco::Color` values:
+Helper functions create {cpp:struct}`deco::Color`s :
 
 > ::: {doxygengroup} ColorHelpers
 > :content-only:
@@ -75,6 +76,7 @@ Predefined {cpp:struct}`deco::Color` constants:
 
 > :::{doxygenstruct} deco::AbsoluteStyle
 
+(api_styles)=
 ### Styles
 
 The inline `deco::styles` namespace provides helper functions and predefined
@@ -92,6 +94,13 @@ Predefined {cpp:struct}`deco::Style` constants:
 > :content-only:
 > :::
 
+### Reset
+
+Use {cpp:var}`deco::reset` to reset style.
+
+> ::: {doxygenvariable} deco::reset
+
+(api_styled_values)=
 ### Styled values
 
 Use {cpp:func}`deco::styled` to associate a value with a style
@@ -106,7 +115,6 @@ Alternatively, use `value | style`.
 > :::{doxygenfunction} operator|(const T&, Style)
 > :::
 > :::{doxygenfunction} operator|(const T&, AbsoluteStyle)
-
 
 (output_hpp)=
 ## Styled output
